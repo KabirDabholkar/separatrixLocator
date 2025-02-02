@@ -1,0 +1,21 @@
+function :
+  _target_  : compose.compose
+  _args_    :
+    - _target_  : dynamical_functions.hopfield
+      _partial_ : true
+      A         :
+        _target_  : dynamical_functions.init_hopfield_ring
+        N         : ${.....dim}
+        M         : 3
+        seed      : 3
+        binary    : true
+        normalise : true
+        scaling   : 4
+
+IC_distribution:
+  _target_  : torch.distributions.Normal
+  loc       : 0
+  scale     : 30
+name            : hopfield_ring_M${.function._args_[0].A.M}_seed${.function._args_[0].A.seed}
+dim  : 500
+equation_latex  : null

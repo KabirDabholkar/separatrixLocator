@@ -1,0 +1,11 @@
+git+https://github.com/nacloos/config-utils.git
+torch
+numpy
+scipy
+scikit-learn
+pandas
+tensorboard
+compose
+torchdiffeq
+matplotlib
+seaborn

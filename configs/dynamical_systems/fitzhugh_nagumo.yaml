@@ -1,0 +1,17 @@
+function :
+  _target_  : compose.compose
+  _args_    :
+    - _target_  : torch.sin
+      _partial_ : true
+#    - ${eval:'lambda x:x-x**3'}
+
+IC_distribution:
+#  _target_  : torch.distributions.Normal
+#  loc       : 0
+#  scale     : 10
+  _target_  : torch.distributions.Uniform
+  low       : -2
+  high      : 2
+name            : fitzhugh_nagumo
+dim  : 2
+equation_latex  : null #'\sin(x)'

@@ -1,0 +1,3 @@
+[submodule "PytorchRBFLayer"]
+	path = PytorchRBFLayer
+	url = https://github.com/rssalessio/PytorchRBFLayer.git

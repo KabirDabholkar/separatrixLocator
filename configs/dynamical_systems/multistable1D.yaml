@@ -1,0 +1,17 @@
+function :
+  _target_  : compose.compose
+  _args_    :
+    - _target_  : torch.sin
+      _partial_ : true
+#    - ${eval:'lambda x:x-x**3'}
+
+IC_distribution:
+  _target_  : torch.distributions.Normal
+  loc       : 0
+  scale     : 3
+#  _target_  : torch.distributions.Uniform
+#  low       : -15
+#  high      : 15
+name            : multistable1D
+dim  : 1
+equation_latex  : '\sin(x)'

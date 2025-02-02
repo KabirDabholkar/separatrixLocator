@@ -1,0 +1,14 @@
+function :
+  _target_  : compose.compose
+  _args_    :
+    - _target_  : torch.stack
+      _partial_ : true
+      dim       : -1
+    - ${eval:'lambda x:(x[...,0]-x[...,0]**3 + 1 * x[...,0] * x[...,1]**2, -x[...,1] + 1.5 * x[...,0]**2*x[...,1] - x[...,1]**3)'}
+IC_distribution:
+  _target_  : torch.distributions.Normal
+  loc       : 0
+  scale     : 1
+name            : quadstable2D
+dim  : 2
+equation_latex  : x-x^3

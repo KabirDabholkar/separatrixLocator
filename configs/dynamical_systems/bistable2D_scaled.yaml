@@ -1,0 +1,15 @@
+function :
+  _target_  : compose.compose
+  _args_    :
+    - _target_  : torch.stack
+      _partial_ : true
+      dim       : -1
+    - ${eval:'lambda x:((x[...,0]-x[...,0]**3)*(x[...,1]**2+1)**(-2), -x[...,1]*(x[...,1]**2+1)**(-2))'}
+IC_distribution:
+  _target_  : torch.distributions.Normal
+  loc       : 0
+  scale     : 1
+run_traj  : true
+name      : bistable2D_scaled
+dim  : 2
+equation_latex  : x-x^3

@@ -1,0 +1,65 @@
+_target_  : utils.setattrs_kwargs
+target  :
+  _target_  : torch.nn.Sequential
+  _args_  :
+    - _target_    : torch.nn.Linear
+      in_features : ${dynamics.dim}
+      out_features: ${....hidden_size}
+    - _target_    : torch.nn.Tanh
+    - _target_    : torch.nn.Linear
+      in_features : ${....hidden_size}
+      out_features: ${....hidden_size}
+    - _target_    : torch.nn.Tanh
+    - _target_    : torch.nn.Linear
+      in_features : ${....hidden_size}
+      out_features: ${....hidden_size}
+    - _target_    : torch.nn.Tanh
+    - _target_    : torch.nn.Linear
+      in_features : ${....hidden_size}
+      out_features: ${....hidden_size}
+    - _target_    : torch.nn.Tanh
+    - _target_    : torch.nn.Linear
+      in_features : ${....hidden_size}
+      out_features: ${....hidden_size}
+    - _target_    : torch.nn.Tanh
+    - _target_    : torch.nn.Linear
+      in_features : ${....hidden_size}
+      out_features: ${....hidden_size}
+    - _target_    : torch.nn.ReLU
+    - _target_    : torch.nn.Linear
+      in_features : ${....hidden_size}
+      out_features: ${....hidden_size}
+    - _target_    : torch.nn.ReLU
+    - _target_    : torch.nn.Linear
+      in_features : ${....hidden_size}
+      out_features: ${....hidden_size}
+    - _target_    : torch.nn.ReLU
+    - _target_    : torch.nn.Linear
+      in_features : ${....hidden_size}
+      out_features: ${....hidden_size}
+    - _target_    : torch.nn.ReLU
+    - _target_    : torch.nn.Linear
+      in_features : ${....hidden_size}
+      out_features: ${....hidden_size}
+    - _target_    : torch.nn.ReLU
+    - _target_    : torch.nn.Linear
+      in_features : ${....hidden_size}
+      out_features: ${....output_size}
+hidden_size: 40
+output_size: 10
+num_layers : 8
+name  : DNN_layers${.num_layers}_ReLU_hidden${.hidden_size}_output${.output_size}
+
+#_target_  : torch.nn.Sequential
+#_args_  :
+#- _target_    : torch.nn.Linear
+#  in_features : 2
+#  out_features: 10
+#- _target_    : torch.nn.Tanh
+#- _target_    : torch.nn.Linear
+#  in_features : 10
+#  out_features: 10
+#- _target_    : torch.nn.Tanh
+#- _target_    : torch.nn.Linear
+#  in_features : 10
+#  out_features: 10

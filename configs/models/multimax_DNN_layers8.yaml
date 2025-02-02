@@ -1,0 +1,59 @@
+_target_  : utils.setattrs_kwargs
+target  :
+  _target_  : learn_koopman_eig.ParallelModels
+  base_model  :
+    _target_  : torch.nn.Sequential
+    _partial_ : true
+    _args_  :
+      - _target_    : torch.nn.Linear
+        in_features : ${dynamics.dim}
+        out_features: ${.....hidden_size}
+      - _target_    : torch.nn.Tanh
+      - _target_    : torch.nn.Linear
+        in_features : ${.....hidden_size}
+        out_features: ${.....hidden_size}
+      - _target_    : torch.nn.Tanh
+      - _target_    : torch.nn.Linear
+        in_features : ${.....hidden_size}
+        out_features: ${.....hidden_size}
+      - _target_    : torch.nn.Tanh
+      - _target_    : torch.nn.Linear
+        in_features : ${.....hidden_size}
+        out_features: ${.....hidden_size}
+      - _target_    : torch.nn.Tanh
+      - _target_    : torch.nn.Linear
+        in_features : ${.....hidden_size}
+        out_features: ${.....hidden_size}
+      - _target_    : torch.nn.Tanh
+      - _target_    : torch.nn.Linear
+        in_features : ${.....hidden_size}
+        out_features: ${.....hidden_size}
+      - _target_    : torch.nn.ReLU
+      - _target_    : torch.nn.Linear
+        in_features : ${.....hidden_size}
+        out_features: ${.....hidden_size}
+      - _target_    : torch.nn.ReLU
+      - _target_    : torch.nn.Linear
+        in_features : ${.....hidden_size}
+        out_features: ${.....output_size}
+  num_models  : 3
+  select_max  : true
+  prod_output : false
+hidden_size: 20
+output_size: 10
+num_layers : 6
+name  : MultiMax_DNN_layers${.num_layers}_Tanh_hidden${.hidden_size}_output${.output_size}
+
+#_target_  : torch.nn.Sequential
+#_args_  :
+#- _target_    : torch.nn.Linear
+#  in_features : 2
+#  out_features: 10
+#- _target_    : torch.nn.Tanh
+#- _target_    : torch.nn.Linear
+#  in_features : 10
+#  out_features: 10
+#- _target_    : torch.nn.Tanh
+#- _target_    : torch.nn.Linear
+#  in_features : 10
+#  out_features: 10

@@ -1,0 +1,29 @@
+function :
+  _target_        : dynamical_functions.radial_to_cartesian
+  radial_dynamics :
+    _target_  : dynamical_functions.radial_bistable
+    _partial_ : true
+#    _target_: compose.compose
+#    _args_:
+#      - _target_: torch.stack
+#        _partial_: true
+#        dim: -1
+#      - ${eval:'lambda x:((x[...,0]-2) - (x[...,0]-2)**3, -x[...,1])'}
+
+run_traj  : true
+lims:
+  x: [-4,4]
+  y: [-4,4]
+IC_distribution:
+  _target_  : torch.distributions.Normal
+  loc       : 0
+#  scale     : 1
+  scale     : 4
+
+name            : radial2D_bistable
+dim  : 2
+equation_latex  : null
+analytical_eigenfunction :
+  _target_: dynamical_functions.analytical_phi
+  _partial_: true
+  mu : 1.5 # 2.5 #0.5  # 0.7

@@ -1,0 +1,293 @@
+defaults:
+###### Dynamical systems ######
+#  - dynamical_systems@dynamics : bistable1D
+#  - dynamical_systems@dynamics : bistable2D
+#  - dynamical_systems@dynamics : bistable3D
+#  - dynamical_systems@dynamics : bistable2D_scaled
+#  - dynamical_systems@dynamics : radial2D
+#  - dynamical_systems@dynamics : radial2D_bistable
+#  - dynamical_systems@dynamics  : perceptual_decision_making
+#  - dynamical_systems@dynamics  : kbitflipflop
+#  - dynamical_systems@dynamics : duffing
+#  - dynamical_systems@dynamics : multistable1D
+#  - dynamical_systems@dynamics : hopfield
+#  - dynamical_systems@dynamics : hopfield_ring
+#  - dynamical_systems@dynamics : parting2D_twobasins
+#  - dynamical_systems@dynamics : parting2D
+#  - dynamical_systems@dynamics : bistable_oscillator2D
+#  - dynamical_systems@dynamics : quadstable2D
+
+  - dynamical_systems@bistable1D : bistable1D
+  - dynamical_systems@bistable2D : bistable2D
+  - dynamical_systems@duffing : duffing
+  - dynamical_systems@1bitflipflop_2D  : 1bitflipflop_2D
+  - dynamical_systems@2bitflipflop_2D  : 2bitflipflop_2D
+  - dynamical_systems@1bitflipflop_3D  : 1bitflipflop_3D
+  - dynamical_systems@radial2D_bistable  : radial2D_bistable
+  - dynamical_systems@multistable1D : multistable1D
+
+####### Models #########
+#  - models@DNN_model  : DNN_layers6
+
+  - models@DNN_layers2  : DNN_layers2
+  - models@DNN_layers4  : DNN_layers4
+  - models@DNN_layers6  : DNN_layers6
+  - models@DNN_layers8  : DNN_layers8
+  - models@DNN_ReLU_layers8  : DNN_ReLU_layers8
+  - models@richDNN_layers8  : richDNN_layers8
+  - models@multimax_DNN_layers8 : multimax_DNN_layers8
+  - models@RBF : RBF
+
+  - _self_
+
+#  - hydra: multirun
+
+##### End defaults ######
+
+
+
+
+load_KEF_model    : true #false
+save_KEF_model    : false
+plot_KEF_of_traj  : true
+save_results      : false
+run_analysis      : true
+runGD_analytical  : false
+runGD             : true
+
+model_options:
+  DNN_layers2: ${DNN_layers2}
+  DNN_layers4: ${DNN_layers4}
+  DNN_layers6: ${DNN_layers6}
+  DNN_layers8: ${DNN_layers8}
+  DNN_ReLU_layers8: ${DNN_ReLU_layers8}
+  richDNN_layers8: ${richDNN_layers8}
+  RBF : ${RBF}
+
+
+dynamics_options:
+  bistable1D : ${bistable1D}
+  multistable1D : ${multistable1D}
+  bistable2D : ${bistable2D}
+  duffing : ${duffing}
+  1bitflipflop_2D : ${1bitflipflop_2D}
+  2bitflipflop_2D : ${2bitflipflop_2D}
+  1bitflipflop_3D : ${1bitflipflop_3D}
+  radial2D_bistable : ${radial2D_bistable}
+
+model_choice  : RBF
+dynamics_choice :  2bitflipflop_2D #radial2D_bistable #duffing #  # #bistable2D
+
+model :  ${model_options.${model_choice}}
+dynamics  : ${dynamics_options.${dynamics_choice}}
+
+
+hyperparams_to_record_in_results:
+  output_size : ${model.output_size}
+  num_layers  : ${model.num_layers}
+  hidden_size  : ${model.hidden_size}
+
+
+test_func_var :
+  _target_  : learn_koopman_eig.eval_loss
+  _partial_ : true
+  batch_size    : 50
+  dynamics_dim  : ${dynamics.dim}
+  eigenvalue  : 1
+  drop_values_outside_range : null
+  normaliser  :
+    _target_  : learn_koopman_eig.variance_normaliser
+    _partial_ : true
+
+test_func_shuffle :
+  _target_  : learn_koopman_eig.eval_loss
+  _partial_ : true
+  batch_size    : 500
+  dynamics_dim  : ${dynamics.dim}
+  eigenvalue  : 1
+  drop_values_outside_range : null
+  normaliser:
+    _target_: learn_koopman_eig.shuffle_normaliser
+    _partial_: true
+
+
+test_func: ${test_func_var}
+
+### main train func
+#train_func_teacher :
+#  _target_  : learn_koopman_eig.train_on_teacher
+#  _partial_ : true
+#  num_epochs    : 1000 #00 #0 #3000
+#  learning_rate : 1e-2
+#  batch_size    : 50 #1000
+#  dynamics_dim  : ${dynamics.dim}
+#  print_every_num_epochs  : 10
+
+
+#train_func :
+#  _target_  : learn_koopman_eig.train_with_logger
+#  _partial_ : true
+#  num_epochs    : 2000 #00 #0 #3000
+#  learning_rate : 1e-2 #5e-3
+#  batch_size    : 5000 #5000 #5000 #1000
+#  dynamics_dim  : ${dynamics.dim}
+#  logger  :
+#    _target_  : torch.utils.tensorboard.SummaryWriter
+#    log_dir   : ${...savepath}/experiment
+#  eigenvalue  : 1
+#  print_every_num_epochs  : 10
+
+#train_func_trajectories :
+#  _target_      : learn_koopman_eig.train_model_on_trajectories_sgd
+#  _partial_     : true
+#  batch_size    : 500
+#  num_epochs    : 200
+#  learning_rate : 0.01
+#train_trajectories          : 5000
+#train_points_per_trajectory : 4
+#train_trajectory_duration   : 0.1
+
+#  decay_module  :
+#    _target_      : learn_koopman_eig.DecayModule
+#    initial_decay : 1.0
+#    decay_rate    : 0.99
+#    start_epoch   : 18000
+
+#train_func :
+#  _target_  : learn_koopman_eig.train
+#  _partial_ : true
+#  num_epochs    : 20000
+#  learning_rate : 1e-3
+#  batch_size    : 200
+#  dynamics_dim  : ${dynamics.dim}
+#  decay_module  :
+#    _target_      : learn_koopman_eig.DecayModule
+#    initial_decay : 1.0
+#    decay_rate    : 0.99
+#    start_epoch   : 18000
+
+
+##### Neural Network model ####
+
+#model :
+#  _target_  : learn_koopman_eig.partialised_RBF_maker
+#  in_features_dim : ${dynamics.dim}
+#  num_kernels : 2000
+#  out_features_dim : 1
+#  normalization : false
+  #  _target_  : PytorchRBFLayer.rbf_layer.rbf_layer.RBFLayer
+  #  in_features_dim : 1 #${dynamics.dim}
+  #  num_kernels : 4
+  #  out_features_dim : 1
+  #  radial_function :
+  #    _target_  : learn_koopman_eig.l_norm
+  #    _partial_ : true
+  #  norm_function :
+  #    _target_  : learn_koopman_eig.rbf_gaussian
+  #    _partial_ : true
+
+
+
+#model : ${DNN_layers2}
+
+#model_base :
+#  _target_  : learn_koopman_eig.create_phi_network
+##  _partial_   : true
+#  input_dim   : ${dynamics.dim}
+#  hidden_dim  : 40
+#  output_dim  : 7
+#  nonlin      :
+#    _target_  : torch.nn.Tanh #Tanh #ReLU  #
+##    _target_  : torch.nn.ReLU
+#    _partial_ : true
+
+#model :
+#  _target_    : learn_koopman_eig.ParallelModels
+#  base_model  : ${model_base}
+#  num_models  : 3
+#  prod_output : false
+
+#model : ${model_base}
+
+#model_base :
+#  _target_  : learn_koopman_eig.create_phi_network
+#  input_dim   : 10
+#  hidden_dim  : 10
+#  output_dim  : 10
+#  nonlin      :
+#    _target_  : torch.nn.Tanh #Tanh #ReLU  #
+#    _partial_ : true
+
+#model:
+#  _target_  : learn_koopman_eig.ODEBlock
+#  odefunc : ${model_base}
+#    _target_  : torch.nn.Linear
+#    in_features   : 10
+#    out_features  : 10
+#  odefunc_dim : 10
+#  input_dim : 2
+#  output_dim : 1
+
+#model:
+#  _target_    : learn_koopman_eig.LogOutput #ExpOutput #LogOutput  #
+#  base_model  : ${model_base}
+
+##### SIREN #####
+#model :
+#  _target_    : siren_pytorch.SirenNet #One later SIREN
+#  dim_in      : ${dynamics.dim}
+#  dim_hidden  : 128
+#  num_layers  : 2
+#  final_activation :
+#    _target_  : torch.nn.Identity
+#  w0_initial : 0.1
+#  dim_out     : 1
+
+#model:
+#  _target_    : learn_koopman_eig.AttentionNN  #AttentionOneHotNN #OneHotOutputNN
+#  input_dim   : ${dynamics.dim}
+#  output_dim  : 3
+#  temperature : 1.0
+
+### Analytical solution
+#model: ${dynamics.analytical_eigenfunction}
+
+savepath  : results/${dynamics.name}
+
+
+
+#######
+
+
+
+GD_on_KEF : ${GD_on_KEF_Adam}
+
+GD_on_KEF_SGD:
+  _target_      : learn_koopman_eig.runGD
+  _partial_     : true
+  input_dim     : ${dynamics.dim}
+  num_steps     : 10000
+  partial_optim :
+    _target_  : torch.optim.SGD
+    _partial_ : true
+    lr: 1e-1
+  batch_size    : 500
+
+
+GD_on_KEF_Adam:
+  _target_: learn_koopman_eig.runGD
+  _partial_: true
+  input_dim: ${dynamics.dim}
+  num_steps: 3000
+  partial_optim:
+    _target_    : torch.optim.Adam
+    _partial_   : true
+    lr          : 1e-3
+  threshold: 0.03 #0.65 #,#0.1 #-20 #null #5e-4 #5e-2
+  lr_scheduler  :
+    _target_  : torch.optim.lr_scheduler.StepLR
+    _partial_ : true
+    step_size : 50
+    gamma     : 0.9
+  batch_size: 100 #00
+

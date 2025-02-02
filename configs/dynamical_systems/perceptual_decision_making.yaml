@@ -1,0 +1,43 @@
+function :
+  _target_  : rnn.discrete_to_continuous
+  discrete_dynamics :
+    _target_ : rnn.get_autonomous_dynamics_from_model
+    model    : ${...loaded_RNN_model}
+
+IC_distribution :
+  _target_  : rnn.hidden_distribution_from_model
+  model     : ${..loaded_RNN_model}
+  dataset   : ${..RNN_dataset}
+
+loaded_RNN_model:
+  _target_: rnn.set_model_with_checkpoint
+  model: ${..RNN_model}
+  checkpoint:
+    _target_: torch.load
+    f: ${savepath}/RNNmodel.torch
+    weights_only: true
+
+RNN_model:
+  _target_  : rnn.GRU_RNN
+  ob_size   : 3
+  act_size  : 3
+  num_h     : ${..dim}
+
+dim  : 32
+
+RNN_dataset:
+  _target_  : neurogym.Dataset
+  env : PerceptualDecisionMaking-v0
+  env_kwargs :
+    dt      : 100
+    sigma   : 1.0
+    timing  :
+#      fixation  : 500 #500
+#      stimulus  : 500
+      delay     : ['uniform', [ 200, 1000 ]]
+#      decision  : 500
+
+
+  seq_len     : 100
+  batch_size  : 16
+name  : ${.RNN_dataset.env}_GRU
