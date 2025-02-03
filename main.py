@@ -190,7 +190,7 @@ def main(cfg):
         )
         KEFvalues_GDtraj = model_to_GD_on(GD_on_KEF_trajectories.reshape(-1,GD_on_KEF_trajectories.shape[-1])).detach().cpu().numpy().reshape(*GD_on_KEF_trajectories.shape[:-1],-1)
         KEFvalues_below_threshold_points = model_to_GD_on(below_threshold_points).detach().cpu().numpy()
-e
+
         print('Gradient descent on KEF landscape complete.')
 
     print("Test loss:",test_losses_mean)
@@ -455,7 +455,7 @@ e
         contour1 = axes[2].contourf(
             X_heatmap, Y_heatmap, np.abs(phi_val) ** 0.1,
         )
-        axes[2].clabel(contour1, inline=True, fontsize=10)
+        # axes[2].clabel(contour1, inline=True, fontsize=10)
         axes[2].set_title('Contour plot of $\phi(x, y)$')
         axes[2].set_xlabel('$x$')
         axes[2].set_ylabel('$y$')
@@ -478,7 +478,7 @@ e
         contour2 = axes[3].contourf(
             X_heatmap, Y_heatmap, (np.abs(phi_val)),
         )
-        axes[3].clabel(contour2, inline=True, fontsize=10)
+        # axes[3].clabel(contour2, inline=True, fontsize=10)
         axes[3].set_title('Contour plot of $\phi(x, y)$')
         axes[3].set_xlabel('$x$')
         axes[3].set_ylabel('$y$')

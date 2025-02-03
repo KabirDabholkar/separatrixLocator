@@ -47,13 +47,13 @@ defaults:
 
 
 
-load_KEF_model    : true #false
+load_KEF_model    : false #false
 save_KEF_model    : false
 plot_KEF_of_traj  : true
 save_results      : false
 run_analysis      : true
 runGD_analytical  : false
-runGD             : true
+runGD             : false
 
 model_options:
   DNN_layers2: ${DNN_layers2}
@@ -76,7 +76,7 @@ dynamics_options:
   radial2D_bistable : ${radial2D_bistable}
 
 model_choice  : RBF
-dynamics_choice :  2bitflipflop_2D #radial2D_bistable #duffing #  # #bistable2D
+dynamics_choice :  1bitflipflop_2D #bistable2D #radial2D_bistable #duffing #  # #
 
 model :  ${model_options.${model_choice}}
 dynamics  : ${dynamics_options.${dynamics_choice}}
@@ -124,18 +124,18 @@ test_func: ${test_func_var}
 #  print_every_num_epochs  : 10
 
 
-#train_func :
-#  _target_  : learn_koopman_eig.train_with_logger
-#  _partial_ : true
-#  num_epochs    : 2000 #00 #0 #3000
-#  learning_rate : 1e-2 #5e-3
-#  batch_size    : 5000 #5000 #5000 #1000
-#  dynamics_dim  : ${dynamics.dim}
-#  logger  :
-#    _target_  : torch.utils.tensorboard.SummaryWriter
-#    log_dir   : ${...savepath}/experiment
-#  eigenvalue  : 1
-#  print_every_num_epochs  : 10
+train_func :
+  _target_  : learn_koopman_eig.train_with_logger
+  _partial_ : true
+  num_epochs    : 2000 #00 #0 #3000
+  learning_rate : 1e-2 #5e-3
+  batch_size    : 5000 #5000 #5000 #1000
+  dynamics_dim  : ${dynamics.dim}
+  logger  :
+    _target_  : torch.utils.tensorboard.SummaryWriter
+    log_dir   : ${...savepath}/experiment
+  eigenvalue  : 1
+  print_every_num_epochs  : 10
 
 #train_func_trajectories :
 #  _target_      : learn_koopman_eig.train_model_on_trajectories_sgd

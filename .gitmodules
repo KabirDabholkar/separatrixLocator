@@ -1,3 +1,6 @@
 [submodule "PytorchRBFLayer"]
 	path = PytorchRBFLayer
 	url = https://github.com/KabirDabholkar/PytorchRBFLayer.git
+[submodule "fixed-point-finder"]
+	path = fixed_point_finder
+	url = https://github.com/KabirDabholkar/fixed-point-finder.git
