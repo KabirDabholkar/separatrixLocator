@@ -5,7 +5,7 @@ from functools import partial
 import torch.nn.functional as F
 from torchdiffeq import odeint
 import numpy as np
-from PytorchRBFLayer.rbf_layer.rbf_layer import RBFLayer
+from PytorchRBFLayer.rbf_layer.rbf_layer import RBFLayer, AnisotropicRBFLayer
 
 import matplotlib.pyplot as plt
 
@@ -625,9 +625,15 @@ def compute_loss(model, x, F, epoch, decay_factor=1.0):
 def variance_normaliser(x,y):
     return torch.mean((x-y)**2,axis=0)/torch.mean(y**2,axis=0)
 
-def shuffle_normaliser(x,y):
+def shuffle_normaliser(x,y,axis=0,return_terms=False):
     permutation = np.random.permutation(x.shape[0])
-    return torch.mean((x-y)**2,axis=0)/torch.mean((x-y[permutation])**2,axis=0)
+    numerator = torch.mean((x - y) ** 2, axis=axis)
+    denominator = torch.mean((x - y[permutation]) ** 2, axis=axis)
+    ratio = numerator / denominator
+    if return_terms:
+        return ratio, numerator, denominator
+    return ratio
+
 
 def eval_loss(model,F,dist,dist_requires_dim=True,batch_size=64,dynamics_dim=1,eigenvalue=1,drop_values_outside_range = None, normaliser=shuffle_normaliser):
     sample_shape = [batch_size]
@@ -658,6 +664,9 @@ def eval_loss(model,F,dist,dist_requires_dim=True,batch_size=64,dynamics_dim=1,e
     # Main loss term: ||phi'(x) F(x) - phi(x)||^2
     dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True)
     # main_loss = torch.mean((dot_prod - eigenvalue * phi_x) ** 2 * points_to_use,axis=(0))/torch.mean(points_to_use.to(float))
+    # dot_prod = torch.log(torch.abs(dot_prod))
+    # phi_x = torch.log(torch.abs(phi_x))
+
     main_loss = normaliser(dot_prod,eigenvalue * phi_x)
 
     # Variance penalty: |Var(phi(x)) - 1|^2
@@ -675,6 +684,10 @@ def l_norm(x, p=2):
 # Gaussian RBF
 def rbf_gaussian(x):
     return (-x.pow(2)).exp()
+
+def rbf_laplacian(x):
+    return (-x.pow(2).sqrt()).exp()
+
 
 
 def train_model_on_trajectories_sgd(trajectories, model, t_values, batch_size=32, num_epochs=1000, learning_rate=0.01, device='cpu'):
@@ -763,13 +776,177 @@ def evaluate_param_specific_hyperparams(model,param_specific_hyperparams):
     #     print(param_list['weight_decay'])
     return param_specific_hyperparams_complete
 
+# def train_with_logger(
+#     model, F, dist, dist_requires_dim=True, num_epochs=1000, learning_rate=1e-3, batch_size=64,
+#     dynamics_dim=1, decay_module=None, logger=None,
+#     eigenvalue = 1, print_every_num_epochs=10, device='cpu',param_specific_hyperparams=[],
+# ):
+#     """
+#     Train the model with optional decay and logging.
+#
+#     Args:
+#         model (torch.nn.Module): The model being trained.
+#         F (callable): Dynamical system function.
+#         dist (torch.distributions.Distribution): Distribution for sampling inputs.
+#         num_epochs (int): Number of epochs for training.
+#         learning_rate (float): Learning rate for the optimizer.
+#         batch_size (int): Batch size for training.
+#         dynamics_dim (int): Dimensionality of the dynamical system.
+#         decay_module (DecayModule, optional): Module for handling decay. Defaults to None.
+#         logger (None, callable, list of callables): Logger(s) to log metrics.
+#     """
+#     if len(param_specific_hyperparams) == 0:
+#         param_specific_hyperparams = model.parameters()
+#     else:
+#         param_specific_hyperparams = evaluate_param_specific_hyperparams(model, param_specific_hyperparams)
+#
+#     optimizer = torch.optim.Adam(
+#         param_specific_hyperparams,
+#         lr=learning_rate
+#     )
+#     if dist_requires_dim:
+#         sample_shape = (batch_size, dynamics_dim)
+#     else:
+#         sample_shape = (batch_size,)
+#     for epoch in range(num_epochs):
+#         # Generate batch of samples
+#         x_batch = dist.sample(sample_shape=sample_shape).to(device)
+#         # print(x_batch.shape)
+#
+#         # Enable gradient computation for x_batch
+#         x_batch.requires_grad_(True)
+#
+#         # Forward pass and compute phi(x)
+#         phi_x = model(x_batch)
+#         # if torch.isnan(phi_x).any():
+#         #     raise ValueError("NaN in phi_x")
+#         # print(model.get_kernels_centers)
+#         # print(model.get_weights)
+#         output_dim = phi_x.shape[-1]
+#         # phi_x_prime = torch.autograd.grad(
+#         #     outputs=phi_x,
+#         #     inputs=x_batch,
+#         #     grad_outputs=torch.ones_like(phi_x),
+#         #     create_graph=True  # True
+#         # )[0]  # .detach() #this wasnt there before
+#         #
+#         # phi_x_prime0 = torch.autograd.grad(
+#         #     outputs=phi_x[...,0],
+#         #     inputs=x_batch,
+#         #     grad_outputs=torch.ones_like(phi_x[...,0]),
+#         #     create_graph=True  # True
+#         # )[0]
+#
+#         phi_x_prime = torch.autograd.grad(
+#             outputs=phi_x.sum(axis=-1),
+#             inputs=x_batch,
+#             grad_outputs=torch.ones_like(phi_x.sum(axis=-1)),
+#             create_graph=True  # True
+#         )[0]
+#
+#
+#         # # Compute phi'(x)
+#         # jacobian = torch.zeros(batch_size, dynamics_dim, output_dim)
+#         # for i in range(output_dim):
+#         #     phi_x_prime = torch.autograd.grad(
+#         #         outputs=phi_x[...,i],
+#         #         inputs=x_batch,
+#         #         grad_outputs=torch.ones_like(phi_x[...,i]),
+#         #         create_graph=True # True
+#         #     )[0] #.detach() #this wasnt there before
+#         #     jacobian[...,i] = phi_x_prime
+#
+#         # Compute F(x_batch)
+#         F_x = F(x_batch.to('cpu')).to(device)
+#
+#         # Main loss term: ||phi'(x) F(x) - phi(x)||^2
+#         dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True)  # .sum(axis=-1, keepdim=True)
+#         # dot_prod = (phi_x_prime * F_x[...,None]).sum(axis=-2, keepdim=True) #.sum(axis=-1, keepdim=True)
+#         # dot_prod = (jacobian * F_x[..., None]).sum(axis=-2)  # .sum(axis=-1, keepdim=True)
+#         # print(phi_x.shape, dot_prod.shape, phi_x_prime.shape, F_x.shape)
+#         pde_diff = dot_prod - eigenvalue * phi_x
+#         perm_ids = np.random.permutation(phi_x.shape[0])
+#         pde_diff_shufffle = dot_prod[perm_ids] - eigenvalue * phi_x
+#         main_loss = torch.mean(torch.abs(pde_diff) ** 2)
+#         # main_loss = torch.mean(torch.log(torch.abs(pde_diff)+1))
+#         rbf = 1
+#         # rbf = torch.exp(
+#         #     -1*torch.mean((phi_x-phi_x[perm_ids]) ** 2,axis=-1,keepdims=True)
+#         # )
+#         shuffle_loss = torch.mean(torch.abs(pde_diff_shufffle) ** 2 * rbf)
+#         # shuffle_loss = torch.mean(torch.log(torch.abs(pde_diff_shufffle) + 1 ))
+#
+#         # Variance penalty: |Var(phi(x)) - 1|^2
+#         phi_mean = torch.mean(phi_x)
+#         phi_deviations = phi_x - phi_mean
+#         variance_penalty = torch.mean(phi_deviations ** 2)
+#         variance_penalty_term = (variance_penalty - 1) ** 2
+#
+#         # Decay term: -l0
+#         l0 = torch.abs(phi_x).mean()
+#
+#         # Compute decay factor if decay_module is provided
+#         decay_factor = decay_module.get_decay_factor(epoch) if decay_module else 1.0
+#
+#         # Total loss
+#         # total_loss = main_loss + variance_penalty_term # - decay_factor * l0
+#         # print(pde_diff.shape)
+#
+#         # normalised_loss = main_loss / variance_penalty * output_dim
+#         normalised_loss = main_loss / shuffle_loss
+#         total_loss = normalised_loss  # + variance_penalty/l0**2
+#
+#         max_id = torch.argmax((pde_diff**2).mean((-1,-2)))
+#         normalised_max_loss = torch.mean(pde_diff[max_id] ** 2) / shuffle_loss
+#         # total_loss += 1e-3 * normalised_max_loss
+#
+#         # Log metrics
+#         metrics = {
+#             "Loss/Total": total_loss.item(),
+#             "Loss/Main": main_loss.item(),
+#             "Loss/VariancePenalty": variance_penalty_term.item(),
+#             "Loss/DecayTerm": (-decay_factor * l0).item(),
+#         }
+#         log_metrics(logger, metrics, epoch)
+#
+#         # Backpropagation and optimization
+#         optimizer.zero_grad()
+#         total_loss.backward()
+#         param_norm = sum([torch.linalg.norm(p.grad) for p in model.parameters()]).item()
+#         # Iterate over all parameters in the model
+#         for param in model.parameters():
+#             if param.grad is not None:
+#                 # Replace NaN values in the gradients with 0
+#                 param.grad.data[torch.isnan(param.grad.data)] = 0
+#         optimizer.step()
+#
+#         # Logging to console every 100 epochs
+#         if epoch % print_every_num_epochs == 0:
+#             print(f"Epoch {epoch}, Loss: {total_loss.item()}, Normalised loss: {normalised_loss}, Normalised Max loss: {normalised_max_loss}, l0: {l0}, param norm: {param_norm}, len(model.parameters()):{len(list(model.parameters()))}")
+
+def mutual_information_loss(psi, eps=1e-8):
+    """
+    psi: tensor of shape (batch_size, num_classes) with softmax outputs.
+    Returns the mutual information based loss:
+      L_MI = E[H(psi(x))] - H(E[psi(x)])
+    """
+    # Conditional entropy per sample: H(psi(x))
+    cond_entropy = -torch.sum(psi * torch.log(psi + eps), dim=1).mean()
+
+    # Marginal distribution over classes: average over batch
+    p_y = psi.mean(dim=0)
+    marg_entropy = -torch.sum(p_y * torch.log(p_y + eps))
+
+    return cond_entropy - marg_entropy
+
 def train_with_logger(
-    model, F, dist, dist_requires_dim=True, num_epochs=1000, learning_rate=1e-3, batch_size=64,
-    dynamics_dim=1, decay_module=None, logger=None,
-    eigenvalue = 1, print_every_num_epochs=10, device='cpu',param_specific_hyperparams=[],
+        model, F, dist, dist_requires_dim=True, num_epochs=1000, learning_rate=1e-3, batch_size=64,
+        dynamics_dim=1, decay_module=None, logger=None, lr_scheduler=None,
+        eigenvalue=1, print_every_num_epochs=10, device='cpu', param_specific_hyperparams=[],
+        normaliser = partial(shuffle_normaliser,axis=None,return_terms=True)
 ):
     """
-    Train the model with optional decay and logging.
+    Train the model with optional decay, logging, and learning rate scheduling.
 
     Args:
         model (torch.nn.Module): The model being trained.
@@ -781,7 +958,13 @@ def train_with_logger(
         dynamics_dim (int): Dimensionality of the dynamical system.
         decay_module (DecayModule, optional): Module for handling decay. Defaults to None.
         logger (None, callable, list of callables): Logger(s) to log metrics.
+        lr_scheduler (torch.optim.lr_scheduler._LRScheduler, optional): Learning rate scheduler.
+        eigenvalue (float): Eigenvalue used in the PDE loss term.
+        print_every_num_epochs (int): Print log every N epochs.
+        device (str): Device to perform training on.
+        param_specific_hyperparams (list): List specifying parameter-specific hyperparameters.
     """
+    # Evaluate parameter-specific hyperparameters if provided
     if len(param_specific_hyperparams) == 0:
         param_specific_hyperparams = model.parameters()
     else:
@@ -791,77 +974,48 @@ def train_with_logger(
         param_specific_hyperparams,
         lr=learning_rate
     )
+    if lr_scheduler is not None:
+        lr_scheduler = lr_scheduler(optimizer)
+
+    # Determine the shape for sampling
     if dist_requires_dim:
         sample_shape = (batch_size, dynamics_dim)
     else:
         sample_shape = (batch_size,)
-    for epoch in range(num_epochs):
-        # Generate batch of samples
-        x_batch = dist.sample(sample_shape=sample_shape).to(device)
-        # print(x_batch.shape)
 
+    for epoch in range(num_epochs):
+        # Generate a batch of samples
+        x_batch = dist.sample(sample_shape=sample_shape).to(device)
         # Enable gradient computation for x_batch
         x_batch.requires_grad_(True)
 
-        # Forward pass and compute phi(x)
+        # Forward pass: compute phi(x)
         phi_x = model(x_batch)
-        if torch.isnan(phi_x).any():
-            raise ValueError("NaN in phi_x")
-        # print(model.get_kernels_centers)
-        # print(model.get_weights)
         output_dim = phi_x.shape[-1]
-        # phi_x_prime = torch.autograd.grad(
-        #     outputs=phi_x,
-        #     inputs=x_batch,
-        #     grad_outputs=torch.ones_like(phi_x),
-        #     create_graph=True  # True
-        # )[0]  # .detach() #this wasnt there before
-        #
-        # phi_x_prime0 = torch.autograd.grad(
-        #     outputs=phi_x[...,0],
-        #     inputs=x_batch,
-        #     grad_outputs=torch.ones_like(phi_x[...,0]),
-        #     create_graph=True  # True
-        # )[0]
 
+        # Compute the gradient of the sum of phi(x) with respect to x_batch
         phi_x_prime = torch.autograd.grad(
             outputs=phi_x.sum(axis=-1),
             inputs=x_batch,
             grad_outputs=torch.ones_like(phi_x.sum(axis=-1)),
-            create_graph=True  # True
+            create_graph=True
         )[0]
-
-
-        # # Compute phi'(x)
-        # jacobian = torch.zeros(batch_size, dynamics_dim, output_dim)
-        # for i in range(output_dim):
-        #     phi_x_prime = torch.autograd.grad(
-        #         outputs=phi_x[...,i],
-        #         inputs=x_batch,
-        #         grad_outputs=torch.ones_like(phi_x[...,i]),
-        #         create_graph=True # True
-        #     )[0] #.detach() #this wasnt there before
-        #     jacobian[...,i] = phi_x_prime
 
         # Compute F(x_batch)
         F_x = F(x_batch.to('cpu')).to(device)
 
-        # Main loss term: ||phi'(x) F(x) - phi(x)||^2
-        dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True)  # .sum(axis=-1, keepdim=True)
-        # dot_prod = (phi_x_prime * F_x[...,None]).sum(axis=-2, keepdim=True) #.sum(axis=-1, keepdim=True)
-        # dot_prod = (jacobian * F_x[..., None]).sum(axis=-2)  # .sum(axis=-1, keepdim=True)
-        # print(phi_x.shape, dot_prod.shape, phi_x_prime.shape, F_x.shape)
-        pde_diff = dot_prod - eigenvalue * phi_x
-        perm_ids = np.random.permutation(phi_x.shape[0])
-        pde_diff_shufffle = dot_prod[perm_ids] - eigenvalue * phi_x
-        main_loss = torch.mean(torch.abs(pde_diff) ** 2)
-        # main_loss = torch.mean(torch.log(torch.abs(pde_diff)+1))
-        rbf = 1
-        # rbf = torch.exp(
-        #     -1*torch.mean((phi_x-phi_x[perm_ids]) ** 2,axis=-1,keepdims=True)
-        # )
-        shuffle_loss = torch.mean(torch.abs(pde_diff_shufffle) ** 2 * rbf)
-        # shuffle_loss = torch.mean(torch.log(torch.abs(pde_diff_shufffle) + 1 ))
+        # Main loss term: ||phi'(x) F(x) - eigenvalue * phi(x)||^2
+        dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True)
+        # dot_prod = torch.log(torch.abs(dot_prod))
+        # phi_x = torch.log(torch.abs(phi_x))
+        # pde_diff = dot_prod - eigenvalue * phi_x
+
+        # Shuffle the batch to compute the shuffle loss term
+        # perm_ids = np.random.permutation(phi_x.shape[0])
+        # pde_diff_shufffle = dot_prod[perm_ids] - eigenvalue * phi_x
+        # main_loss = torch.mean(torch.abs(pde_diff) ** 2)
+        # rbf = 1
+        # shuffle_loss = torch.mean(torch.abs(pde_diff_shufffle) ** 2 * rbf)
 
         # Variance penalty: |Var(phi(x)) - 1|^2
         phi_mean = torch.mean(phi_x)
@@ -869,22 +1023,30 @@ def train_with_logger(
         variance_penalty = torch.mean(phi_deviations ** 2)
         variance_penalty_term = (variance_penalty - 1) ** 2
 
-        # Decay term: -l0
+        # Decay term: -l0 (where l0 is the mean absolute value of phi(x))
         l0 = torch.abs(phi_x).mean()
 
         # Compute decay factor if decay_module is provided
         decay_factor = decay_module.get_decay_factor(epoch) if decay_module else 1.0
 
-        # Total loss
-        # total_loss = main_loss + variance_penalty_term # - decay_factor * l0
-        # print(pde_diff.shape)
+        # Total loss: here we use a normalized loss (main_loss divided by shuffle_loss)
+        if normaliser is None:
+            normaliser = lambda x, y: (
+                torch.mean((x - y) ** 2),
+                torch.zeros_like(torch.mean((x - y) ** 2)),
+                torch.zeros_like(torch.mean((x - y) ** 2))
+            )
+        normalised_loss, main_loss, shuffle_loss = normaliser(dot_prod, eigenvalue*phi_x) #main_loss / shuffle_loss
+        # normalised_loss = main_loss / variance_penalty
+        total_loss = normalised_loss
+        total_loss += mutual_information_loss(phi_x)
 
-        # normalised_loss = main_loss / variance_penalty * output_dim
-        normalised_loss = main_loss / shuffle_loss
-        total_loss = normalised_loss  # + variance_penalty/l0**2
 
-        max_id = torch.argmax((pde_diff**2).mean((-1,-2)))
-        normalised_max_loss = torch.mean(pde_diff[max_id] ** 2) / shuffle_loss
+
+        # Optionally, add additional loss terms such as a max-loss penalty if desired
+        # max_id = torch.argmax((pde_diff ** 2).mean((-1, -2)))
+        # normalised_max_loss = torch.mean(pde_diff[max_id] ** 2) / shuffle_loss
+
         # total_loss += 1e-3 * normalised_max_loss
 
         # Log metrics
@@ -893,25 +1055,33 @@ def train_with_logger(
             "Loss/Main": main_loss.item(),
             "Loss/VariancePenalty": variance_penalty_term.item(),
             "Loss/DecayTerm": (-decay_factor * l0).item(),
+            "Learning Rate": optimizer.param_groups[0]['lr'],
         }
         log_metrics(logger, metrics, epoch)
 
-        # Backpropagation and optimization
+        # Backpropagation and optimization step
         optimizer.zero_grad()
         total_loss.backward()
         param_norm = sum([torch.linalg.norm(p.grad) for p in model.parameters()]).item()
-        # Iterate over all parameters in the model
+        # Replace NaN gradients with 0 to maintain stability
         for param in model.parameters():
             if param.grad is not None:
-                # Replace NaN values in the gradients with 0
                 param.grad.data[torch.isnan(param.grad.data)] = 0
-        if torch.isnan(model.kernels_centers.grad).any():
-            raise ValueError("NaN in kernel_centers.grad")
         optimizer.step()
 
-        # Logging to console every 100 epochs
+        # Step the learning rate scheduler if provided
+        if lr_scheduler is not None:
+            lr_scheduler.step()
+
+        # Logging to console every 'print_every_num_epochs' epochs
         if epoch % print_every_num_epochs == 0:
-            print(f"Epoch {epoch}, Loss: {total_loss.item()}, Normalised loss: {normalised_loss}, Normalised Max loss: {normalised_max_loss}, l0: {l0}, param norm: {param_norm}, len(model.parameters()):{len(list(model.parameters()))}")
+            print(
+                f"Epoch {epoch}, Loss: {total_loss.item()}, Normalised loss: {normalised_loss}, "
+                # f"Normalised Max loss: {normalised_max_loss}, l0: {l0}, "
+                f"param norm: {param_norm}, ",
+                f"Learning Rate: {optimizer.param_groups[0]['lr']}, "
+                f"len(model.parameters()): {len(list(model.parameters()))}"
+            )
 
 
 def train_on_teacher(
@@ -1079,9 +1249,21 @@ def train(model, F, dist, num_epochs=1000, learning_rate=1e-3, batch_size=64, dy
 
 
 def partialised_RBF_maker(reset_params,**kwargs):
-    model = RBFLayer(radial_function=rbf_gaussian,norm_function=l_norm,**kwargs)
+    model = RBFLayer(
+        radial_function=rbf_gaussian,
+        # radial_function=rbf_laplacian,
+        norm_function=partial(l_norm,p=2),
+        **kwargs)
     model.reset(**reset_params)
     return model
+
+def partialised_AnisotropicRBF_maker(reset_params,**kwargs):
+    model = AnisotropicRBFLayer(
+        radial_function=rbf_gaussian,
+        **kwargs)
+    # model.reset(**reset_params)
+    return model
+
 def main():
     # Define function F(x) = x - x^3
     # def F(x):

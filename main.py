@@ -60,6 +60,7 @@ def main(cfg):
     model = instantiate(cfg.model)
 
     print(model)
+    print(dict(model.named_parameters()))
 
     path = Path(cfg.savepath)
     path.mkdir(parents=True,exist_ok=True)
@@ -253,25 +254,25 @@ def main(cfg):
         return
 
     if cfg.dynamics.dim == 1:
-        x = torch.linspace(-5, 5, 1000)
+        x = torch.linspace(-15, 15, 1000,dtype=torch.float32)
         x.requires_grad_(True)
         phi_val = model(x[:, None])
         F_val = F(x[:, None])
 
-        F_val = F_val.detach().cpu().numpy()
+        F_val = F_val.detach().cpu().numpy()[...,0]
 
 
         phi_x_prime = torch.autograd.grad(
-            outputs=phi_val, #.sum(axis=-1),
+            outputs=phi_val[:,:].sum(axis=-1),
             inputs=x,
-            grad_outputs=torch.ones_like(phi_val),
-            create_graph=False  # True
+            grad_outputs=torch.ones_like(phi_val[:,0]),
+            create_graph= True
         )[0]
-        phi_val = phi_val.detach().cpu().numpy()
+        phi_val = phi_val.detach().cpu().numpy()[...,0]
         x = x.detach().cpu().numpy()
         phi_x_prime = phi_x_prime.detach().cpu().numpy()
 
-        fig,axs = plt.subplots(3,1,figsize=(4,7),sharex=True)
+        fig,axs = plt.subplots(4,1,figsize=(4,7),sharex=True)
         ax = axs[0]
         ax.plot(x, 0 * x, c='grey', lw=1)
         ax.plot(x, F_val, label='F')
@@ -284,19 +285,41 @@ def main(cfg):
             ax.plot(x,np.abs(ana_phi_val)/np.sqrt(ana_phi_val**2).mean(),ls='dashed',color='black',alpha=0.5)
 
         ax = axs[2]
-        # print(phi_x_prime.shape,F_val.shape,phi_val.shape)
+        print(phi_x_prime.shape,F_val.shape,phi_val.shape)
+        diff = (phi_x_prime * F_val) - 1 * phi_val
+        diff /= diff.std()
         ax.plot(
             x,
             # (phi_x_prime*F_val.flatten())[...,None]-1*phi_val,
-            np.log(1+np.abs((phi_x_prime * F_val.flatten())[..., None] - 1 * phi_val)),
+            np.abs(diff),
             label=r'$\nabla \phi-\lambda \phi$',
             lw=1
         )
 
+        ax = axs[3]
+        # print(phi_x_prime.shape,F_val.shape,phi_val.shape)
+        dot_prods = (phi_x_prime * F_val) # - 1 * phi_val
+
+        ax.plot(
+            x,
+            np.abs(dot_prods),
+            label=r'$\nabla \phi \cdot F$',
+            lw=1,
+            c='red'
+        )
+        ax.plot(
+            x,
+            np.abs(phi_val),
+            label=r'$\phi$',
+            lw=1,
+            c='blue'
+        )
+        # ax.set_yscale('log')
+        ax.legend()
 
         # plt.legend()
-        for ax in axs.flatten(): #[:1]:
-            ax.set_ylim(-6, 6)
+        for ax in axs.flatten():
+            ax.set_xlim(-15, 15)
         fig.tight_layout()
         fig.savefig(path / 'F_and_phi.png',dpi=300)
         plt.close(fig)

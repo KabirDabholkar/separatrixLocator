@@ -1,7 +1,7 @@
 # PATH_TO_FIXED_POINT_FINDER = '../fixed-point-finder'
 # import sys
 # sys.path.insert(0, PATH_TO_FIXED_POINT_FINDER)
-from fixed-point-finder.examples.helper.FlipFlopData import FlipFlopData
+from fixed_point_finder.examples.helper.FlipFlopData import FlipFlopData
 
 
 
