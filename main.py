@@ -26,10 +26,10 @@ import torch
 from torchdiffeq import odeint
 import numpy as np
 
-# PATH_TO_FIXED_POINT_FINDER = '../fixed-point-finder'
-# import sys
-# sys.path.insert(0, PATH_TO_FIXED_POINT_FINDER)
-# from FixedPointFinderTorch import FixedPointFinderTorch
+PATH_TO_FIXED_POINT_FINDER = './fixed_point_finder'
+import sys
+sys.path.insert(0, PATH_TO_FIXED_POINT_FINDER)
+from fixed_point_finder.FixedPointFinderTorch import FixedPointFinderTorch
 
 
 CONFIG_PATH = "configs"
@@ -142,7 +142,7 @@ def main(cfg):
 
     model_to_GD_on = compose(
         # lambda x: x ** 0.1,
-        lambda x: x ** 2,
+        # lambda x: x ** 2,
         torch.log,
         lambda x: x + 1,
         torch.exp,
@@ -150,6 +150,19 @@ def main(cfg):
         torch.log,
         torch.abs,
         model
+    )
+
+    samples_for_normalisation = 1000
+    needs_dim = True
+    if hasattr(cfg.dynamics, 'dist_requires_dim'):
+        needs_dim = cfg.dynamics.dist_requires_dim
+
+    samples = dist.sample(sample_shape=[samples_for_normalisation] + ([cfg.dynamics.dim] if needs_dim else []))
+    norm_val = float(torch.mean(torch.sum(model_to_GD_on(samples)**2,axis=-1)).sqrt().detach().numpy())
+
+    model_to_GD_on = compose(
+        lambda x: x/norm_val,
+        model_to_GD_on
     )
 
     if cfg.plot_KEF_of_traj:
@@ -190,9 +203,9 @@ def main(cfg):
             dist_needs_dim = (cfg.dynamics.dist_requires_dim if hasattr(cfg.dynamics,'dist_requires_dim') else True),
         )
         KEFvalues_GDtraj = model_to_GD_on(GD_on_KEF_trajectories.reshape(-1,GD_on_KEF_trajectories.shape[-1])).detach().cpu().numpy().reshape(*GD_on_KEF_trajectories.shape[:-1],-1)
-        KEFvalues_below_threshold_points = model_to_GD_on(below_threshold_points).detach().cpu().numpy()
-
+        # KEFvalues_below_threshold_points = model_to_GD_on(below_threshold_points).detach().cpu().numpy()
         print('Gradient descent on KEF landscape complete.')
+        print(f'Found {below_threshold_points.shape[0]} points below threshold.')
 
     print("Test loss:",test_losses_mean)
     if hasattr(cfg.dynamics,'analytical_eigenfunction'):
@@ -223,7 +236,6 @@ def main(cfg):
 
         if cfg.runGD_analytical:
             fig, axs = plt.subplots(2, 2, figsize=(8, 8),sharex=True)
-
 
             GD_on_KEF = instantiate(cfg.GD_on_KEF)
 
@@ -272,7 +284,7 @@ def main(cfg):
         x = x.detach().cpu().numpy()
         phi_x_prime = phi_x_prime.detach().cpu().numpy()
 
-        fig,axs = plt.subplots(4,1,figsize=(4,7),sharex=True)
+        fig,axs = plt.subplots(4 + int(below_threshold_points is not None),1,figsize=(4,7),sharex=True)
         ax = axs[0]
         ax.plot(x, 0 * x, c='grey', lw=1)
         ax.plot(x, F_val, label='F')
@@ -317,9 +329,16 @@ def main(cfg):
         # ax.set_yscale('log')
         ax.legend()
 
+
+        if below_threshold_points is not None:
+            ax = axs[4]
+            ax.hist(below_threshold_points,density=True,bins=100)
+
         # plt.legend()
         for ax in axs.flatten():
-            ax.set_xlim(-15, 15)
+            ax.set_xlim(-5, 5)
+            ax.set_ylim(0, 5)
+        axs[0].set_ylim(-2,2)
         fig.tight_layout()
         fig.savefig(path / 'F_and_phi.png',dpi=300)
         plt.close(fig)
@@ -445,6 +464,10 @@ def main(cfg):
         axes[0].set_title('Kinetic Energy and Vector Field of $F(x, y)$')
         axes[0].set_xlabel('$x$')
         axes[0].set_ylabel('$y$')
+        if below_threshold_points is not None:
+            # print('below_threshold_points',below_threshold_points)
+            axes[0].scatter(below_threshold_points[ :, 0],
+                            below_threshold_points[ :, 1], c='red', zorder=1000)
         fig.colorbar(im1, ax=axes[0], label='Kinetic Energy $||F(x, y)||^2$')
 
         # Right subplot: Heatmap of phi with contour for phi(x, y) = 0
@@ -458,15 +481,16 @@ def main(cfg):
         contour = axes[1].contourf(
             X_heatmap, Y_heatmap, phi_val,
         )
-        if GD_on_KEF_trajectories is not None:
-            axes[1].plot(GD_on_KEF_trajectories[..., 0],
-                         GD_on_KEF_trajectories[..., 1], c='grey', lw=0.5,alpha=0.3)
-            axes[1].scatter(GD_on_KEF_trajectories[-1, :, 0],
-                       GD_on_KEF_trajectories[-1, :, 1], c='red',zorder=1000)
+        # if GD_on_KEF_trajectories is not None:
+        #     axes[1].plot(GD_on_KEF_trajectories[..., 0],
+        #                  GD_on_KEF_trajectories[..., 1], c='grey', lw=0.5,alpha=0.3)
+        #     axes[1].scatter(GD_on_KEF_trajectories[-1, :, 0],
+        #                GD_on_KEF_trajectories[-1, :, 1], c='red',zorder=1000)
         if below_threshold_points is not None:
             # print('below_threshold_points',below_threshold_points)
             axes[1].scatter(below_threshold_points[ :, 0],
-                            below_threshold_points[ :, 1], c='black', zorder=1000)
+                            below_threshold_points[ :, 1], c='red', zorder=1000)
+            # print('Plotting below_threshold_points:',below_threshold_points)
         # axes[1].clabel(contour, inline=True, fontsize=10)
         axes[1].set_title('Contour plot of $\log \phi(x, y)$')
         axes[1].set_xlabel('$x$')
@@ -753,7 +777,7 @@ def main(cfg):
                     trajectories.reshape(-1, trajectories.shape[-1])).reshape(
                     *trajectories.shape[:-1], P.n_components
                 )
-                for i in np.arange(trajectories.shape[1]):
+                for i in np.arange(pc_trajectories.shape[1]):
                     traj_l,=ax.plot(
                         pc_trajectories[:, i, 0],
                         pc_trajectories[:, i, 1],
@@ -761,20 +785,34 @@ def main(cfg):
                         c='C6', lw=0.5, alpha=0.5
                     )
 
-            for i in np.where(select_best)[0]:
-                ax.plot(
-                    pc_GD_on_KEF_trajectories[[0,-1], i, 0],
-                    pc_GD_on_KEF_trajectories[[0,-1], i, 1],
-                    pc_GD_on_KEF_trajectories[[0,-1], i, 2],
-                    c='C5', lw=0.5, alpha=0.5
-                )
+            # for i in np.where(select_best)[0]:
+            #     ax.plot(
+            #         pc_GD_on_KEF_trajectories[[0,-1], i, 0],
+            #         pc_GD_on_KEF_trajectories[[0,-1], i, 1],
+            #         pc_GD_on_KEF_trajectories[[0,-1], i, 2],
+            #         c='C5', lw=0.5, alpha=0.5
+            #     )
 
-            scatter5 = ax.scatter(
-                pc_GD_on_KEF_trajectories[-1, select_best, 0],
-                pc_GD_on_KEF_trajectories[-1, select_best, 1],
-                pc_GD_on_KEF_trajectories[-1, select_best, 2],
-                c='C5', s=10,alpha=0.5
-            )
+            # scatter5 = ax.scatter(
+            #     pc_GD_on_KEF_trajectories[-1, select_best, 0],
+            #     pc_GD_on_KEF_trajectories[-1, select_best, 1],
+            #     pc_GD_on_KEF_trajectories[-1, select_best, 2],
+            #     c='C5', s=10,alpha=0.5
+            # )
+            if below_threshold_points is not None:
+                pc_below_threshold_points = P.transform(below_threshold_points)
+                scatter5 = ax.scatter(
+                    pc_below_threshold_points[:, 0],
+                    pc_below_threshold_points[:, 1],
+                    pc_below_threshold_points[:, 2],
+                    c='red', s=10,alpha=0.5
+                )
+            # scatter5 = ax.scatter(
+            #     pc_GD_on_KEF_trajectories[-1, select_best, 0],
+            #     pc_GD_on_KEF_trajectories[-1, select_best, 1],
+            #     pc_GD_on_KEF_trajectories[-1, select_best, 2],
+            #     c='red', s=10, alpha=0.5
+            # )
 
 
         # Add legend using scatter plot artists

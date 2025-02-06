@@ -13,148 +13,72 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 
+import torch
+from functools import partial
 
-def runGD(
+
+def process_initial_conditions(
         func,
         init_cond_dist,
-        initial_conditions = None,
-        input_dim = 1,
-        dist_needs_dim = True,
-        num_steps = 100,
-        partial_optim = partial(optim.Adam,learning_rate=1e-2),
-        batch_size=64,
-        threshold = 5e-2
-    ):
+        initial_conditions,
+        input_dim,
+        dist_needs_dim,
+        batch_size,
+        threshold,
+        resample_above_threshold
+):
     """
-    Optimizes a scalar-valued function using full-batch Adam and records trajectories.
+    Processes initial conditions for optimization.
+
+    If initial_conditions is None and resample_above_threshold is True, samples candidates from
+    `init_cond_dist` until obtaining a full batch of points with func(point) > threshold.
+    Otherwise, if initial_conditions is None, samples a full batch normally.
+    If initial_conditions is provided, it is used as is (with gradients enabled).
 
     Args:
         func: Callable, a differentiable scalar-valued function.
         init_cond_dist: A PyTorch distribution for sampling initial conditions.
+        initial_conditions: Optional tensor of initial conditions.
         input_dim: Dimension of the input space.
-        num_steps: Number of optimization steps.
-        learning_rate: Adam optimizer learning rate.
+        dist_needs_dim: Boolean indicating whether to add an extra dimension to the sample.
         batch_size: Number of initial points to optimize.
+        threshold: Threshold value used to filter points.
+        resample_above_threshold: If True, only accept points where func(point) > threshold.
 
     Returns:
-        trajectories: A tensor of shape (num_steps, batch_size, input_dim),
-                      recording the optimization trajectories.
+        initial_conditions: A tensor of initial conditions with gradients enabled.
+        batch_size: The effective batch size.
     """
-    # Sample initial conditions
     if initial_conditions is None:
-        sample_shape = [batch_size]+([input_dim] if dist_needs_dim else [])
-        print('sample_shape', sample_shape)
-        initial_conditions = init_cond_dist.sample(sample_shape=sample_shape).requires_grad_() #input_dim
-    else:
-        batch_size = initial_conditions.shape[0]
-        initial_conditions = initial_conditions.requires_grad_()
-
-    # Create Adam optimizer
-    optimizer = partial_optim([initial_conditions])
-
-    # Record trajectories
-    trajectories = torch.zeros((num_steps, batch_size, input_dim), dtype=torch.float32)
-
-    for step in range(num_steps):
-        # Record current position
-        trajectories[step] = initial_conditions.detach()
-
-        # Zero gradients
-        optimizer.zero_grad()
-
-        # Compute loss (scalar value)
-        losses = func(initial_conditions)  #.mean()
-        if threshold is not None:
-            losses = losses * (losses>threshold)
-        loss = losses.sum()
-
-        # Backward pass
-        loss.backward()
-
-        # Update parameters
-        optimizer.step()
-
-    return trajectories
-
-def runGD(
-        func,
-        init_cond_dist,
-        initial_conditions=None,
-        input_dim=1,
-        dist_needs_dim=True,
-        num_steps=100,
-        partial_optim=partial(torch.optim.Adam, lr=1e-2),
-        batch_size=64,
-        threshold=5e-2
-    ):
-    """
-    Optimizes a scalar-valued function using full-batch Adam and records trajectories.
-
-    Args:
-        func: Callable, a differentiable scalar-valued function.
-        init_cond_dist: A PyTorch distribution for sampling initial conditions.
-        input_dim: Dimension of the input space.
-        num_steps: Number of optimization steps.
-        partial_optim: Partial function for optimizer.
-        batch_size: Number of initial points to optimize.
-        threshold: Threshold below which values are recorded separately.
-
-    Returns:
-        trajectories: A tensor of shape (num_steps, batch_size, input_dim),
-                      recording the optimization trajectories.
-        below_threshold_points: A tensor containing points that dropped below the threshold.
-    """
-    # Sample initial conditions
-    if initial_conditions is None:
-        sample_shape = [batch_size] + ([input_dim] if dist_needs_dim else [])
-        initial_conditions = init_cond_dist.sample(sample_shape=sample_shape).requires_grad_()
-    else:
-        batch_size = initial_conditions.shape[0]
-        initial_conditions = initial_conditions.requires_grad_()
-
-    # Create Adam optimizer
-    optimizer = partial_optim([initial_conditions])
-
-    # Record trajectories
-    trajectories = torch.zeros((num_steps, batch_size, input_dim), dtype=torch.float32)
-
-    # Track points that go below the threshold
-    below_threshold_mask = torch.zeros(batch_size, dtype=torch.bool)
-    below_threshold_points = []
-
-    for step in range(num_steps):
-        # Record current position
-        trajectories[step] = initial_conditions.detach()
-
-        # Zero gradients
-        optimizer.zero_grad()
-
-        # Compute loss (scalar value)
-        losses = func(initial_conditions)
-        if threshold is not None:
-            losses_to_optimize = losses * (losses > threshold)
+        if resample_above_threshold:
+            if threshold is None:
+                raise ValueError("When resample_above_threshold is True, threshold must be provided.")
+            accepted_points = []
+            # Continue sampling until we have enough valid points.
+            while sum(pt.shape[0] for pt in accepted_points) < batch_size:
+                sample_shape = [batch_size] + ([input_dim] if dist_needs_dim else [])
+                candidates = init_cond_dist.sample(sample_shape=sample_shape)
+                # Evaluate candidates without tracking gradients.
+                with torch.no_grad():
+                    candidate_losses = func(candidates)
+                # Create a boolean mask: only keep candidates above the threshold.
+                mask = candidate_losses[...,0] > threshold
+                valid = candidates[mask]
+                if valid.numel() > 0:
+                    accepted_points.append(valid)
+            # Concatenate and take only the first batch_size samples.
+            accepted_points = torch.cat(accepted_points, dim=0)[:batch_size]
+            initial_conditions = accepted_points.requires_grad_()
         else:
-            losses_to_optimize = losses
-        loss = losses_to_optimize.sum()
-
-        # Backward pass
-        loss.backward()
-
-        # Update parameters
-        optimizer.step()
-
-        # Check for values going below threshold and store them
-        newly_below_threshold = (losses < threshold) & ~below_threshold_mask
-        if newly_below_threshold.any():
-            below_threshold_points.append(initial_conditions[newly_below_threshold].detach().clone())
-            below_threshold_mask[newly_below_threshold] = True
-
-    if below_threshold_points:
-        below_threshold_points = torch.cat(below_threshold_points, dim=0)
+            sample_shape = [batch_size] + ([input_dim] if dist_needs_dim else [])
+            initial_conditions = init_cond_dist.sample(sample_shape=sample_shape).requires_grad_()
     else:
-        below_threshold_points = torch.empty((0, input_dim))
+        # Use provided initial conditions.
+        batch_size = initial_conditions.shape[0]
+        initial_conditions = initial_conditions.requires_grad_()
 
-    return trajectories, below_threshold_points
+    return initial_conditions, batch_size
+
 
 def runGD(
         func,
@@ -166,80 +90,86 @@ def runGD(
         partial_optim=partial(torch.optim.Adam, lr=1e-2),
         batch_size=64,
         threshold=5e-2,
-        lr_scheduler=None
-    ):
+        lr_scheduler=None,
+        resample_above_threshold=False
+):
     """
     Optimizes a scalar-valued function using full-batch Adam and records trajectories.
 
     Args:
         func: Callable, a differentiable scalar-valued function.
         init_cond_dist: A PyTorch distribution for sampling initial conditions.
+        initial_conditions: Optional tensor of initial conditions. If None, conditions will be sampled.
         input_dim: Dimension of the input space.
+        dist_needs_dim: Boolean indicating whether to add an extra dimension to the sample.
         num_steps: Number of optimization steps.
-        partial_optim: Partial function for optimizer.
+        partial_optim: Partial function for creating the optimizer.
         batch_size: Number of initial points to optimize.
-        threshold: Threshold below which values are recorded separately.
+        threshold: Threshold value. During optimization, points with func(value) below
+                   threshold are recorded separately. When resampling is enabled, only
+                   initial conditions with func(value) above threshold are used.
         lr_scheduler: Optional learning rate scheduler.
+        resample_above_threshold: If True, only initial conditions with func(initial_conditions) > threshold
+                                  are used (others are dropped and re-sampled).
 
     Returns:
         trajectories: A tensor of shape (num_steps, batch_size, input_dim),
                       recording the optimization trajectories.
         below_threshold_points: A tensor containing points that dropped below the threshold.
     """
-    # Sample initial conditions
-    if initial_conditions is None:
-        sample_shape = [batch_size] + ([input_dim] if dist_needs_dim else [])
-        initial_conditions = init_cond_dist.sample(sample_shape=sample_shape).requires_grad_()
-    else:
-        batch_size = initial_conditions.shape[0]
-        initial_conditions = initial_conditions.requires_grad_()
+    # Process the initial conditions using the helper function.
+    initial_conditions, batch_size = process_initial_conditions(
+        func, init_cond_dist, initial_conditions, input_dim, dist_needs_dim, batch_size, threshold,
+        resample_above_threshold
+    )
 
-    # Create Adam optimizer
+    # Create the optimizer.
     optimizer = partial_optim([initial_conditions])
 
-    # Apply learning rate scheduler if provided
+    # Apply learning rate scheduler if provided.
     scheduler = lr_scheduler(optimizer) if lr_scheduler else None
 
-    # Record trajectories
+    # Record trajectories.
     trajectories = torch.zeros((num_steps, batch_size, input_dim), dtype=torch.float32)
 
-    # Track points that go below the threshold
+    # Track points that go below the threshold.
     below_threshold_mask = torch.zeros(batch_size, dtype=torch.bool)
     below_threshold_points = []
 
     for step in range(num_steps):
-        # Record current position
+        # Record current positions.
         trajectories[step] = initial_conditions.detach()
 
-        # Zero gradients
+        # Zero gradients.
         optimizer.zero_grad()
 
-        # Compute loss (scalar value)
+        # Compute loss (scalar value).
         losses = func(initial_conditions)
-        if threshold is not None:
-            losses_to_optimize = losses * (losses > threshold)
-        else:
-            losses_to_optimize = losses
+        # if threshold is not None:
+        #     # Only optimize points with loss above threshold.
+        #     losses_to_optimize = losses * (losses > threshold)
+        # else:
+        #     losses_to_optimize = losses
+        losses_to_optimize = losses
+
         loss = losses_to_optimize.sum()
 
-        # Backward pass
+        # Backward pass.
         loss.backward()
 
-        # Update parameters
+        # Update parameters.
         optimizer.step()
 
-        # Step the learning rate scheduler if provided
+        # Step the learning rate scheduler if provided.
         if scheduler:
             scheduler.step()
 
-        # Check for values going below threshold and store them
-        newly_below_threshold = (losses < threshold) & ~below_threshold_mask
+        # Check for values going below threshold and store them.
+        newly_below_threshold = (losses[...,0] < threshold) & ~below_threshold_mask
         if newly_below_threshold.any():
-            # below_threshold_points.append(initial_conditions[newly_below_threshold].detach().clone())
-            below_threshold_points.append(
-                initial_conditions[newly_below_threshold.nonzero(as_tuple=True)[0]].detach().clone())
-
-            below_threshold_mask[newly_below_threshold.nonzero(as_tuple=True)[0]] = True
+            indices = newly_below_threshold.nonzero(as_tuple=True)[0]
+            below_threshold_points.append(initial_conditions[indices].detach().clone())
+            below_threshold_mask[indices] = True
 
     if below_threshold_points:
         below_threshold_points = torch.cat(below_threshold_points, dim=0)
@@ -247,6 +177,7 @@ def runGD(
         below_threshold_points = torch.empty((0, input_dim))
 
     return trajectories, below_threshold_points
+
 
 def log_metrics(logger, metrics, epoch):
     """
@@ -944,7 +875,7 @@ def train_with_logger(
         dynamics_dim=1, decay_module=None, logger=None, lr_scheduler=None,
         eigenvalue=1, print_every_num_epochs=10, device='cpu', param_specific_hyperparams=[],
         normaliser = partial(shuffle_normaliser,axis=None,return_terms=True)
-):
+    ):
     """
     Train the model with optional decay, logging, and learning rate scheduling.
 
@@ -1039,7 +970,7 @@ def train_with_logger(
         normalised_loss, main_loss, shuffle_loss = normaliser(dot_prod, eigenvalue*phi_x) #main_loss / shuffle_loss
         # normalised_loss = main_loss / variance_penalty
         total_loss = normalised_loss
-        total_loss += mutual_information_loss(phi_x)
+        # total_loss += mutual_information_loss(phi_x)
 
 
 

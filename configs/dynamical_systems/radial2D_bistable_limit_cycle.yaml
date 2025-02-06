@@ -1,0 +1,19 @@
+function :
+  _target_        : dynamical_functions.radial_to_cartesian
+  radial_dynamics :
+    _target_  : dynamical_functions.radial_bistable_limit_cycle
+    _partial_ : true
+
+run_traj  : true
+lims:
+  x: [-4,4]
+  y: [-4,4]
+IC_distribution:
+  _target_  : torch.distributions.Normal
+  loc       : 0
+#  scale     : 1
+  scale     : 4
+
+name            : radial2D_bistable_limitcycle
+dim  : 2
+equation_latex  : null

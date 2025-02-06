@@ -53,6 +53,12 @@ def radial_bistable(x):
     dthetadt = -torch.sin(theta)
     return torch.concat([drdt, dthetadt],dim=-1)
 
+def radial_bistable_limit_cycle(x):
+    r,theta = x[...,0:1],x[...,1:2]
+    drdt = (r-2) - (r-2)**3
+    dthetadt = x[...,0:1] * 0 + 1 # basically all 1
+    return torch.concat([drdt, dthetadt],dim=-1)
+
 def analytical_phi(z,mu = 1.5):
     # r, theta = x[..., 0:1], x[..., 1:2]
     x, y = z[..., 0:1], z[..., 1:2]
