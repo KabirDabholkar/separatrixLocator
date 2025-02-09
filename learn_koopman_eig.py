@@ -274,19 +274,18 @@ class ScaledLinear(nn.Linear):
         return nn.functional.linear(x, self.weight * self.scale, self.bias)
 
 # Define the neural network as phi(x) using nn.Sequential
-def create_phi_network(input_dim=1, hidden_dim=200, output_dim=1, nonlin = nn.Tanh):
-    model = nn.Sequential(
-        nn.Linear(input_dim, hidden_dim),
-        nonlin(),
-        nn.Linear(hidden_dim, hidden_dim),
-        nonlin(),
-        nn.Linear(hidden_dim, hidden_dim),
-        nonlin(),
-        # nn.Linear(hidden_dim, hidden_dim),
-        # nonlin(),
-        # nn.Dropout(p=0.02),
-        nn.Linear(hidden_dim, output_dim)
+def create_phi_network(input_dim=1, hidden_dim=200, output_dim=1, num_layers=4, nonlin = nn.Tanh):
+    args = []
+    args.append(nn.Linear(input_dim, hidden_dim))
+    args.append(nonlin())
 
+    for i in range(num_layers-2):
+        args.append(nn.Linear(hidden_dim, hidden_dim))
+        args.append(nonlin())
+
+    args.append(nn.Linear(hidden_dim, output_dim))
+    model = nn.Sequential(
+        *args
     )
     return model
 
@@ -874,7 +873,8 @@ def train_with_logger(
         model, F, dist, dist_requires_dim=True, num_epochs=1000, learning_rate=1e-3, batch_size=64,
         dynamics_dim=1, decay_module=None, logger=None, lr_scheduler=None,
         eigenvalue=1, print_every_num_epochs=10, device='cpu', param_specific_hyperparams=[],
-        normaliser = partial(shuffle_normaliser,axis=None,return_terms=True)
+        normaliser = partial(shuffle_normaliser,axis=None,return_terms=True),
+        verbose = False,
     ):
     """
     Train the model with optional decay, logging, and learning rate scheduling.
@@ -1005,7 +1005,7 @@ def train_with_logger(
             lr_scheduler.step()
 
         # Logging to console every 'print_every_num_epochs' epochs
-        if epoch % print_every_num_epochs == 0:
+        if epoch % print_every_num_epochs == 0 and verbose:
             print(
                 f"Epoch {epoch}, Loss: {total_loss.item()}, Normalised loss: {normalised_loss}, "
                 # f"Normalised Max loss: {normalised_max_loss}, l0: {l0}, "
