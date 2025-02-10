@@ -8,8 +8,10 @@ from pathlib import Path
 from functools import partial
 import os
 from compose import compose
+from plotting import plot_model_contour,plot_kinetic_energy
 
 from sklearn.decomposition import PCA
+
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -22,11 +24,13 @@ mpl.rcParams['agg.path.chunksize'] = 10000
 # mpl.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
 
 
+from separatrixLocator import SeparatrixLocator
+
 import torch
 from torchdiffeq import odeint
 import numpy as np
 
-PATH_TO_FIXED_POINT_FINDER = './fixed_point_finder'
+PATH_TO_FIXED_POINT_FINDER = f'{os.getenv("PROJECT_PATH")}/fixed_point_finder'
 import sys
 sys.path.insert(0, PATH_TO_FIXED_POINT_FINDER)
 from fixed_point_finder.FixedPointFinderTorch import FixedPointFinderTorch
@@ -43,7 +47,96 @@ project_path = os.getenv("PROJECT_PATH")
 
 @hydra.main(version_base='1.3', config_path=CONFIG_PATH, config_name=CONFIG_NAME)
 def decorated_main(cfg):
-    return main(cfg)
+    # return main(cfg)
+    return main_multimodel(cfg)
+
+def main_multimodel(cfg):
+    """
+    Uses the SeparatrixLocator class.
+    """
+    omegaconf_resolvers()
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+
+    OmegaConf.resolve(cfg.model)
+
+    print(OmegaConf.to_yaml(cfg))
+
+    dynamics_function = instantiate(cfg.dynamics.function)
+    distribution = instantiate(cfg.dynamics.IC_distribution)
+
+    SL = instantiate(cfg.separatrix_locator)
+    SL.models = [instantiate(cfg.model).to(SL.device) for _ in range(cfg.separatrix_locator.num_models)]
+
+    SL.fit(
+        dynamics_function,distribution,
+        **instantiate(cfg.separatrix_locator_fit_kwargs)
+    )
+    SL.models = [model.to('cpu') for model in SL.models]
+
+    if cfg.save_KEF_model:
+        SL.save_models(cfg.savepath)
+    if cfg.load_KEF_model:
+        SL.load_models(cfg.savepath)
+
+    scores = SL.score(
+        dynamics_function,distribution,
+        **instantiate(cfg.separatrix_locator_score_kwargs)
+    )
+    print(scores)
+
+    all_below_threshold_points = None
+    if cfg.runGD:
+        _, all_below_threshold_points = SL.find_separatrix(
+            distribution,
+            dist_needs_dim = cfg.dynamics.dist_requires_dim,
+            **instantiate(cfg.separatrix_find_separatrix_kwargs)
+        )
+
+    if cfg.run_analysis:
+        fig,axs = plt.subplots(2,5,figsize=np.array([10,4])*1.3,sharey=True,sharex=True)
+        for i in range(SL.num_models):
+            below_threshold_points = all_below_threshold_points[i] if all_below_threshold_points is not None else None
+            mod_model = compose(
+                torch.log,
+                lambda x: x + 1,
+                torch.exp,
+                partial(torch.sum, dim=-1, keepdims=True),
+                torch.log,
+                torch.abs,
+                SL.models[i]
+            )
+            ax = axs.flatten()[i]
+            plot_model_contour(
+                mod_model,
+                ax
+            )
+            if below_threshold_points is not None:
+                xlim = ax.get_xlim()  # Store current x limits
+                ylim = ax.get_ylim()  # Store current y limits
+
+                ax.scatter(below_threshold_points[:, 0], below_threshold_points[:, 1], c='red', s=10)
+
+                ax.set_xlim(xlim)  # Reset x limits
+                ax.set_ylim(ylim)  # Reset y limits
+            ax.set_aspect('equal')
+            ax.set_title(f'Model-{i}')
+            ax.set_xlabel('')
+            ax.set_ylabel('')
+
+        fig.tight_layout()
+        fig.savefig(Path(cfg.savepath)/"all_KEF_contours.png",dpi=300)
+        plt.close(fig)
+
+        fig,ax = plt.subplots(1,1, figsize=(5,5))
+        plot_kinetic_energy(
+            dynamics_function,
+            ax,
+            below_threshold_points = np.concatenate(all_below_threshold_points,axis=0)
+        )
+        fig.tight_layout()
+        fig.savefig(Path(cfg.savepath)/"kinetic_energy.png",dpi=300)
+        plt.close(fig)
+
 
 def main(cfg):
     omegaconf_resolvers()
@@ -55,7 +148,6 @@ def main(cfg):
     print(OmegaConf.to_yaml(cfg))
 
     F = instantiate(cfg.dynamics.function)
-
     dist = instantiate(cfg.dynamics.IC_distribution)
     model = instantiate(cfg.model)
 

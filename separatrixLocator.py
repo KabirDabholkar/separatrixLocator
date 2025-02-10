@@ -5,8 +5,10 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 import torch.multiprocessing as mp
 from functools import partial
-
-from learn_koopman_eig import train_with_logger, eval_loss
+from pathlib import Path
+from compose import compose
+import os
+from learn_koopman_eig import train_with_logger, eval_loss, runGD
 
 
 class KoopmanEigenfunctionModel(nn.Module):
@@ -56,9 +58,15 @@ class SeparatrixLocator(BaseEstimator):
         self.models = []
         self.scores = None
 
+    def init_models(self):
+        self.models = [self.model_class(self.dynamics_dim) for _ in range(self.num_models)]
+
     def fit(self, func, distribution, **kwargs):
         train_single_model_ = partial(train_with_logger,F=func,dist=distribution, dynamics_dim=self.dynamics_dim,**kwargs)
-        self.models = [self.model_class(self.dynamics_dim) for _ in range(self.num_models)]
+
+        if len(self.models)==0:
+            self.init_models()
+
         print(self.models)
         if self.use_multiprocessing:
             mp.set_start_method('spawn', force=True)
@@ -68,15 +76,16 @@ class SeparatrixLocator(BaseEstimator):
                 results = [
                     pool.apply_async(
                         train_single_model_,
-                        args=(self.models[i], devices[i % len(devices)], self.lr, self.epochs)
+                        args = (self.models[i]),
+                        kwds = dict(verbose=self.verbose,device=self.device),
                     ) for i in range(self.num_models)
                 ]
 
-                for i, result in enumerate(results):
-                    self.models[i].load_state_dict(result.get())
+                # for i, result in enumerate(results):
+                #     self.models[i].load_state_dict(result.get())
         else:
             for model in self.models:
-                train_single_model_(model,verbose=self.verbose)
+                train_single_model_(model,verbose=self.verbose,device=self.device)
                 # model.load_state_dict(trained_state_dict)
 
         return self
@@ -84,11 +93,20 @@ class SeparatrixLocator(BaseEstimator):
     def score(self, func, distribution, **kwargs):
         scores = []
         for model in self.models:
-            # y_pred = model(torch.tensor(X, dtype=torch.float32)).detach().numpy()
-            score = eval_loss(model, func, distribution, **kwargs)
+            score = eval_loss(model, func, distribution, dynamics_dim=self.dynamics_dim, **kwargs)
             scores.append(score)
         self.scores = scores
         return scores
+
+    def save_models(self,savedir):
+        os.makedirs(Path(savedir)/"models", exist_ok=True)
+        for i,model in enumerate(self.models):
+            torch.save(model.state_dict(), Path(savedir) / "models" / f"{model.__class__.__name__}_{i}.pt")
+
+    def load_models(self,savedir):
+        for i,model in enumerate(self.models):
+            state_dict = torch.load(Path(savedir) / "models" / f"{model.__class__.__name__}_{i}.pt",weights_only=True)
+            self.models[i].load_state_dict(state_dict)
 
     def filter_models(self, threshold):
         assert (self.scores is not None)
@@ -96,16 +114,41 @@ class SeparatrixLocator(BaseEstimator):
         self.models = [m for m, s in zip(self.models, scores) if s < threshold]
         return self
 
-    def find_separatrix(self, X):
-        X_tensor = torch.tensor(X, dtype=torch.float32, requires_grad=True)
+    def find_separatrix(self, distribution, dist_needs_dim=True, **kwargs):
+        all_trajectories = []
+        all_below_threshold_points = []
         for model in self.models:
-            optimizer = optim.SGD([X_tensor], lr=0.01)
-            for _ in range(100):
-                optimizer.zero_grad()
-                loss = model(X_tensor).abs().mean()
-                loss.backward()
-                optimizer.step()
-        return X_tensor.detach().numpy()
+            model_to_GD_on = compose(
+                torch.log,
+                lambda x: x + 1,
+                torch.exp,
+                partial(torch.sum, dim=-1, keepdims=True),
+                torch.log,
+                torch.abs,
+                model
+            )
+            samples_for_normalisation = 1000
+
+            needs_dim = dist_needs_dim
+
+            samples = distribution.sample(sample_shape=[samples_for_normalisation] + ([self.dynamics_dim] if needs_dim else []))
+            norm_val = float(torch.mean(torch.sum(model_to_GD_on(samples) ** 2, axis=-1)).sqrt().detach().numpy())
+
+            model_to_GD_on = compose(
+                lambda x: x / norm_val,
+                model_to_GD_on
+            )
+
+            trajectories, below_threshold_points = runGD(
+                model_to_GD_on,
+                distribution,
+                input_dim = self.dynamics_dim,
+                dist_needs_dim = dist_needs_dim,
+                **kwargs
+            )
+            all_trajectories.append(trajectories)
+            all_below_threshold_points.append(below_threshold_points)
+        return all_trajectories, all_below_threshold_points
 
 if __name__ == '__main__':
     # model_class = KoopmanEigenfunctionModel
@@ -117,12 +160,12 @@ if __name__ == '__main__':
         dynamics_dim = 2,
         use_multiprocessing = False,
         verbose = True,
-        model_class=model_class
+        model_class = model_class
     )
     from torch.distributions import Normal, Uniform
     SL.fit(
         func = lambda x: x-x**3,
-        distribution= Normal(0, 1),
+        distribution = Normal(0, 1),
         dist_requires_dim = True,
-        batch_size=2000
+        batch_size = 2000
     )

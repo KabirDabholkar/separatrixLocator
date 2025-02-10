@@ -117,9 +117,15 @@ def runGD(
                       recording the optimization trajectories.
         below_threshold_points: A tensor containing points that dropped below the threshold.
     """
+    if type(threshold) is not float:
+        start_threshold = threshold['start_threshold']
+        end_threshold = threshold['end_threshold']
+    else:
+        start_threshold = threshold
+        end_threshold = threshold
     # Process the initial conditions using the helper function.
     initial_conditions, batch_size = process_initial_conditions(
-        func, init_cond_dist, initial_conditions, input_dim, dist_needs_dim, batch_size, threshold,
+        func, init_cond_dist, initial_conditions, input_dim, dist_needs_dim, batch_size, start_threshold,
         resample_above_threshold
     )
 
@@ -165,7 +171,7 @@ def runGD(
             scheduler.step()
 
         # Check for values going below threshold and store them.
-        newly_below_threshold = (losses[...,0] < threshold) & ~below_threshold_mask
+        newly_below_threshold = (losses[...,0] < end_threshold) & ~below_threshold_mask
         if newly_below_threshold.any():
             indices = newly_below_threshold.nonzero(as_tuple=True)[0]
             below_threshold_points.append(initial_conditions[indices].detach().clone())
