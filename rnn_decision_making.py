@@ -72,7 +72,7 @@ def main(cfg):
 
     running_loss = 0.0
     loss_hist = []
-    for i in range(600): #2000
+    for i in range(100): #2000
         inputs, labels = dataset()
         inputs = torch.from_numpy(inputs).type(torch.float).to(device)
         # labels = torch.from_numpy(labels.flatten()).type(torch.long).to(device)

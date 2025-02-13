@@ -23,6 +23,9 @@ defaults:
   - dynamical_systems@1bitflipflop_2D  : 1bitflipflop_2D
   - dynamical_systems@2bitflipflop_2D  : 2bitflipflop_2D
   - dynamical_systems@1bitflipflop_3D  : 1bitflipflop_3D
+  - dynamical_systems@1bitflipflop_32D  : 1bitflipflop_32D
+  - dynamical_systems@2bitflipflop_32D_long  : 2bitflipflop_32D_long
+  - dynamical_systems@1bitflipflop_32D_long  : 1bitflipflop_32D_long
   - dynamical_systems@radial2D_bistable  : radial2D_bistable
   - dynamical_systems@multistable1D : multistable1D
   - dynamical_systems@radial2D_bistable_limit_cycle : radial2D_bistable_limit_cycle
@@ -49,15 +52,16 @@ defaults:
 
 
 
-save_KEF_model    : true
+save_KEF_model    : false
 load_KEF_model    : true
 plot_KEF_of_traj  : false
 save_results      : false
 run_analysis      : true
 runGD_analytical  : false
-runGD             : true
+runGD             : false
 
 model_choice  : DNN_layers6
+#model_choice  : DNN_layers2
 #model_choice  : DNN_softmax_layers8
 #model_choice  : RBF
 #model_choice  : AnisotropicRBF
@@ -66,8 +70,76 @@ model_choice  : DNN_layers6
 #dynamics_choice : 2bitflipflop_2D #radial2D_bistable #2bitflipflop_2D #bistable2D #duffing #
 #dynamics_choice : radial2D_bistable_limit_cycle
 #dynamics_choice : 1bitflipflop_3D
-dynamics_choice : duffing
+#dynamics_choice : duffing
+dynamics_choice : 1bitflipflop_32D_long
 
+
+### main train func
+#train_func_teacher :
+#  _target_  : learn_koopman_eig.train_on_teacher
+#  _partial_ : true
+#  num_epochs    : 1000 #00 #0 #3000
+#  learning_rate : 1e-2
+#  batch_size    : 50 #1000
+#  dynamics_dim  : ${dynamics.dim}
+#  print_every_num_epochs  : 10
+
+separatrix_locator :
+  _target_    : separatrixLocator.SeparatrixLocator
+  num_models  : 4 #0 #0
+  dynamics_dim : ${dynamics.dim}
+  use_multiprocessing : false
+  verbose : true
+  model_class: null
+#  device  : cuda
+  device  : cpu
+
+separatrix_locator_fit_kwargs:
+  num_epochs: 0 #2000
+  learning_rate: 5e-3 #5e-3 1e-2
+  batch_size: 5000 #5000 #5000 #1000
+#  logger:
+#    _target_: torch.utils.tensorboard.SummaryWriter
+#    log_dir: ${...savepath}/experiment
+  eigenvalue: 1
+  lr_scheduler:
+    _target_: torch.optim.lr_scheduler.StepLR
+    _partial_: true
+    step_size: 500
+    gamma: 0.90
+  print_every_num_epochs: 10
+  dist_requires_dim : ${dynamics.dist_requires_dim}
+
+
+separatrix_locator_score_kwargs:
+  batch_size: 500
+  eigenvalue: 1
+  drop_values_outside_range: null
+  dist_requires_dim : ${dynamics.dist_requires_dim}
+  normaliser:
+    _target_: learn_koopman_eig.shuffle_normaliser
+    _partial_: true
+
+separatrix_find_separatrix_kwargs:
+  num_steps: 5000 #5000
+  partial_optim:
+    _target_: torch.optim.Adam
+    _partial_: true
+    lr: 1e-3
+#  threshold: 1e-5 #0.65 #,#0.1 #-20 #null #5e-4 #5e-2
+  threshold :
+    start_threshold : 1e-2
+    end_threshold : 1e-5
+  lr_scheduler:
+    _target_: torch.optim.lr_scheduler.StepLR
+    _partial_: true
+    step_size: 50
+    gamma: 0.9
+  batch_size: 1000 #00 #00
+  resample_above_threshold: true
+
+
+#### Option list
 
 model_options:
   DNN_layers2: ${DNN_layers2}
@@ -92,6 +164,9 @@ dynamics_options:
   1bitflipflop_3D : ${1bitflipflop_3D}
   radial2D_bistable : ${radial2D_bistable}
   radial2D_bistable_limit_cycle : ${radial2D_bistable_limit_cycle}
+  1bitflipflop_32D  : ${1bitflipflop_32D}
+  2bitflipflop_32D_long : ${2bitflipflop_32D_long}
+  1bitflipflop_32D_long : ${1bitflipflop_32D_long}
 
 model :  ${model_options.${model_choice}}
 dynamics  : ${dynamics_options.${dynamics_choice}}
@@ -127,66 +202,6 @@ test_func_shuffle :
 
 
 test_func: ${test_func_var}
-
-### main train func
-#train_func_teacher :
-#  _target_  : learn_koopman_eig.train_on_teacher
-#  _partial_ : true
-#  num_epochs    : 1000 #00 #0 #3000
-#  learning_rate : 1e-2
-#  batch_size    : 50 #1000
-#  dynamics_dim  : ${dynamics.dim}
-#  print_every_num_epochs  : 10
-
-separatrix_locator :
-  _target_    : separatrixLocator.SeparatrixLocator
-  num_models  : 10 #0
-  dynamics_dim : 2
-  use_multiprocessing : false
-  verbose : true
-  model_class: null
-  device  : "cuda"
-
-separatrix_locator_fit_kwargs:
-  num_epochs: 2000
-  learning_rate: 5e-3 #5e-3 1e-2
-  batch_size: 5000 #5000 #5000 #1000
-#  logger:
-#    _target_: torch.utils.tensorboard.SummaryWriter
-#    log_dir: ${...savepath}/experiment
-  eigenvalue: 1
-  lr_scheduler:
-    _target_: torch.optim.lr_scheduler.StepLR
-    _partial_: true
-    step_size: 500
-    gamma: 0.90
-  print_every_num_epochs: 10
-
-separatrix_locator_score_kwargs:
-  batch_size: 500
-  eigenvalue: 1
-  drop_values_outside_range: null
-  normaliser:
-    _target_: learn_koopman_eig.shuffle_normaliser
-    _partial_: true
-
-separatrix_find_separatrix_kwargs:
-  num_steps: 5000 #5000
-  partial_optim:
-    _target_: torch.optim.Adam
-    _partial_: true
-    lr: 1e-3
-#  threshold: 1e-5 #0.65 #,#0.1 #-20 #null #5e-4 #5e-2
-  threshold :
-    start_threshold : 1e-2
-    end_threshold : 1e-5
-  lr_scheduler:
-    _target_: torch.optim.lr_scheduler.StepLR
-    _partial_: true
-    step_size: 50
-    gamma: 0.9
-  batch_size: 1000 #00 #00
-  resample_above_threshold: true
 
 
 #### Eigenvalue 1 train func

@@ -84,58 +84,132 @@ def main_multimodel(cfg):
     )
     print(scores)
 
+    SL.filter_models(0.1)
+
     all_below_threshold_points = None
     if cfg.runGD:
         _, all_below_threshold_points = SL.find_separatrix(
             distribution,
-            dist_needs_dim = cfg.dynamics.dist_requires_dim,
+            dist_needs_dim = cfg.dynamics.dist_requires_dim if hasattr(cfg.dynamics,"dist_requires_dim") else True,
             **instantiate(cfg.separatrix_find_separatrix_kwargs)
         )
 
     if cfg.run_analysis:
-        fig,axs = plt.subplots(2,5,figsize=np.array([10,4])*1.3,sharey=True,sharex=True)
-        for i in range(SL.num_models):
-            below_threshold_points = all_below_threshold_points[i] if all_below_threshold_points is not None else None
-            mod_model = compose(
-                torch.log,
-                lambda x: x + 1,
-                torch.exp,
-                partial(torch.sum, dim=-1, keepdims=True),
-                torch.log,
-                torch.abs,
-                SL.models[i]
+        if cfg.dynamics.dim == 1:
+            pass
+        elif cfg.dynamics.dim == 2:
+            fig,axs = plt.subplots(2,5,figsize=np.array([10,4])*1.3,sharey=True,sharex=True)
+            for i in range(SL.num_models):
+                below_threshold_points = all_below_threshold_points[i] if all_below_threshold_points is not None else None
+                mod_model = compose(
+                    torch.log,
+                    lambda x: x + 1,
+                    torch.exp,
+                    partial(torch.sum, dim=-1, keepdims=True),
+                    torch.log,
+                    torch.abs,
+                    SL.models[i]
+                )
+                ax = axs.flatten()[i]
+                x_limits = (-2, 2)  # Limits for x-axis
+                y_limits = (-2, 2)  # Limits for y-axis
+                if hasattr(cfg.dynamics, 'lims'):
+                    x_limits = cfg.dynamics.lims.x
+                    y_limits = cfg.dynamics.lims.y
+                plot_model_contour(
+                    mod_model,
+                    ax,
+                    x_limits=x_limits,
+                    y_limits=y_limits,
+                )
+                if below_threshold_points is not None:
+                    xlim = ax.get_xlim()  # Store current x limits
+                    ylim = ax.get_ylim()  # Store current y limits
+
+                    ax.scatter(below_threshold_points[:, 0], below_threshold_points[:, 1], c='red', s=10)
+
+                    ax.set_xlim(xlim)  # Reset x limits
+                    ax.set_ylim(ylim)  # Reset y limits
+                ax.set_aspect('equal')
+                ax.set_title(f'Model-{i}')
+                ax.set_xlabel('')
+                ax.set_ylabel('')
+
+            fig.tight_layout()
+            fig.savefig(Path(cfg.savepath)/"all_KEF_contours.png",dpi=300)
+            plt.close(fig)
+
+            x_limits = (-2, 2)  # Limits for x-axis
+            y_limits = (-2, 2)  # Limits for y-axis
+            if hasattr(cfg.dynamics, 'lims'):
+                x_limits = cfg.dynamics.lims.x
+                y_limits = cfg.dynamics.lims.y
+            fig,ax = plt.subplots(1,1, figsize=(5,5))
+            plot_kinetic_energy(
+                dynamics_function,
+                ax,
+                x_limits=x_limits,
+                y_limits=y_limits,
+                below_threshold_points = np.concatenate(all_below_threshold_points,axis=0)
             )
-            ax = axs.flatten()[i]
-            plot_model_contour(
-                mod_model,
-                ax
-            )
-            if below_threshold_points is not None:
-                xlim = ax.get_xlim()  # Store current x limits
-                ylim = ax.get_ylim()  # Store current y limits
+            fig.tight_layout()
+            fig.savefig(Path(cfg.savepath)/"kinetic_energy.png",dpi=300)
+            plt.close(fig)
 
-                ax.scatter(below_threshold_points[:, 0], below_threshold_points[:, 1], c='red', s=10)
+        elif cfg.dynamics.dim > 2:
+            if hasattr(cfg.dynamics,'RNN_dataset'):
+                dataset = instantiate(cfg.dynamics.RNN_dataset)
+                rnn = instantiate(cfg.dynamics.loaded_RNN_model)
+                dist = instantiate(cfg.dynamics.IC_distribution)
+                inputs, targets = dataset()
+                inputs = torch.from_numpy(inputs).type(torch.float)
+                targets = torch.from_numpy(targets)
+                outputs,hidden = rnn(inputs,return_hidden=True)
 
-                ax.set_xlim(xlim)  # Reset x limits
-                ax.set_ylim(ylim)  # Reset y limits
-            ax.set_aspect('equal')
-            ax.set_title(f'Model-{i}')
-            ax.set_xlabel('')
-            ax.set_ylabel('')
+                KEFvals = []
+                for i in range(SL.num_models):
+                    mod_model = compose(
+                        torch.log,
+                        lambda x: x + 1,
+                        torch.exp,
+                        partial(torch.sum, dim=-1, keepdims=True),
+                        torch.log,
+                        torch.abs,
+                        SL.models[i]
+                    )
+                    samples_for_normalisation = 1000
+                    needs_dim = True
+                    if hasattr(cfg.dynamics, 'dist_requires_dim'):
+                        needs_dim = cfg.dynamics.dist_requires_dim
 
-        fig.tight_layout()
-        fig.savefig(Path(cfg.savepath)/"all_KEF_contours.png",dpi=300)
-        plt.close(fig)
+                    samples = dist.sample(
+                        sample_shape=[samples_for_normalisation] + ([cfg.dynamics.dim] if needs_dim else []))
+                    norm_val = float(
+                        torch.mean(torch.sum(mod_model(samples) ** 2, axis=-1)).sqrt().detach().numpy())
 
-        fig,ax = plt.subplots(1,1, figsize=(5,5))
-        plot_kinetic_energy(
-            dynamics_function,
-            ax,
-            below_threshold_points = np.concatenate(all_below_threshold_points,axis=0)
-        )
-        fig.tight_layout()
-        fig.savefig(Path(cfg.savepath)/"kinetic_energy.png",dpi=300)
-        plt.close(fig)
+                    mod_model = compose(
+                        lambda x: x / norm_val,
+                        mod_model
+                    )
+                    KEFval = mod_model(hidden).detach()
+                    KEFvals.append(KEFval)
+                KEFvals = torch.concatenate(KEFvals,axis=-1).detach().cpu().numpy()
+                inputs = inputs.detach().cpu().numpy()
+                targets = targets.detach().cpu().numpy()
+                outputs = outputs.detach().cpu().numpy()
+
+                fig, axs = plt.subplots(3, 1, sharex=True)
+                trial_num = 3
+                ax = axs[0]
+                ax.plot(inputs[:, trial_num])
+                ax = axs[1]
+                ax.plot(targets[:, trial_num])
+                # ax.plot(np.argmax(outputs[:, 0,:],axis=-1),ls='dashed')
+                ax.plot(outputs[:, trial_num], ls='dashed')
+                ax = axs[2]
+                ax.plot(KEFvals[:, trial_num])
+                fig.tight_layout()
+                fig.savefig(Path(cfg.savepath) / "RNN_task_KEFvals.png")
 
 
 def main(cfg):

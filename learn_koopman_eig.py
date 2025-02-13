@@ -117,7 +117,7 @@ def runGD(
                       recording the optimization trajectories.
         below_threshold_points: A tensor containing points that dropped below the threshold.
     """
-    if type(threshold) is not float:
+    if hasattr(threshold,'start_threshold'):
         start_threshold = threshold['start_threshold']
         end_threshold = threshold['end_threshold']
     else:
@@ -925,6 +925,7 @@ def train_with_logger(
         x_batch = dist.sample(sample_shape=sample_shape).to(device)
         # Enable gradient computation for x_batch
         x_batch.requires_grad_(True)
+
 
         # Forward pass: compute phi(x)
         phi_x = model(x_batch)

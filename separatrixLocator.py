@@ -111,7 +111,8 @@ class SeparatrixLocator(BaseEstimator):
     def filter_models(self, threshold):
         assert (self.scores is not None)
         scores = self.scores
-        self.models = [m for m, s in zip(self.models, scores) if s < threshold]
+        self.models = [m for m, s in zip(self.models, scores) if torch.mean(s) < threshold]
+        self.num_models = len(self.models)
         return self
 
     def find_separatrix(self, distribution, dist_needs_dim=True, **kwargs):

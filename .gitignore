@@ -11,3 +11,4 @@ test_outputs
 __pycache__
 .DS_Store
 .idea
+RNN_ALM_gating
