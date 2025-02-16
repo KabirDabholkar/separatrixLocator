@@ -59,6 +59,7 @@ save_results      : false
 run_analysis      : true
 runGD_analytical  : false
 runGD             : false
+run_fixed_point_finder  : true
 
 model_choice  : DNN_layers6
 #model_choice  : DNN_layers2

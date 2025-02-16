@@ -94,6 +94,55 @@ def main_multimodel(cfg):
             **instantiate(cfg.separatrix_find_separatrix_kwargs)
         )
 
+    if cfg.run_fixed_point_finder:
+        assert hasattr(cfg.dynamics,"loaded_RNN_model")
+        rnn_model = instantiate(cfg.dynamics.loaded_RNN_model)
+        # cfg.dynamics.RNN_dataset.batch_size = 5000
+        cfg.dynamics.RNN_dataset.n_trials = 1000
+        dataset = instantiate(cfg.dynamics.RNN_dataset)
+        inp, targ = dataset()
+
+        torch_inp = torch.from_numpy(inp).type(torch.float)  # .to(device)
+        outputs, hidden_traj = rnn_model(torch_inp, return_hidden=True)
+        outputs, hidden_traj = outputs.detach().cpu().numpy(), hidden_traj.detach().cpu().numpy()
+
+        # print(model)
+        fpf_hps = {
+            'max_iters': 1000,  # 10000
+            'n_iters_per_print_update': 1000,
+            'lr_init': .1,
+            'outlier_distance_scale': 10.0,
+            'verbose': True,
+            'super_verbose': True,
+            # 'tol_q':1e-6,
+            # 'tol_q': 1e-15,
+            # 'tol_dq': 1e-15,
+        }
+        FPF = FixedPointFinderTorch(
+            rnn_model.rnn,
+            **fpf_hps
+        )
+        num_trials = 1000
+        # initial_conditions = dist.sample(sample_shape=(num_trials,)).detach().cpu().numpy()
+        inputs = np.zeros((1, cfg.dynamics.RNN_model.act_size))
+        # inputs[...,0] = 1
+        initial_conditions = hidden_traj.reshape(-1, hidden_traj.shape[-1])
+        initial_conditions = initial_conditions[
+            np.random.choice(initial_conditions.shape[0], size=num_trials, replace=False)]
+        initial_conditions += np.random.normal(size=initial_conditions.shape) * 0.05
+        # print('initial_conditions', initial_conditions.shape)
+        unique_fps, all_fps = FPF.find_fixed_points(
+            initial_conditions,
+            inputs
+        )
+        # print(all_fps.shape)
+        fixed_point_data = pd.DataFrame({
+            'stability': unique_fps.is_stable,
+            'q': unique_fps.qstar,
+            # 'KEF': model_to_GD_on(torch.from_numpy(unique_fps.xstar).type(torch.float)).detach().cpu().numpy()[..., 0],
+        })
+        fixed_point_data.to_csv(Path(cfg.savepath) / 'fixed_point_data.csv', index=False)
+
     if cfg.run_analysis:
         if cfg.dynamics.dim == 1:
             pass
@@ -158,7 +207,7 @@ def main_multimodel(cfg):
 
         elif cfg.dynamics.dim > 2:
             if hasattr(cfg.dynamics,'RNN_dataset'):
-                dataset = instantiate(cfg.dynamics.RNN_dataset)
+                dataset = instantiate(cfg.dynamics.RNN_analysis_dataset)
                 rnn = instantiate(cfg.dynamics.loaded_RNN_model)
                 dist = instantiate(cfg.dynamics.IC_distribution)
                 inputs, targets = dataset()
@@ -198,18 +247,47 @@ def main_multimodel(cfg):
                 targets = targets.detach().cpu().numpy()
                 outputs = outputs.detach().cpu().numpy()
 
-                fig, axs = plt.subplots(3, 1, sharex=True)
-                trial_num = 3
-                ax = axs[0]
-                ax.plot(inputs[:, trial_num])
-                ax = axs[1]
-                ax.plot(targets[:, trial_num])
-                # ax.plot(np.argmax(outputs[:, 0,:],axis=-1),ls='dashed')
-                ax.plot(outputs[:, trial_num], ls='dashed')
-                ax = axs[2]
-                ax.plot(KEFvals[:, trial_num])
+
+                fig, axes = plt.subplots(3, 10, sharex=True, sharey='row', figsize=(15, 6))
+
+                for trial_num in range(axes.shape[1]):
+                    axs = axes[:, trial_num]
+
+                    # Column Titles (Above First Row)
+                    axs[0].set_title(f"Trial-{trial_num}")
+
+                    # First Row: Inputs
+                    ax = axs[0]
+                    ax.plot(inputs[:, trial_num])
+                    ax.spines['top'].set_visible(False)
+                    ax.spines['right'].set_visible(False)
+                    ax.spines['left'].set_bounds(-1, 1)
+
+                    # Second Row: Outputs/Targets
+                    ax = axs[1]
+                    ax.plot(targets[:, trial_num])
+                    ax.plot(outputs[:, trial_num], ls='dashed')
+                    ax.spines['top'].set_visible(False)
+                    ax.spines['right'].set_visible(False)
+                    ax.spines['left'].set_bounds(-1, 1)
+
+                    # Third Row: KEF values
+                    ax = axs[2]
+                    ax.plot(KEFvals[:, trial_num])
+                    ax.spines['top'].set_visible(False)
+                    ax.spines['right'].set_visible(False)
+
+                # Set y-axis labels only for the first column
+                ylabel_texts = ['inputs', 'outputs/targets', 'KEF values']
+                for row, label in enumerate(ylabel_texts):
+                    axes[row, 0].set_ylabel(label)
+                for ax in axes.flatten():
+                    ax.set_xlim(230,300)
+
                 fig.tight_layout()
-                fig.savefig(Path(cfg.savepath) / "RNN_task_KEFvals.png")
+                fig.savefig(Path(cfg.savepath) / "RNN_task_KEFvals_sweep.png", dpi=300)
+
+
 
 
 def main(cfg):

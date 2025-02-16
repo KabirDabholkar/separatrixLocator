@@ -42,9 +42,18 @@ RNN_criterion :
 RNN_dataset:
   _target_  : task_utils.FlipFlopDataset
   n_trials  : 16
-  n_time    : 30
+  n_time    : 50
   n_bits    : ${..k_bit}
-  p         : 0.1
+  p         : 0.2
+  random_seed : 2
+  repeats : 10
+
+RNN_analysis_dataset:
+  _target_  : task_utils.FlipFlopSweepDataset
+  n_trials  : 10
+  n_time    : 50
+  n_bits    : ${..k_bit}
+  p         : 0.2
   random_seed : 2
   repeats : 10
 
