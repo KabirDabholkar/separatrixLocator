@@ -82,9 +82,15 @@ def main_multimodel(cfg):
         dynamics_function,distribution,
         **instantiate(cfg.separatrix_locator_score_kwargs)
     )
-    print(scores)
+    print('Scores:\n', scores.detach().cpu().numpy())
+    if hasattr(cfg,'separatrix_locator_score_kwargs_2'):
+        scores2 = SL.score(
+            dynamics_function,distribution,
+            **instantiate(cfg.separatrix_locator_score_kwargs_2)
+        )
+        print('Scores over 2x scaled distribution:\n',scores2.detach().cpu().numpy())
 
-    SL.filter_models(0.1)
+    #SL.filter_models(0.1)
 
     all_below_threshold_points = None
     if cfg.runGD:
@@ -136,54 +142,136 @@ def main_multimodel(cfg):
             inputs
         )
         # print(all_fps.shape)
-        fixed_point_data = pd.DataFrame({
+        KEF_val_at_fp = {}
+        for i in range(SL.num_models):
+            # below_threshold_points = all_below_threshold_points[i] if all_below_threshold_points is not None else None
+            mod_model = compose(
+                torch.log,
+                lambda x: x + 1,
+                torch.exp,
+                partial(torch.sum, dim=-1, keepdims=True),
+                torch.log,
+                torch.abs,
+                SL.models[i]
+            )
+            KEF_val_at_fp[f'KEF{i}'] = mod_model(torch.from_numpy(unique_fps.xstar).to(SL.device)).detach().cpu().numpy().flatten()
+
+        fixed_point_data = {
             'stability': unique_fps.is_stable,
             'q': unique_fps.qstar,
-            # 'KEF': model_to_GD_on(torch.from_numpy(unique_fps.xstar).type(torch.float)).detach().cpu().numpy()[..., 0],
-        })
+        }
+        fixed_point_data.update(KEF_val_at_fp)
+        # print(fixed_point_data)
+        fixed_point_data = pd.DataFrame(fixed_point_data)
         fixed_point_data.to_csv(Path(cfg.savepath) / 'fixed_point_data.csv', index=False)
 
     if cfg.run_analysis:
+
+        #### Plotting log prob vs KEF amplitude
+        num_samples = 1000
+        needs_dim = True
+        if hasattr(cfg.dynamics, 'dist_requires_dim'):
+            needs_dim = cfg.dynamics.dist_requires_dim
+
+        samples = distribution.sample(
+            sample_shape=[num_samples] + ([cfg.dynamics.dim] if needs_dim else []))
+
+        samples.requires_grad_(True)
+
+        fig,axs = plt.subplots(2,1,sharex=True,figsize=(6,8))
+        for j in range(SL.num_models):
+            mod_model = compose(
+                lambda x: x.sum(axis=-1,keepdims=True),
+                torch.log,
+                torch.abs,
+                SL.models[j]
+            )
+            log_probs = distribution.log_prob(samples).detach().cpu().numpy()
+            phi_x = mod_model(samples.to(SL.device))#.detach().cpu().numpy()
+            # print(log_probs.shape,phi_x.shape)
+            # from learn_koopman_eig import eval_loss
+            # losses = eval_loss(
+            #     model,
+            #     normaliser=lambda x,y:(x - y) ** 2
+            # )
+            # Compute phi'(x)
+            phi_x_prime = torch.autograd.grad(
+                outputs=phi_x,
+                inputs=samples,
+                grad_outputs=torch.ones_like(phi_x),
+                create_graph=True
+            )[0]
+            # Compute F(x_batch)
+            F_x = dynamics_function(samples)
+
+            # Main loss term: ||phi'(x) F(x) - phi(x)||^2
+            dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True)
+            errors = torch.abs(dot_prod - phi_x).detach().cpu().numpy()
+
+            phi_x = phi_x.detach().cpu().numpy()
+
+            ax = axs[0]
+            ax.scatter(np.repeat(log_probs[...,None],repeats=phi_x.shape[-1],axis=-1),np.abs(phi_x),s=10)
+            ax.set_ylabel(r'$|$KEF$(x)|$')
+            ax.set_yscale('log')
+            ax.set_xlabel(r'$\log p(x)$')
+
+            ax = axs[1]
+            ax.scatter(log_probs[..., None], errors, s=10)
+            ax.set_ylabel('PDE error')
+            ax.set_yscale('log')
+            ax.set_xlabel(r'$\log p(x)$')
+        fig.tight_layout()
+        fig.savefig(Path(cfg.savepath) / 'log_prob_and_KEF_amplitude.png')
+
+
+
         if cfg.dynamics.dim == 1:
             pass
         elif cfg.dynamics.dim == 2:
-            fig,axs = plt.subplots(2,5,figsize=np.array([10,4])*1.3,sharey=True,sharex=True)
-            for i in range(SL.num_models):
-                below_threshold_points = all_below_threshold_points[i] if all_below_threshold_points is not None else None
-                mod_model = compose(
-                    torch.log,
-                    lambda x: x + 1,
-                    torch.exp,
-                    partial(torch.sum, dim=-1, keepdims=True),
-                    torch.log,
-                    torch.abs,
-                    SL.models[i]
-                )
-                ax = axs.flatten()[i]
-                x_limits = (-2, 2)  # Limits for x-axis
-                y_limits = (-2, 2)  # Limits for y-axis
-                if hasattr(cfg.dynamics, 'lims'):
-                    x_limits = cfg.dynamics.lims.x
-                    y_limits = cfg.dynamics.lims.y
-                plot_model_contour(
-                    mod_model,
-                    ax,
-                    x_limits=x_limits,
-                    y_limits=y_limits,
-                )
-                if below_threshold_points is not None:
-                    xlim = ax.get_xlim()  # Store current x limits
-                    ylim = ax.get_ylim()  # Store current y limits
+            fig,axs = plt.subplots(10,5,figsize=np.array([5,10])*2.3,sharey=True,sharex=True)
+            for j in range(SL.num_models):
+                for i in range(axs.shape[0]):
+                    mod_model = compose(
+                        lambda x: x**0.01,
+                        torch.log,
+                        lambda x: x + 1,
+                        torch.exp,
+                        # partial(torch.sum, dim=-1, keepdims=True),
+                        lambda x: x[...,i:i+1],
+                        torch.log,
+                        torch.abs,
+                        SL.models[j]
+                    )
+                    ax = axs[i,j]
 
-                    ax.scatter(below_threshold_points[:, 0], below_threshold_points[:, 1], c='red', s=10)
+                    x_limits = (-2, 2)  # Limits for x-axis
+                    y_limits = (-2, 2)  # Limits for y-axis
+                    if hasattr(cfg.dynamics, 'lims'):
+                        x_limits = cfg.dynamics.lims.x
+                        y_limits = cfg.dynamics.lims.y
+                    plot_model_contour(
+                        mod_model,
+                        ax,
+                        x_limits=x_limits,
+                        y_limits=y_limits,
+                    )
+                    below_threshold_points = all_below_threshold_points[j] if all_below_threshold_points is not None else None
+                    if below_threshold_points is not None:
+                        xlim = ax.get_xlim()  # Store current x limits
+                        ylim = ax.get_ylim()  # Store current y limits
 
-                    ax.set_xlim(xlim)  # Reset x limits
-                    ax.set_ylim(ylim)  # Reset y limits
-                ax.set_aspect('equal')
-                ax.set_title(f'Model-{i}')
-                ax.set_xlabel('')
-                ax.set_ylabel('')
+                        ax.scatter(below_threshold_points[:, 0], below_threshold_points[:, 1], c='red', s=10)
 
+                        ax.set_xlim(xlim)  # Reset x limits
+                        ax.set_ylim(ylim)  # Reset y limits
+                    ax.set_aspect('equal')
+                    ax.set_title(f'Model-{j},output{i}'+'\n'+f", loss:{scores[j, i]:.5f}")
+                    ax.set_xlabel('')
+                    ax.set_ylabel('')
+
+                    ax.scatter(*unique_fps.xstar[unique_fps.is_stable, :].T, c='blue',marker='x',s=100,zorder=1001)
+                    ax.scatter(*unique_fps.xstar[~unique_fps.is_stable, :].T, c='red',marker='x',s=100,zorder=1000)
             fig.tight_layout()
             fig.savefig(Path(cfg.savepath)/"all_KEF_contours.png",dpi=300)
             plt.close(fig)
@@ -199,95 +287,222 @@ def main_multimodel(cfg):
                 ax,
                 x_limits=x_limits,
                 y_limits=y_limits,
-                below_threshold_points = np.concatenate(all_below_threshold_points,axis=0)
+                below_threshold_points = np.concatenate(all_below_threshold_points,axis=0) if all_below_threshold_points is not None else None,
             )
+            ax.scatter(*unique_fps.xstar[unique_fps.is_stable, :].T, c='blue', marker='x', s=100, zorder=1001)
+            ax.scatter(*unique_fps.xstar[~unique_fps.is_stable, :].T, c='red', marker='x', s=100, zorder=1000)
             fig.tight_layout()
-            fig.savefig(Path(cfg.savepath)/"kinetic_energy.png",dpi=300)
+            fig.savefig(Path(cfg.savepath) / "kinetic_energy.png",dpi=300)
             plt.close(fig)
 
-        elif cfg.dynamics.dim > 2:
-            if hasattr(cfg.dynamics,'RNN_dataset'):
-                dataset = instantiate(cfg.dynamics.RNN_analysis_dataset)
-                rnn = instantiate(cfg.dynamics.loaded_RNN_model)
-                dist = instantiate(cfg.dynamics.IC_distribution)
-                inputs, targets = dataset()
-                inputs = torch.from_numpy(inputs).type(torch.float)
-                targets = torch.from_numpy(targets)
-                outputs,hidden = rnn(inputs,return_hidden=True)
-
-                KEFvals = []
-                for i in range(SL.num_models):
-                    mod_model = compose(
-                        torch.log,
-                        lambda x: x + 1,
-                        torch.exp,
-                        partial(torch.sum, dim=-1, keepdims=True),
-                        torch.log,
-                        torch.abs,
-                        SL.models[i]
-                    )
-                    samples_for_normalisation = 1000
-                    needs_dim = True
-                    if hasattr(cfg.dynamics, 'dist_requires_dim'):
-                        needs_dim = cfg.dynamics.dist_requires_dim
-
-                    samples = dist.sample(
-                        sample_shape=[samples_for_normalisation] + ([cfg.dynamics.dim] if needs_dim else []))
-                    norm_val = float(
-                        torch.mean(torch.sum(mod_model(samples) ** 2, axis=-1)).sqrt().detach().numpy())
-
-                    mod_model = compose(
-                        lambda x: x / norm_val,
-                        mod_model
-                    )
-                    KEFval = mod_model(hidden).detach()
-                    KEFvals.append(KEFval)
-                KEFvals = torch.concatenate(KEFvals,axis=-1).detach().cpu().numpy()
-                inputs = inputs.detach().cpu().numpy()
-                targets = targets.detach().cpu().numpy()
-                outputs = outputs.detach().cpu().numpy()
+        # elif cfg.dynamics.dim > 2:
+        if hasattr(cfg.dynamics,'RNN_dataset'):
+            dataset = instantiate(cfg.dynamics.RNN_analysis_dataset)
+            rnn = instantiate(cfg.dynamics.loaded_RNN_model)
+            dist = instantiate(cfg.dynamics.IC_distribution)
+            inputs, targets = dataset()
+            inputs = torch.from_numpy(inputs).type(torch.float)
+            targets = torch.from_numpy(targets)
+            outputs,hidden = rnn(inputs,return_hidden=True)
 
 
-                fig, axes = plt.subplots(3, 10, sharex=True, sharey='row', figsize=(15, 6))
-
-                for trial_num in range(axes.shape[1]):
-                    axs = axes[:, trial_num]
-
-                    # Column Titles (Above First Row)
-                    axs[0].set_title(f"Trial-{trial_num}")
-
-                    # First Row: Inputs
-                    ax = axs[0]
-                    ax.plot(inputs[:, trial_num])
-                    ax.spines['top'].set_visible(False)
-                    ax.spines['right'].set_visible(False)
-                    ax.spines['left'].set_bounds(-1, 1)
-
-                    # Second Row: Outputs/Targets
-                    ax = axs[1]
-                    ax.plot(targets[:, trial_num])
-                    ax.plot(outputs[:, trial_num], ls='dashed')
-                    ax.spines['top'].set_visible(False)
-                    ax.spines['right'].set_visible(False)
-                    ax.spines['left'].set_bounds(-1, 1)
-
-                    # Third Row: KEF values
-                    ax = axs[2]
-                    ax.plot(KEFvals[:, trial_num])
-                    ax.spines['top'].set_visible(False)
-                    ax.spines['right'].set_visible(False)
-
-                # Set y-axis labels only for the first column
-                ylabel_texts = ['inputs', 'outputs/targets', 'KEF values']
-                for row, label in enumerate(ylabel_texts):
-                    axes[row, 0].set_ylabel(label)
-                for ax in axes.flatten():
-                    ax.set_xlim(230,300)
-
-                fig.tight_layout()
-                fig.savefig(Path(cfg.savepath) / "RNN_task_KEFvals_sweep.png", dpi=300)
+            GD_traj, all_below_threshold_points, all_below_threshold_masks  = SL.find_separatrix(
+                distribution,
+                initial_conditions = hidden.reshape(-1,hidden.shape[-1]).detach().clone(),
+                dist_needs_dim=cfg.dynamics.dist_requires_dim if hasattr(cfg.dynamics,
+                                                                         "dist_requires_dim") else True,
+                return_indices = False,
+                return_mask = True,
+                **instantiate(cfg.separatrix_find_separatrix_kwargs)
+            )
 
 
+            KEFvals = []
+            delta_dists = []
+            delta_hiddens = []
+            for i in range(SL.num_models):
+                mod_model = compose(
+                    torch.log,
+                    lambda x: x + 1,
+                    torch.exp,
+                    partial(torch.sum, dim=-1, keepdims=True),
+                    torch.log,
+                    torch.abs,
+                    SL.models[i]
+                )
+                samples_for_normalisation = 1000
+                needs_dim = True
+                if hasattr(cfg.dynamics, 'dist_requires_dim'):
+                    needs_dim = cfg.dynamics.dist_requires_dim
+
+                samples = dist.sample(
+                    sample_shape=[samples_for_normalisation] + ([cfg.dynamics.dim] if needs_dim else []))
+                norm_val = float(
+                    torch.mean(torch.sum(mod_model(samples) ** 2, axis=-1)).sqrt().detach().numpy())
+
+                mod_model = compose(
+                    lambda x: x / norm_val,
+                    mod_model
+                )
+                KEFval = mod_model(hidden).detach()
+                KEFvals.append(KEFval)
+
+                below_threshold_points = all_below_threshold_points[i]
+                below_threshold_mask = all_below_threshold_masks[i]
+                hidden_reshaped = hidden.clone().detach().reshape(-1, hidden.shape[-1]).detach()
+                hidden_reshaped[~below_threshold_mask] = torch.nan
+                delta_hidden = torch.zeros_like(hidden_reshaped)
+                delta_hidden[below_threshold_mask] = below_threshold_points - hidden_reshaped[below_threshold_mask]
+                delta_hidden[~below_threshold_mask] = torch.nan
+                delta_hidden = delta_hidden.reshape(*hidden.shape)
+                delta_hiddens.append(delta_hidden)
+                delta_dist = torch.nanmean(
+                    (delta_hidden)**2,
+                    axis = -1
+                )
+                delta_dists.append(delta_dist)
+
+                # hidden_onlyvalid = hidden_reshaped.reshape(*hidden.shape)
+            print('len(delta_dists)',len(delta_dists))
+
+            ### perturbation
+            scale = 1.0 #3.0
+            pert_rnn = instantiate(cfg.dynamics.perturbable_RNN_model)
+            delta_dists_st = torch.stack(delta_dists, axis=-1)
+            min_ids = np.argmin(np.nanmin(np.array(delta_dists_st), axis=-1), axis=0)
+            pert_inputs = torch.zeros((*delta_dists_st.shape[:2], rnn.rnn.hidden_size))
+            random_pert_inputs = pert_inputs.clone()
+            for i in range(len(min_ids)):
+                pert_vector = delta_hiddens[0][min_ids[i], i, :] * scale
+                pert_inputs[min_ids[i]:min_ids[i]+3, i, :] = pert_vector[None]
+                random_pert_inputs[min_ids[i]:min_ids[i]+3, i, :] = pert_vector[np.random.permutation(len(pert_vector))][None]
+            concat_inputs = torch.concat((inputs, pert_inputs), dim=-1)
+            random_concat_inputs = torch.concat((inputs, random_pert_inputs), dim=-1)
+            pert_outputs, pert_hidden = pert_rnn(concat_inputs, return_hidden=True)
+            random_pert_outputs, random_pert_hidden = pert_rnn(random_concat_inputs, return_hidden=True)
+
+            KEFvals = torch.concatenate(KEFvals,axis=-1).detach().cpu().numpy()
+            inputs = inputs.detach().cpu().numpy()
+            targets = targets.detach().cpu().numpy()
+            outputs = outputs.detach().cpu().numpy()
+            pert_outputs = pert_outputs.detach().cpu().numpy()
+            random_pert_outputs = random_pert_outputs.detach().cpu().numpy()
+
+
+
+
+            fig, axes = plt.subplots(5, 10, sharex=True, sharey='row', figsize=(15, 12))
+
+            for trial_num in range(axes.shape[1]):
+                axs = axes[:, trial_num]
+
+                # Column Titles (Above First Row)
+                axs[0].set_title(f"Trial-{trial_num}")
+
+                # First Row: Inputs
+                ax = axs[0]
+                ax.plot(inputs[:, trial_num])
+                ax.spines['top'].set_visible(False)
+                ax.spines['right'].set_visible(False)
+                ax.spines['left'].set_bounds(-1, 1)
+
+                ax = axs[1]
+                ax.plot(np.linalg.norm(pert_inputs[:,trial_num], axis=-1))
+                ax.spines['top'].set_visible(False)
+                ax.spines['right'].set_visible(False)
+                ax.spines['left'].set_bounds(0, 1)
+                ax.set_ylim(-0.1,1.1)
+
+
+                # Second Row: Outputs/Targets
+                ax = axs[2]
+                ax.plot(targets[:, trial_num])
+                ax.plot(outputs[:, trial_num], ls='solid',label='No pert', alpha=0.7)
+                ax.plot(pert_outputs[:, trial_num], ls='dashed', label='Calc pert', alpha=0.7)
+                ax.plot(random_pert_outputs[:, trial_num], ls='dashed', label='Random pert', alpha=0.7)
+                ax.spines['top'].set_visible(False)
+                ax.spines['right'].set_visible(False)
+                ax.spines['left'].set_bounds(-1,1)
+                # ax.set_ylim(-0.1, 1.1)
+
+                # Third Row: KEF values
+                ax = axs[3]
+                ax.plot(KEFvals[:, trial_num])
+                ax.spines['top'].set_visible(False)
+                ax.spines['right'].set_visible(False)
+                ax.set_yscale('log')
+
+                ## Fourth Row: dist to separatrix
+                ax = axs[4]
+                ax.plot(torch.stack(delta_dists,axis=-1)[:,trial_num],marker='o',markersize=1,alpha=0.5)
+                # ax.plot(dist.log_prob(hidden[:, trial_num]).detach().cpu().numpy())
+                # ax.set_ylabel('Log prob(hidden)')
+                ax.spines['top'].set_visible(False)
+                ax.spines['right'].set_visible(False)
+                ax.set_yscale('log')
+
+
+
+            # Set y-axis labels only for the first column
+            ylabel_texts = ['inputs', 'Norm of Pert input', 'outputs/targets', 'KEF values', 'Dist to Separatrix']
+            for row, label in enumerate(ylabel_texts):
+                axes[row, 0].set_ylabel(label)
+
+            axes[2,1].legend(fontsize=8)
+            # for ax in axes.flatten():
+            #     ax.set_xlim(230,300)
+
+            fig.tight_layout()
+            fig.savefig(Path(cfg.savepath) / "RNN_task_KEFvals_sweep.png", dpi=300)
+            plt.close(fig)
+
+
+
+            # P = PCA(n_components=3)
+            # pc_hidden = P.fit_transform(hidden.reshape(-1,hidden.shape[-1]).detach().cpu().numpy())
+            # pc_hidden = pc_hidden.reshape(*hidden.shape[:-1],P.n_components)
+            #
+            #
+            # # fig,ax = plt.subplots()
+            # fig = plt.figure(figsize=(6, 5))
+            # ax = fig.add_subplot(111, projection='3d')
+            #
+            # n_lines = pc_hidden.shape[1]
+            # import matplotlib.cm as cm
+            # colors = cm.Purples(np.linspace(0.3, 0.9, n_lines))
+            #
+            # # fig, ax = plt.subplots()
+            # for i in range(n_lines):
+            #     ax.plot(*pc_hidden[100:, i, :].T, color=colors[i])
+            #
+            # for i in range(SL.num_models):
+            #     below_threshold_points = all_below_threshold_points[i].detach().cpu().numpy()
+            #     below_threshold_points = below_threshold_points[~np.isnan(below_threshold_points).any(axis=-1)]
+            #     if len(below_threshold_points) == 0:
+            #         continue
+            #     pc_below_threshold_points = P.transform(below_threshold_points)
+            #     ax.scatter(*pc_below_threshold_points[:,:].T,c=f'C{i}',s=10)
+            #
+            #
+            # pc_unique_fps = P.transform(unique_fps.xstar)
+            # ax.scatter(*pc_unique_fps[unique_fps.is_stable, :].T, c='blue',marker='x',s=100,zorder=1001)
+            # ax.scatter(*pc_unique_fps[~unique_fps.is_stable, :].T, c='red',marker='x',s=100,zorder=1000) #
+            #
+            # fig.tight_layout()
+            # fig.savefig(Path(cfg.savepath) / "trajectory_PCA.png", dpi=300)
+            # # plt.close(fig)
+            #
+            # ##### Function to rotate the plot ######
+            # def rotate(angle):
+            #     ax.view_init(elev=30, azim=angle)
+            #
+            # # Create animation
+            # num_frames = 360  # Number of frames for a full rotation
+            # rotation_animation = animation.FuncAnimation(fig, rotate, frames=num_frames, interval=1000 / 30)
+            #
+            # # Save the animation to a file
+            # rotation_animation.save(Path(cfg.savepath) / 'PCA_3d_rotation.mp4', writer='ffmpeg', fps=30, dpi=100)
+            # plt.close(fig)
 
 
 def main(cfg):

@@ -18,6 +18,7 @@ name : bistable1D
 dim  : 1
 equation_latex  : x-x^3
 analytical_eigenfunction:
-  _target_: compose.compose
-  _args_:
-    - ${eval:'lambda x:x/((x**2-1)**2)**0.25'}
+  _target_  : compose.compose
+  _args_    :
+    - ${eval:'lambda x: x[...,0:1]/((1-x[...,0:1]**2)**2)**0.5 * (-x[...,1:2])'}
+#    - - ${eval:'lambda x:x/((x**2-1)**2)**0.25'}

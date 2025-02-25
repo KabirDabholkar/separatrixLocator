@@ -72,7 +72,7 @@ def main(cfg):
 
     running_loss = 0.0
     loss_hist = []
-    for i in range(100): #2000
+    for i in range(50): #100 #2000
         inputs, labels = dataset()
         inputs = torch.from_numpy(inputs).type(torch.float).to(device)
         # labels = torch.from_numpy(labels.flatten()).type(torch.long).to(device)
@@ -125,7 +125,6 @@ def main(cfg):
     # ax.plot(np.argmax(outputs[:, 0,:],axis=-1),ls='dashed')
     ax.plot(outputs[:, 0, :], ls='dashed')
     plt.savefig(path / "RNN_task.png")
-
     torch.save(net.state_dict(), os.path.join(cfg.savepath,'RNNmodel.torch'))
 
 

@@ -96,7 +96,7 @@ class SeparatrixLocator(BaseEstimator):
             score = eval_loss(model, func, distribution, dynamics_dim=self.dynamics_dim, **kwargs)
             scores.append(score)
         self.scores = scores
-        return scores
+        return torch.stack(self.scores)
 
     def save_models(self,savedir):
         os.makedirs(Path(savedir)/"models", exist_ok=True)
@@ -115,41 +115,73 @@ class SeparatrixLocator(BaseEstimator):
         self.num_models = len(self.models)
         return self
 
-    def find_separatrix(self, distribution, dist_needs_dim=True, **kwargs):
-        all_trajectories = []
-        all_below_threshold_points = []
+    # def find_separatrix(self, distribution, dist_needs_dim=True, **kwargs):
+    #     all_trajectories = []
+    #     all_below_threshold_points = []
+    #     for model in self.models:
+    #         model_to_GD_on = compose(
+    #             torch.log,
+    #             lambda x: x + 1,
+    #             torch.exp,
+    #             partial(torch.sum, dim=-1, keepdims=True),
+    #             torch.log,
+    #             torch.abs,
+    #             model
+    #         )
+    #         samples_for_normalisation = 1000
+    #
+    #         needs_dim = dist_needs_dim
+    #
+    #         samples = distribution.sample(sample_shape=[samples_for_normalisation] + ([self.dynamics_dim] if needs_dim else []))
+    #         norm_val = float(torch.mean(torch.sum(model_to_GD_on(samples) ** 2, axis=-1)).sqrt().detach().numpy())
+    #
+    #         model_to_GD_on = compose(
+    #             lambda x: x / norm_val,
+    #             model_to_GD_on
+    #         )
+    #
+    #         trajectories, below_threshold_points = runGD(
+    #             model_to_GD_on,
+    #             distribution,
+    #             input_dim = self.dynamics_dim,
+    #             dist_needs_dim = dist_needs_dim,
+    #             **kwargs
+    #         )
+    #         all_trajectories.append(trajectories)
+    #         all_below_threshold_points.append(below_threshold_points)
+    #     return all_trajectories, all_below_threshold_points
+
+    def find_separatrix(self, distribution, dist_needs_dim=True,
+                        return_indices=False, return_mask=False, **kwargs):
+        all_traj, all_below, all_inds, all_masks = [], [], [], []
         for model in self.models:
-            model_to_GD_on = compose(
-                torch.log,
-                lambda x: x + 1,
-                torch.exp,
+            f = compose(
+                lambda x: x**0.1,
+                torch.log, lambda x: x + 1, torch.exp,
                 partial(torch.sum, dim=-1, keepdims=True),
-                torch.log,
-                torch.abs,
-                model
+                torch.log, torch.abs, model
             )
-            samples_for_normalisation = 1000
-
-            needs_dim = dist_needs_dim
-
-            samples = distribution.sample(sample_shape=[samples_for_normalisation] + ([self.dynamics_dim] if needs_dim else []))
-            norm_val = float(torch.mean(torch.sum(model_to_GD_on(samples) ** 2, axis=-1)).sqrt().detach().numpy())
-
-            model_to_GD_on = compose(
-                lambda x: x / norm_val,
-                model_to_GD_on
+            shape = [1000] + ([self.dynamics_dim] if dist_needs_dim else [])
+            samples = distribution.sample(sample_shape=shape)
+            norm_val = float(torch.mean(torch.sum(f(samples) ** 2, dim=-1)).sqrt().detach().numpy())
+            f = compose(lambda x: x / norm_val, f)
+            ret = runGD(
+                f, distribution, input_dim=self.dynamics_dim, dist_needs_dim=dist_needs_dim,
+                return_indices=return_indices, return_mask=return_mask, **kwargs
             )
+            all_traj.append(ret[0])
+            all_below.append(ret[1])
+            off = 2
+            if return_indices:
+                all_inds.append(ret[off]);
+                off += 1
+            if return_mask:
+                all_masks.append(ret[off])
+        res = [all_traj, all_below]
+        if return_indices: res.append(all_inds)
+        if return_mask: res.append(all_masks)
+        return tuple(res)
 
-            trajectories, below_threshold_points = runGD(
-                model_to_GD_on,
-                distribution,
-                input_dim = self.dynamics_dim,
-                dist_needs_dim = dist_needs_dim,
-                **kwargs
-            )
-            all_trajectories.append(trajectories)
-            all_below_threshold_points.append(below_threshold_points)
-        return all_trajectories, all_below_threshold_points
 
 if __name__ == '__main__':
     # model_class = KoopmanEigenfunctionModel

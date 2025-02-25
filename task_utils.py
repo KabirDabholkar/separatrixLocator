@@ -20,8 +20,9 @@ class FlipFlopDataset(FlipFlopData):
 
 
 class FlipFlopSweepDataset(FlipFlopDataset):
-    def __init__(self,**kwargs):
+    def __init__(self,sign=1,**kwargs):
         super().__init__(**kwargs)
+        self.sign = sign
 
     def __call__(self):
         inputs = np.zeros((self.n_time,self.n_trials,self.n_bits))
@@ -30,6 +31,8 @@ class FlipFlopSweepDataset(FlipFlopDataset):
         inputs = np.repeat(inputs,self.repeats,axis=0)
         targets = np.zeros_like(inputs)
         targets[:] = np.nan
+
+        inputs = inputs * self.sign
         return inputs, targets #[...,None,None], targets[...,None,None]
 
 

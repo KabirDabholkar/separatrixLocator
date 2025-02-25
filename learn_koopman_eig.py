@@ -12,9 +12,178 @@ import matplotlib.pyplot as plt
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
+from copy import deepcopy
 
 import torch
 from functools import partial
+
+
+# def process_initial_conditions(
+#         func,
+#         init_cond_dist,
+#         initial_conditions,
+#         input_dim,
+#         dist_needs_dim,
+#         batch_size,
+#         threshold,
+#         resample_above_threshold
+# ):
+#     """
+#     Processes initial conditions for optimization.
+#
+#     If initial_conditions is None and resample_above_threshold is True, samples candidates from
+#     `init_cond_dist` until obtaining a full batch of points with func(point) > threshold.
+#     Otherwise, if initial_conditions is None, samples a full batch normally.
+#     If initial_conditions is provided, it is used as is (with gradients enabled).
+#
+#     Args:
+#         func: Callable, a differentiable scalar-valued function.
+#         init_cond_dist: A PyTorch distribution for sampling initial conditions.
+#         initial_conditions: Optional tensor of initial conditions.
+#         input_dim: Dimension of the input space.
+#         dist_needs_dim: Boolean indicating whether to add an extra dimension to the sample.
+#         batch_size: Number of initial points to optimize.
+#         threshold: Threshold value used to filter points.
+#         resample_above_threshold: If True, only accept points where func(point) > threshold.
+#
+#     Returns:
+#         initial_conditions: A tensor of initial conditions with gradients enabled.
+#         batch_size: The effective batch size.
+#     """
+#     if initial_conditions is None:
+#         if resample_above_threshold:
+#             if threshold is None:
+#                 raise ValueError("When resample_above_threshold is True, threshold must be provided.")
+#             accepted_points = []
+#             # Continue sampling until we have enough valid points.
+#             while sum(pt.shape[0] for pt in accepted_points) < batch_size:
+#                 sample_shape = [batch_size] + ([input_dim] if dist_needs_dim else [])
+#                 candidates = init_cond_dist.sample(sample_shape=sample_shape)
+#                 # Evaluate candidates without tracking gradients.
+#                 with torch.no_grad():
+#                     candidate_losses = func(candidates)
+#                 # Create a boolean mask: only keep candidates above the threshold.
+#                 mask = candidate_losses[...,0] > threshold
+#                 valid = candidates[mask]
+#                 if valid.numel() > 0:
+#                     accepted_points.append(valid)
+#             # Concatenate and take only the first batch_size samples.
+#             accepted_points = torch.cat(accepted_points, dim=0)[:batch_size]
+#             initial_conditions = accepted_points.requires_grad_()
+#         else:
+#             sample_shape = [batch_size] + ([input_dim] if dist_needs_dim else [])
+#             initial_conditions = init_cond_dist.sample(sample_shape=sample_shape).requires_grad_()
+#     else:
+#         # Use provided initial conditions.
+#         batch_size = initial_conditions.shape[0]
+#         initial_conditions = initial_conditions.requires_grad_()
+#
+#     return initial_conditions, batch_size
+#
+#
+# def runGD(
+#         func,
+#         init_cond_dist,
+#         initial_conditions=None,
+#         input_dim=1,
+#         dist_needs_dim=True,
+#         num_steps=100,
+#         partial_optim=partial(torch.optim.Adam, lr=1e-2),
+#         batch_size=64,
+#         threshold=5e-2,
+#         lr_scheduler=None,
+#         resample_above_threshold=False
+# ):
+#     """
+#     Optimizes a scalar-valued function using full-batch Adam and records trajectories.
+#
+#     Args:
+#         func: Callable, a differentiable scalar-valued function.
+#         init_cond_dist: A PyTorch distribution for sampling initial conditions.
+#         initial_conditions: Optional tensor of initial conditions. If None, conditions will be sampled.
+#         input_dim: Dimension of the input space.
+#         dist_needs_dim: Boolean indicating whether to add an extra dimension to the sample.
+#         num_steps: Number of optimization steps.
+#         partial_optim: Partial function for creating the optimizer.
+#         batch_size: Number of initial points to optimize.
+#         threshold: Threshold value. During optimization, points with func(value) below
+#                    threshold are recorded separately. When resampling is enabled, only
+#                    initial conditions with func(value) above threshold are used.
+#         lr_scheduler: Optional learning rate scheduler.
+#         resample_above_threshold: If True, only initial conditions with func(initial_conditions) > threshold
+#                                   are used (others are dropped and re-sampled).
+#
+#     Returns:
+#         trajectories: A tensor of shape (num_steps, batch_size, input_dim),
+#                       recording the optimization trajectories.
+#         below_threshold_points: A tensor containing points that dropped below the threshold.
+#     """
+#     if hasattr(threshold,'start_threshold'):
+#         start_threshold = threshold['start_threshold']
+#         end_threshold = threshold['end_threshold']
+#     else:
+#         start_threshold = threshold
+#         end_threshold = threshold
+#     # Process the initial conditions using the helper function.
+#     initial_conditions, batch_size = process_initial_conditions(
+#         func, init_cond_dist, initial_conditions, input_dim, dist_needs_dim, batch_size, start_threshold,
+#         resample_above_threshold
+#     )
+#
+#     # Create the optimizer.
+#     optimizer = partial_optim([initial_conditions])
+#
+#     # Apply learning rate scheduler if provided.
+#     scheduler = lr_scheduler(optimizer) if lr_scheduler else None
+#
+#     # Record trajectories.
+#     trajectories = torch.zeros((num_steps, batch_size, input_dim), dtype=torch.float32)
+#
+#     # Track points that go below the threshold.
+#     below_threshold_mask = torch.zeros(batch_size, dtype=torch.bool)
+#     below_threshold_points = []
+#
+#     for step in range(num_steps):
+#         # Record current positions.
+#         trajectories[step] = initial_conditions.detach()
+#
+#         # Zero gradients.
+#         optimizer.zero_grad()
+#
+#         # Compute loss (scalar value).
+#         losses = func(initial_conditions)
+#         # if threshold is not None:
+#         #     # Only optimize points with loss above threshold.
+#         #     losses_to_optimize = losses * (losses > threshold)
+#         # else:
+#         #     losses_to_optimize = losses
+#         losses_to_optimize = losses
+#
+#         loss = losses_to_optimize.sum()
+#
+#         # Backward pass.
+#         loss.backward()
+#
+#         # Update parameters.
+#         optimizer.step()
+#
+#         # Step the learning rate scheduler if provided.
+#         if scheduler:
+#             scheduler.step()
+#
+#         # Check for values going below threshold and store them.
+#         newly_below_threshold = (losses[...,0] < end_threshold) & ~below_threshold_mask
+#         if newly_below_threshold.any():
+#             indices = newly_below_threshold.nonzero(as_tuple=True)[0]
+#             below_threshold_points.append(initial_conditions[indices].detach().clone())
+#             below_threshold_mask[indices] = True
+#
+#     if below_threshold_points:
+#         below_threshold_points = torch.cat(below_threshold_points, dim=0)
+#     else:
+#         below_threshold_points = torch.empty((0, input_dim))
+#
+#     return trajectories, below_threshold_points
 
 
 def process_initial_conditions(
@@ -30,10 +199,13 @@ def process_initial_conditions(
     """
     Processes initial conditions for optimization.
 
-    If initial_conditions is None and resample_above_threshold is True, samples candidates from
-    `init_cond_dist` until obtaining a full batch of points with func(point) > threshold.
-    Otherwise, if initial_conditions is None, samples a full batch normally.
-    If initial_conditions is provided, it is used as is (with gradients enabled).
+    If `initial_conditions` is None and resampling is requested, it samples candidates
+    from `init_cond_dist` until a full batch of points satisfying func(point) > threshold is obtained.
+    If `initial_conditions` is provided:
+      - When resample_above_threshold is True, all points are accepted as valid.
+      - Otherwise, points where func(point) <= threshold are dropped.
+    In either case, an additional tensor `orig_indices` is returned to indicate the indices of
+    the initial conditions (with respect to the original provided/sampled ordering).
 
     Args:
         func: Callable, a differentiable scalar-valued function.
@@ -44,10 +216,13 @@ def process_initial_conditions(
         batch_size: Number of initial points to optimize.
         threshold: Threshold value used to filter points.
         resample_above_threshold: If True, only accept points where func(point) > threshold.
+                                  (If initial_conditions is provided, all points are assumed valid.)
 
     Returns:
         initial_conditions: A tensor of initial conditions with gradients enabled.
         batch_size: The effective batch size.
+        orig_indices: A tensor containing the indices of the original initial conditions
+                      that are returned.
     """
     if initial_conditions is None:
         if resample_above_threshold:
@@ -61,8 +236,8 @@ def process_initial_conditions(
                 # Evaluate candidates without tracking gradients.
                 with torch.no_grad():
                     candidate_losses = func(candidates)
-                # Create a boolean mask: only keep candidates above the threshold.
-                mask = candidate_losses[...,0] > threshold
+                # Only keep candidates above the threshold.
+                mask = candidate_losses[..., 0] > threshold
                 valid = candidates[mask]
                 if valid.numel() > 0:
                     accepted_points.append(valid)
@@ -72,12 +247,26 @@ def process_initial_conditions(
         else:
             sample_shape = [batch_size] + ([input_dim] if dist_needs_dim else [])
             initial_conditions = init_cond_dist.sample(sample_shape=sample_shape).requires_grad_()
-    else:
-        # Use provided initial conditions.
+        # For sampled conditions, assign sequential original indices.
+        orig_indices = torch.arange(initial_conditions.shape[0])
         batch_size = initial_conditions.shape[0]
-        initial_conditions = initial_conditions.requires_grad_()
+    else:
+        # Provided initial conditions.
+        if resample_above_threshold:
+            # Assume all provided points are above threshold.
+            batch_size = initial_conditions.shape[0]
+            orig_indices = torch.arange(batch_size)
+            initial_conditions = initial_conditions.requires_grad_()
+        else:
+            # Filter out points that do not satisfy the threshold.
+            with torch.no_grad():
+                candidate_losses = func(initial_conditions)
+            mask = candidate_losses[..., 0] > threshold
+            orig_indices = torch.nonzero(mask, as_tuple=False).flatten()
+            initial_conditions = initial_conditions[mask].requires_grad_()
+            batch_size = initial_conditions.shape[0]
 
-    return initial_conditions, batch_size
+    return initial_conditions, batch_size, orig_indices
 
 
 def runGD(
@@ -91,7 +280,9 @@ def runGD(
         batch_size=64,
         threshold=5e-2,
         lr_scheduler=None,
-        resample_above_threshold=False
+        resample_above_threshold=False,
+        return_indices = False,
+        return_mask = False,
 ):
     """
     Optimizes a scalar-valued function using full-batch Adam and records trajectories.
@@ -105,84 +296,83 @@ def runGD(
         num_steps: Number of optimization steps.
         partial_optim: Partial function for creating the optimizer.
         batch_size: Number of initial points to optimize.
-        threshold: Threshold value. During optimization, points with func(value) below
-                   threshold are recorded separately. When resampling is enabled, only
-                   initial conditions with func(value) above threshold are used.
+        threshold: Threshold value. If a dict with keys 'start_threshold' and 'end_threshold' is provided,
+                   those are used accordingly; otherwise, the same value is used for both.
         lr_scheduler: Optional learning rate scheduler.
-        resample_above_threshold: If True, only initial conditions with func(initial_conditions) > threshold
-                                  are used (others are dropped and re-sampled).
+        resample_above_threshold: If True, only initial conditions with func(value) > threshold
+                                  are used. (When provided initial_conditions, all are assumed valid.)
+        return_indices: If True, also returns the original indices of the points that dropped below threshold.
 
     Returns:
         trajectories: A tensor of shape (num_steps, batch_size, input_dim),
                       recording the optimization trajectories.
         below_threshold_points: A tensor containing points that dropped below the threshold.
+        below_threshold_indices (optional): A tensor containing the indices (from the original initial_conditions)
+                                             corresponding to below_threshold_points, returned only if return_indices=True.
     """
-    if hasattr(threshold,'start_threshold'):
+    if hasattr(threshold, 'start_threshold'):
         start_threshold = threshold['start_threshold']
         end_threshold = threshold['end_threshold']
     else:
         start_threshold = threshold
         end_threshold = threshold
-    # Process the initial conditions using the helper function.
-    initial_conditions, batch_size = process_initial_conditions(
+
+    orig_initial_conditions = deepcopy(initial_conditions)
+
+    # Process the initial conditions and obtain their original indices.
+    initial_conditions, batch_size, orig_indices = process_initial_conditions(
         func, init_cond_dist, initial_conditions, input_dim, dist_needs_dim, batch_size, start_threshold,
         resample_above_threshold
     )
 
-    # Create the optimizer.
     optimizer = partial_optim([initial_conditions])
-
-    # Apply learning rate scheduler if provided.
     scheduler = lr_scheduler(optimizer) if lr_scheduler else None
 
-    # Record trajectories.
     trajectories = torch.zeros((num_steps, batch_size, input_dim), dtype=torch.float32)
 
-    # Track points that go below the threshold.
     below_threshold_mask = torch.zeros(batch_size, dtype=torch.bool)
     below_threshold_points = []
+    below_threshold_indices = []  # To track which original indices drop below threshold
 
     for step in range(num_steps):
-        # Record current positions.
         trajectories[step] = initial_conditions.detach()
 
-        # Zero gradients.
         optimizer.zero_grad()
 
-        # Compute loss (scalar value).
         losses = func(initial_conditions)
-        # if threshold is not None:
-        #     # Only optimize points with loss above threshold.
-        #     losses_to_optimize = losses * (losses > threshold)
-        # else:
-        #     losses_to_optimize = losses
         losses_to_optimize = losses
-
         loss = losses_to_optimize.sum()
 
-        # Backward pass.
         loss.backward()
-
-        # Update parameters.
         optimizer.step()
 
-        # Step the learning rate scheduler if provided.
         if scheduler:
             scheduler.step()
 
-        # Check for values going below threshold and store them.
-        newly_below_threshold = (losses[...,0] < end_threshold) & ~below_threshold_mask
+        # Identify points that drop below the end_threshold and record them.
+        newly_below_threshold = (losses[..., 0] < end_threshold) & ~below_threshold_mask
         if newly_below_threshold.any():
             indices = newly_below_threshold.nonzero(as_tuple=True)[0]
             below_threshold_points.append(initial_conditions[indices].detach().clone())
+            # Use orig_indices to track the corresponding indices from the original set.
+            below_threshold_indices.append(orig_indices[indices].detach().clone())
             below_threshold_mask[indices] = True
 
     if below_threshold_points:
         below_threshold_points = torch.cat(below_threshold_points, dim=0)
+        below_threshold_indices = torch.cat(below_threshold_indices, dim=0)
     else:
         below_threshold_points = torch.empty((0, input_dim))
+        below_threshold_indices = torch.empty((0,), dtype=torch.long)
 
-    return trajectories, below_threshold_points
+    to_return = [trajectories, below_threshold_points]
+    if return_indices:
+        to_return += [below_threshold_indices]
+    if return_mask:
+        mask = torch.zeros(orig_initial_conditions.shape[0], dtype=torch.bool)
+        mask[below_threshold_indices] = True
+        to_return += [mask]
+    return tuple(to_return)
 
 
 def log_metrics(logger, metrics, epoch):
@@ -571,7 +761,7 @@ def shuffle_normaliser(x,y,axis=0,return_terms=False):
     return ratio
 
 
-def eval_loss(model,F,dist,dist_requires_dim=True,batch_size=64,dynamics_dim=1,eigenvalue=1,drop_values_outside_range = None, normaliser=shuffle_normaliser):
+def eval_loss(model,F,dist,dist_requires_dim=True,batch_size=64,dynamics_dim=1,eigenvalue=1,drop_values_outside_range = None, normaliser=shuffle_normaliser,scale_dist=1):
     sample_shape = [batch_size]
     if dist_requires_dim:
         sample_shape += [dynamics_dim]
@@ -579,6 +769,8 @@ def eval_loss(model,F,dist,dist_requires_dim=True,batch_size=64,dynamics_dim=1,e
 
     # Enable gradient computation for x_batch
     x_batch.requires_grad_(True)
+
+    x_batch = x_batch * scale_dist
 
     # Forward pass and compute phi(x)
     phi_x = model(x_batch)
@@ -875,12 +1067,35 @@ def mutual_information_loss(psi, eps=1e-8):
 
     return cond_entropy - marg_entropy
 
+
+def restrict_to_distribution_loss(x_batch,phi_x,dist,threshold = -4.0):
+    # Compute the log probability for the current batch samples
+    log_probs = dist.log_prob(x_batch)
+
+    # Define a weighting function that is high when log_probs are low.
+    # One option is to use a sigmoid that smoothly transitions.
+    # You might choose a threshold based on your distribution (e.g., threshold = -5)
+
+    weight = torch.sigmoid(threshold - log_probs)
+
+    # Alternatively, you could use an exponential form:
+    # weight = torch.exp(-log_probs)
+    # (optionally, clip weight to avoid extreme values)
+
+    # Regularisation: penalise high |phi(x)| in low probability regions.
+    # lambda_reg is a hyperparameter to tune the strength of this penalty.
+    # lambda_reg = 1e-3  # example value, adjust as needed
+    reg_loss = torch.mean(weight * torch.abs(phi_x))
+    return reg_loss
+
+
 def train_with_logger(
         model, F, dist, dist_requires_dim=True, num_epochs=1000, learning_rate=1e-3, batch_size=64,
         dynamics_dim=1, decay_module=None, logger=None, lr_scheduler=None,
         eigenvalue=1, print_every_num_epochs=10, device='cpu', param_specific_hyperparams=[],
         normaliser = partial(shuffle_normaliser,axis=None,return_terms=True),
         verbose = False,
+        restrict_to_distribution_lambda = 1e-3
     ):
     """
     Train the model with optional decay, logging, and learning rate scheduling.

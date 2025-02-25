@@ -12,3 +12,7 @@ IC_distribution:
 name            : bistable2D
 dim  : 2
 equation_latex  : x-x^3
+analytical_eigenfunction:
+  _target_: compose.compose
+  _args_:
+    - ${eval:'lambda x,y:x/((x**2-1)**2)**0.25'}
