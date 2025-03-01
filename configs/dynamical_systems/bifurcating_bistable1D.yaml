@@ -1,23 +1,22 @@
 function :
   _target_  : compose.compose
   _args_    :
-    - ${eval:'lambda x:x-x**3'}
+    - ${eval:'lambda x,u:u*(x-x**3)+(1-u)*(-x)'}
 IC_distribution:
   _target_  : torch.distributions.Normal
   loc       : 0
   scale     : 2
-#  _target_  : custom_distributions.MultiGapNormal
-#  gap_points  : [-1.0,1.0]
-#  epsilon :  1e-3
-#  loc : 0
-#  scale : 2
-#  _target_  : torch.distributions.Uniform
-#  low       : -1
-#  high      : 1
+
+external_input_distribution:
+  _target_: torch.distributions.Uniform
+  low     : 0
+  high    : 1
 
 dist_requires_dim : true
+has_external_input : true
 name : bistable1D
 dim  : 1
+external_input_dim  : 1
 equation_latex  : x-x^3
 analytical_eigenfunction:
   _target_  : compose.compose

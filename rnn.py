@@ -19,13 +19,17 @@ def multidimbatch(func):
 def set_model_with_checkpoint(model,checkpoint):
     model.load_state_dict(checkpoint) #['model_state_dict'])
     return model
-def get_autonomous_dynamics_from_model(model,device='cpu'):
+def get_autonomous_dynamics_from_model(model,device='cpu',rnn_submodule_name='rnn',kwargs={}):
     @multidimbatch
     def dynamics(hx):
+        submodule = model
+        if rnn_submodule_name is not None:
+            submodule = getattr(model,rnn_submodule_name)
         hx = hx[None]
-        inp = torch.zeros_like(hx)[..., :model.rnn.input_size]
+        inp = torch.zeros_like(hx)[..., :submodule.input_size]
         model.to(device)
-        output = model.rnn(inp,hx)[0][0]
+        # print('in dynamics',inp.shape,hx.shape)
+        output = submodule(inp,hx,**kwargs)[0][0]
         model.to('cpu')
         return output
     return dynamics
@@ -128,8 +132,11 @@ if __name__ == '__main__':
         hidden_distribution_from_model(model, dataset)
     )
 
-    new_model = convert_rnn(model)
+    hx = torch.zeros((1, 2, 10))
+    inp = torch.ones((1, 2, 3))
+    new_model = convert_to_perturbableRNN(model)
     print(
-        new_model
+        model.rnn(inp, hx)
     )
 
+    print(model.rnn.batch_first)

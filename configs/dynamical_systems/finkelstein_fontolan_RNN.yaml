@@ -3,6 +3,10 @@ function :
   discrete_dynamics :
     _target_ : rnn.get_autonomous_dynamics_from_model
     model    : ${...loaded_RNN_model}
+    rnn_submodule_name: null
+    kwargs:
+      deterministic : true
+      batch_first   : false
 
 run_traj : true
 
@@ -20,49 +24,32 @@ IC_distribution :
 dist_requires_dim : false
 
 loaded_RNN_model:
-  _target_: rnn.set_model_with_checkpoint
-  model: ${..RNN_model}
-  checkpoint:
-    _target_: torch.load
-    f: ${savepath}/RNNmodel.torch
-    weights_only: true
+  _target_    : finkelstein_fontolan_RNN.init_network
+  params_dict :
+    _target_  : load_RNN_ALM_gating.get_params_dict
+    input_file_path : ${savepath}/input_data/
+
+
 
 RNN_model:
-  _target_  : rnn.RNN
-  ob_size   : ${..k_bit}
-  act_size  : ${..k_bit}
+  act_size  : 3
   num_h     : ${..dim}
-  RNN_class : RNN
+
 
 perturbable_RNN_model:
   _target_  : rnn.convert_to_perturbableRNN
   old_model : ${..loaded_RNN_model}
 
 dim  : 668
-k_bit : 1
 
 RNN_criterion :
   _target_  : torch.nn.MSELoss
 
 RNN_dataset:
-  _target_  : task_utils.FlipFlopDataset
-  n_trials  : 16
-  n_time    : 50
-  n_bits    : ${..k_bit}
-  p         : 0.2
-  random_seed : 2
-  repeats : 10
+  _target_        : finkelstein_fontolan_task.initialize_task
+  input_file_path : ${savepath}/input_data/
+  N_trials_cd     : 10
 
-RNN_analysis_dataset:
-  _target_  : task_utils.FlipFlopSweepDataset
-  n_trials  : 10
-  n_time    : 50
-  n_bits    : ${..k_bit}
-  p         : 0.2
-  random_seed : 2
-  repeats : 3
-  sign    : 1
-#  sign    : -1
+RNN_analysis_dataset : ${.RNN_dataset}
 
-
-name  : ${.RNN_dataset.n_bits}bitFlipFlop_long_isotropic_Vanilla${.dim}
+name  : finkelstein_fontolan_RNN

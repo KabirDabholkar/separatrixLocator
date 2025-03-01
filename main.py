@@ -63,6 +63,7 @@ def main_multimodel(cfg):
 
     dynamics_function = instantiate(cfg.dynamics.function)
     distribution = instantiate(cfg.dynamics.IC_distribution)
+    input_distribution = instantiate(cfg.dynamics.external_input_distribution) if hasattr(cfg.dynamics,'external_input_distribution') else None
 
     SL = instantiate(cfg.separatrix_locator)
     SL.models = [instantiate(cfg.model).to(SL.device) for _ in range(cfg.separatrix_locator.num_models)]
@@ -104,7 +105,7 @@ def main_multimodel(cfg):
         assert hasattr(cfg.dynamics,"loaded_RNN_model")
         rnn_model = instantiate(cfg.dynamics.loaded_RNN_model)
         # cfg.dynamics.RNN_dataset.batch_size = 5000
-        cfg.dynamics.RNN_dataset.n_trials = 1000
+        # cfg.dynamics.RNN_dataset.n_trials = 1000
         dataset = instantiate(cfg.dynamics.RNN_dataset)
         inp, targ = dataset()
 
@@ -113,24 +114,25 @@ def main_multimodel(cfg):
         outputs, hidden_traj = outputs.detach().cpu().numpy(), hidden_traj.detach().cpu().numpy()
 
         # print(model)
-        fpf_hps = {
-            'max_iters': 1000,  # 10000
-            'n_iters_per_print_update': 1000,
-            'lr_init': .1,
-            'outlier_distance_scale': 10.0,
-            'verbose': True,
-            'super_verbose': True,
-            # 'tol_q':1e-6,
-            # 'tol_q': 1e-15,
-            # 'tol_dq': 1e-15,
-        }
+        # fpf_hps = {
+        #     'max_iters': 1000,  # 10000
+        #     'n_iters_per_print_update': 1000,
+        #     'lr_init': .1,
+        #     'outlier_distance_scale': 10.0,
+        #     'verbose': True,
+        #     'super_verbose': True,
+        #     # 'tol_q':1e-6,
+        #     # 'tol_q': 1e-15,
+        #     # 'tol_dq': 1e-15,
+        # }
         FPF = FixedPointFinderTorch(
-            rnn_model.rnn,
-            **fpf_hps
+            rnn_model.rnn if hasattr(rnn_model,"rnn") else rnn_model,
+            **instantiate(cfg.fpf_hps)
         )
         num_trials = 1000
         # initial_conditions = dist.sample(sample_shape=(num_trials,)).detach().cpu().numpy()
         inputs = np.zeros((1, cfg.dynamics.RNN_model.act_size))
+        inputs[...,2] = 1.0
         # inputs[...,0] = 1
         initial_conditions = hidden_traj.reshape(-1, hidden_traj.shape[-1])
         initial_conditions = initial_conditions[
@@ -298,12 +300,41 @@ def main_multimodel(cfg):
         # elif cfg.dynamics.dim > 2:
         if hasattr(cfg.dynamics,'RNN_dataset'):
             dataset = instantiate(cfg.dynamics.RNN_analysis_dataset)
+            dataset.N_trials_cd = 20
             rnn = instantiate(cfg.dynamics.loaded_RNN_model)
             dist = instantiate(cfg.dynamics.IC_distribution)
             inputs, targets = dataset()
             inputs = torch.from_numpy(inputs).type(torch.float)
             targets = torch.from_numpy(targets)
-            outputs,hidden = rnn(inputs,return_hidden=True)
+            # inputs = inputs * 0
+            print('inputs.shape',inputs.shape)
+            print('batch first',rnn.batch_first)
+            outputs,hidden = rnn(inputs,return_hidden=True,deterministic=False)
+
+            P = PCA(n_components=3)
+            pc_hidden = P.fit_transform(hidden.reshape(-1,hidden.shape[-1]).detach().cpu()).reshape(*hidden.shape[:2],P.n_components)
+
+            plt.figure()
+            for i in range(pc_hidden.shape[1]):
+                plt.plot(pc_hidden[:,i,0])
+            plt.savefig(Path(cfg.savepath) / "PCA_traj.png",dpi=300)
+            plt.close()
+
+            plt.figure()
+            for i in range(pc_hidden.shape[1]):
+                plt.plot(inputs[:, i, :])
+            plt.savefig(Path(cfg.savepath) / "inputs.png", dpi=300)
+            plt.close()
+
+            plt.figure()
+            neuron_id = 2
+            for i in range(hidden.shape[1]):
+                plt.plot(hidden[:, i, :].mean(-1).detach().cpu().numpy())
+            plt.savefig(Path(cfg.savepath) / "hidden_traj.png",dpi=300)
+            plt.close()
+            print(
+                'hidden[:5,0,0]:',hidden[:5,0,0]
+            )
 
 
             GD_traj, all_below_threshold_points, all_below_threshold_masks  = SL.find_separatrix(

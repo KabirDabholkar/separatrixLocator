@@ -1090,7 +1090,7 @@ def restrict_to_distribution_loss(x_batch,phi_x,dist,threshold = -4.0):
 
 
 def train_with_logger(
-        model, F, dist, dist_requires_dim=True, num_epochs=1000, learning_rate=1e-3, batch_size=64,
+        model, F, dist, external_input_dist=None, dist_requires_dim=True, num_epochs=1000, learning_rate=1e-3, batch_size=64,
         dynamics_dim=1, decay_module=None, logger=None, lr_scheduler=None,
         eigenvalue=1, print_every_num_epochs=10, device='cpu', param_specific_hyperparams=[],
         normaliser = partial(shuffle_normaliser,axis=None,return_terms=True),
@@ -1140,10 +1140,14 @@ def train_with_logger(
         x_batch = dist.sample(sample_shape=sample_shape).to(device)
         # Enable gradient computation for x_batch
         x_batch.requires_grad_(True)
+        input_to_model = x_batch
+        if external_input_dist is not None:
+            external_inputs = external_input_dist.sample(sample_shape=sample_shape).to(device)
+            input_to_model = torch.concat((input_to_model, external_inputs), dim=-1)
 
 
         # Forward pass: compute phi(x)
-        phi_x = model(x_batch)
+        phi_x = model(input_to_model)
         output_dim = phi_x.shape[-1]
 
         # Compute the gradient of the sum of phi(x) with respect to x_batch

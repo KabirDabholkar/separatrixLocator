@@ -29,6 +29,7 @@ defaults:
   - dynamical_systems@1bitflipflop_32D_long_isotropic  : 1bitflipflop_32D_long_isotropic
   - dynamical_systems@1bitflipflop_Vanilla64D_long_isotropic  : 1bitflipflop_Vanilla64D_long_isotropic
   - dynamical_systems@1bitflipflop_2D_long  : 1bitflipflop_2D_long
+  - dynamical_systems@finkelstein_fontolan_RNN  : finkelstein_fontolan_RNN
   - dynamical_systems@radial2D_bistable  : radial2D_bistable
   - dynamical_systems@multistable1D : multistable1D
   - dynamical_systems@radial2D_bistable_limit_cycle : radial2D_bistable_limit_cycle
@@ -55,14 +56,14 @@ defaults:
 
 
 
-save_KEF_model    : false
-load_KEF_model    : true
+save_KEF_model    : true
+load_KEF_model    : false
 plot_KEF_of_traj  : false
 save_results      : false
-run_analysis      : true
+run_analysis      : false
 runGD_analytical  : false
-runGD             : true
-run_fixed_point_finder  : true
+runGD             : false
+run_fixed_point_finder  : false
 
 model_choice  : DNN_layers6
 #model_choice  : DNN_layers2
@@ -70,15 +71,16 @@ model_choice  : DNN_layers6
 #model_choice  : RBF
 #model_choice  : AnisotropicRBF
 
-#dynamics_choice : bistable2D #1bitflipflop_2D #bistable1D # # #duffing #  # #
+dynamics_choice : bistable1D #1bitflipflop_2D #bistable1D # # #duffing #  # #
 #dynamics_choice : 2bitflipflop_2D #radial2D_bistable #2bitflipflop_2D #bistable2D #duffing #
 #dynamics_choice : radial2D_bistable_limit_cycle
 #dynamics_choice : 1bitflipflop_3D
 #dynamics_choice : duffing
 #dynamics_choice : 1bitflipflop_32D_long
 #dynamics_choice : 1bitflipflop_32D_long_isotropic
-dynamics_choice : 1bitflipflop_Vanilla64D_long_isotropic
+#dynamics_choice : 1bitflipflop_Vanilla64D_long_isotropic
 #dynamics_choice : 1bitflipflop_2D_long
+#dynamics_choice : finkelstein_fontolan_RNN
 
 
 ### main train func
@@ -102,7 +104,7 @@ separatrix_locator :
   device  : cpu
 
 separatrix_locator_fit_kwargs:
-  num_epochs: 0 #5000
+  num_epochs: 1000 #5000
   learning_rate: 5e-3 #5e-3 1e-2
   batch_size: 5000 #5000 #5000 #1000
 #  logger:
@@ -158,6 +160,26 @@ separatrix_find_separatrix_kwargs:
   batch_size: 1000 #00 #00
   resample_above_threshold: true
 
+#### Fixed point finder params
+fpf_hps :
+  max_iters: 5000  # 10000
+  n_iters_per_print_update: 500
+  lr_init: 0.5
+  lr_patience : 10
+  lr_factor : 0.95
+#  max_iters : 1000  # 10000
+#  n_iters_per_print_update : 1000
+#  lr_init: 0.1
+#  lr_patience : 5
+#  lr_factor : 0.95
+  outlier_distance_scale: 10.0
+  verbose: true
+  super_verbose: true
+#  tol_q: 1e-6,
+#  tol_q: 1e-15,
+#  tol_dq: 1e-15
+
+
 
 #### Option list
 
@@ -190,6 +212,7 @@ dynamics_options:
   1bitflipflop_2D_long  : ${1bitflipflop_2D_long}
   1bitflipflop_32D_long_isotropic : ${1bitflipflop_32D_long_isotropic}
   1bitflipflop_Vanilla64D_long_isotropic  : ${1bitflipflop_Vanilla64D_long_isotropic}
+  finkelstein_fontolan_RNN  : ${finkelstein_fontolan_RNN}
 
 ### Analytical solution
 #model: ${dynamics.analytical_eigenfunction}
