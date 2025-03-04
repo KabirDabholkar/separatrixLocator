@@ -5,14 +5,16 @@ from functools import wraps
 
 def discrete_to_continuous(discrete_dynamics):
     @wraps(discrete_dynamics)
-    def continuous_dynamics(x):
-        return discrete_dynamics(x) - x
+    def continuous_dynamics(*args):
+        return discrete_dynamics(*args) - args[0]
     return continuous_dynamics
 def multidimbatch(func):
-    def new_func(inp):
-        new_inp = inp.reshape(-1,inp.shape[-1])
-        new_out = func(new_inp)
-        out = new_out.reshape(*inp.shape[:-1],new_out.shape[-1])
+    def new_func(*args):
+        # new_inp = inp.reshape(-1,inp.shape[-1])
+        new_args = [arg.reshape(-1,arg.shape[-1]) for arg in args]
+
+        new_out = func(*new_args)
+        out = new_out.reshape(*args[0].shape[:-1],new_out.shape[-1])
         return out
     return new_func
 
@@ -21,15 +23,16 @@ def set_model_with_checkpoint(model,checkpoint):
     return model
 def get_autonomous_dynamics_from_model(model,device='cpu',rnn_submodule_name='rnn',kwargs={}):
     @multidimbatch
-    def dynamics(hx):
+    def dynamics(hx,inp=None):
         submodule = model
         if rnn_submodule_name is not None:
             submodule = getattr(model,rnn_submodule_name)
         hx = hx[None]
-        inp = torch.zeros_like(hx)[..., :submodule.input_size]
+        inp = torch.zeros_like(hx)[..., :submodule.input_size] if inp is None else inp[None]
         model.to(device)
         # print('in dynamics',inp.shape,hx.shape)
         output = submodule(inp,hx,**kwargs)[0][0]
+        # print(output)
         model.to('cpu')
         return output
     return dynamics

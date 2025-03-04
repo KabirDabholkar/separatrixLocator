@@ -8,7 +8,7 @@ from functools import partial
 from pathlib import Path
 from compose import compose
 import os
-from learn_koopman_eig import train_with_logger, eval_loss, runGD
+from learn_koopman_eig import train_with_logger, train_with_logger_ext_inp, eval_loss, runGD
 
 
 class KoopmanEigenfunctionModel(nn.Module):
@@ -26,20 +26,7 @@ class KoopmanEigenfunctionModel(nn.Module):
         return self.net(x)
 
 
-def train_single_model(model, X, y, device, lr, epochs):
-    """Trains a single Koopman model on a given device."""
-    model.to(device)
-    X, y = torch.tensor(X, dtype=torch.float32).to(device), torch.tensor(y, dtype=torch.float32).to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-    criterion = nn.MSELoss()
-    for _ in range(epochs):
-        optimizer.zero_grad()
-        loss = criterion(model(X), y)
-        loss.backward()
-        optimizer.step()
-
-    return model.cpu().state_dict()
 
 
 class SeparatrixLocator(BaseEstimator):
@@ -62,7 +49,7 @@ class SeparatrixLocator(BaseEstimator):
         self.models = [self.model_class(self.dynamics_dim) for _ in range(self.num_models)]
 
     def fit(self, func, distribution, **kwargs):
-        train_single_model_ = partial(train_with_logger,F=func,dist=distribution, dynamics_dim=self.dynamics_dim,**kwargs)
+        train_single_model_ = partial(train_with_logger_ext_inp,F=func,dist=distribution, dynamics_dim=self.dynamics_dim,**kwargs)
 
         if len(self.models)==0:
             self.init_models()
@@ -156,14 +143,28 @@ class SeparatrixLocator(BaseEstimator):
         all_traj, all_below, all_inds, all_masks = [], [], [], []
         for model in self.models:
             f = compose(
-                lambda x: x**0.1,
+                # lambda x: x ** 0.1,
                 torch.log, lambda x: x + 1, torch.exp,
                 partial(torch.sum, dim=-1, keepdims=True),
                 torch.log, torch.abs, model
             )
+            # Sample initial conditions.
             shape = [1000] + ([self.dynamics_dim] if dist_needs_dim else [])
-            samples = distribution.sample(sample_shape=shape)
-            norm_val = float(torch.mean(torch.sum(f(samples) ** 2, dim=-1)).sqrt().detach().numpy())
+            samples_ic = distribution.sample(sample_shape=shape)
+            # If an external input distribution is provided, sample external inputs.
+            if "external_input_dist" in kwargs:
+                ext_input_dist = kwargs["external_input_dist"]
+                ext_input_dim = kwargs.get("external_input_dim", self.dynamics_dim)
+                shape_ext = [1000] + ([ext_input_dim] if dist_needs_dim else [])
+                samples_ext = ext_input_dist.sample(sample_shape=shape_ext)
+            else:
+                # If not provided, use a dummy tensor (zeros) of the same shape as samples_ic.
+                samples_ext = torch.zeros_like(samples_ic)
+            # Concatenate the samples along the last dimension.
+            combined_samples = torch.cat((samples_ic, samples_ext), dim=-1)
+            # Calculate the normalisation value over the combined inputs.
+            norm_val = float(torch.mean(torch.sum(f(combined_samples) ** 2, dim=-1)).sqrt().detach().numpy())
+            # Update f to normalize its output.
             f = compose(lambda x: x / norm_val, f)
             ret = runGD(
                 f, distribution, input_dim=self.dynamics_dim, dist_needs_dim=dist_needs_dim,
@@ -173,13 +174,15 @@ class SeparatrixLocator(BaseEstimator):
             all_below.append(ret[1])
             off = 2
             if return_indices:
-                all_inds.append(ret[off]);
+                all_inds.append(ret[off])
                 off += 1
             if return_mask:
                 all_masks.append(ret[off])
         res = [all_traj, all_below]
-        if return_indices: res.append(all_inds)
-        if return_mask: res.append(all_masks)
+        if return_indices:
+            res.append(all_inds)
+        if return_mask:
+            res.append(all_masks)
         return tuple(res)
 
 

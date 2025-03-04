@@ -11,13 +11,14 @@ from compose import compose
 from plotting import plot_model_contour,plot_kinetic_energy
 
 from sklearn.decomposition import PCA
-
+from copy import deepcopy
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import matplotlib.animation as animation
 import seaborn as sns
 mpl.rcParams['agg.path.chunksize'] = 10000
+
 # mpl.rcParams['text.usetex'] = True
 # plt.rcParams["font.family"] = "sans-serif"
 # plt.rcParams["mathtext.fontset"] = "dejavuserif"
@@ -57,19 +58,26 @@ def main_multimodel(cfg):
     omegaconf_resolvers()
     cfg.savepath = os.path.join(project_path, cfg.savepath)
 
-    OmegaConf.resolve(cfg.model)
+    # OmegaConf.resolve(cfg.model)
 
-    print(OmegaConf.to_yaml(cfg))
+    # print(OmegaConf.to_yaml(cfg))
 
     dynamics_function = instantiate(cfg.dynamics.function)
     distribution = instantiate(cfg.dynamics.IC_distribution)
     input_distribution = instantiate(cfg.dynamics.external_input_distribution) if hasattr(cfg.dynamics,'external_input_distribution') else None
 
+    if input_distribution is not None:
+        cfg.model.input_size = cfg.dynamics.dim + cfg.dynamics.external_input_dim
+        OmegaConf.resolve(cfg.model)
+        # print(cfg.model)
+
     SL = instantiate(cfg.separatrix_locator)
     SL.models = [instantiate(cfg.model).to(SL.device) for _ in range(cfg.separatrix_locator.num_models)]
 
     SL.fit(
-        dynamics_function,distribution,
+        dynamics_function,
+        distribution,
+        external_input_dist = input_distribution,
         **instantiate(cfg.separatrix_locator_fit_kwargs)
     )
     SL.models = [model.to('cpu') for model in SL.models]
@@ -80,13 +88,17 @@ def main_multimodel(cfg):
         SL.load_models(cfg.savepath)
 
     scores = SL.score(
-        dynamics_function,distribution,
+        dynamics_function,
+        distribution,
+        external_input_dist = input_distribution,
         **instantiate(cfg.separatrix_locator_score_kwargs)
     )
     print('Scores:\n', scores.detach().cpu().numpy())
     if hasattr(cfg,'separatrix_locator_score_kwargs_2'):
         scores2 = SL.score(
-            dynamics_function,distribution,
+            dynamics_function,
+            distribution,
+            external_input_dist=input_distribution,
             **instantiate(cfg.separatrix_locator_score_kwargs_2)
         )
         print('Scores over 2x scaled distribution:\n',scores2.detach().cpu().numpy())
@@ -95,11 +107,16 @@ def main_multimodel(cfg):
 
     all_below_threshold_points = None
     if cfg.runGD:
+        external_inputs = None
+        if input_distribution is not None:
+            external_inputs = input_distribution.sample(sample_shape=(cfg.separatrix_find_separatrix_kwargs.batch_size,))
         _, all_below_threshold_points = SL.find_separatrix(
             distribution,
+            external_inputs = external_inputs,
             dist_needs_dim = cfg.dynamics.dist_requires_dim if hasattr(cfg.dynamics,"dist_requires_dim") else True,
             **instantiate(cfg.separatrix_find_separatrix_kwargs)
         )
+        print('all_below_threshold_points',all_below_threshold_points)
 
     if cfg.run_fixed_point_finder:
         assert hasattr(cfg.dynamics,"loaded_RNN_model")
@@ -110,39 +127,33 @@ def main_multimodel(cfg):
         inp, targ = dataset()
 
         torch_inp = torch.from_numpy(inp).type(torch.float)  # .to(device)
-        outputs, hidden_traj = rnn_model(torch_inp, return_hidden=True)
+        outputs, hidden_traj = rnn_model(torch_inp, return_hidden=True, deterministic=False)
         outputs, hidden_traj = outputs.detach().cpu().numpy(), hidden_traj.detach().cpu().numpy()
 
-        # print(model)
-        # fpf_hps = {
-        #     'max_iters': 1000,  # 10000
-        #     'n_iters_per_print_update': 1000,
-        #     'lr_init': .1,
-        #     'outlier_distance_scale': 10.0,
-        #     'verbose': True,
-        #     'super_verbose': True,
-        #     # 'tol_q':1e-6,
-        #     # 'tol_q': 1e-15,
-        #     # 'tol_dq': 1e-15,
-        # }
+
         FPF = FixedPointFinderTorch(
             rnn_model.rnn if hasattr(rnn_model,"rnn") else rnn_model,
             **instantiate(cfg.fpf_hps)
         )
-        num_trials = 1000
+        num_trials = 500
         # initial_conditions = dist.sample(sample_shape=(num_trials,)).detach().cpu().numpy()
-        inputs = np.zeros((1, cfg.dynamics.RNN_model.act_size))
-        inputs[...,2] = 1.0
+        # inputs = np.zeros((1, cfg.dynamics.RNN_model.act_size))
+        # inputs[...,2] = 1.0
+        fp_inputs = torch_inp.reshape(-1, torch_inp.shape[-1]).detach().cpu().numpy()
+
         # inputs[...,0] = 1
         initial_conditions = hidden_traj.reshape(-1, hidden_traj.shape[-1])
-        initial_conditions = initial_conditions[
-            np.random.choice(initial_conditions.shape[0], size=num_trials, replace=False)]
-        initial_conditions += np.random.normal(size=initial_conditions.shape) * 0.05
+        select = np.random.choice(initial_conditions.shape[0], size=num_trials, replace=False)
+        initial_conditions = initial_conditions[select]
+        fp_inputs = fp_inputs[select]
+        # fp_inputs[:,:2] = 0
+        initial_conditions += np.random.normal(size=initial_conditions.shape) * 2.0 #0.5 #2.0
         # print('initial_conditions', initial_conditions.shape)
         unique_fps, all_fps = FPF.find_fixed_points(
-            initial_conditions,
-            inputs
+            deepcopy(initial_conditions),
+            fp_inputs
         )
+
         # print(all_fps.shape)
         KEF_val_at_fp = {}
         for i in range(SL.num_models):
@@ -156,7 +167,7 @@ def main_multimodel(cfg):
                 torch.abs,
                 SL.models[i]
             )
-            KEF_val_at_fp[f'KEF{i}'] = mod_model(torch.from_numpy(unique_fps.xstar).to(SL.device)).detach().cpu().numpy().flatten()
+            # KEF_val_at_fp[f'KEF{i}'] = mod_model(torch.from_numpy(unique_fps.xstar).to(SL.device)).detach().cpu().numpy().flatten()
 
         fixed_point_data = {
             'stability': unique_fps.is_stable,
@@ -170,70 +181,70 @@ def main_multimodel(cfg):
     if cfg.run_analysis:
 
         #### Plotting log prob vs KEF amplitude
-        num_samples = 1000
-        needs_dim = True
-        if hasattr(cfg.dynamics, 'dist_requires_dim'):
-            needs_dim = cfg.dynamics.dist_requires_dim
+        # num_samples = 1000
+        # needs_dim = True
+        # if hasattr(cfg.dynamics, 'dist_requires_dim'):
+        #     needs_dim = cfg.dynamics.dist_requires_dim
+        #
+        # samples = distribution.sample(
+        #     sample_shape=[num_samples] + ([cfg.dynamics.dim] if needs_dim else []))
+        #
+        # samples.requires_grad_(True)
+        #
+        # fig,axs = plt.subplots(2,1,sharex=True,figsize=(6,8))
+        # for j in range(SL.num_models):
+        #     mod_model = compose(
+        #         lambda x: x.sum(axis=-1,keepdims=True),
+        #         torch.log,
+        #         torch.abs,
+        #         SL.models[j]
+        #     )
+        #     log_probs = distribution.log_prob(samples).detach().cpu().numpy()
+        #     phi_x = mod_model(samples.to(SL.device))#.detach().cpu().numpy()
+        #     # print(log_probs.shape,phi_x.shape)
+        #     # from learn_koopman_eig import eval_loss
+        #     # losses = eval_loss(
+        #     #     model,
+        #     #     normaliser=lambda x,y:(x - y) ** 2
+        #     # )
+        #     # Compute phi'(x)
+        #     phi_x_prime = torch.autograd.grad(
+        #         outputs=phi_x,
+        #         inputs=samples,
+        #         grad_outputs=torch.ones_like(phi_x),
+        #         create_graph=True
+        #     )[0]
+        #     # Compute F(x_batch)
+        #     F_x = dynamics_function(samples)
+        #
+        #     # Main loss term: ||phi'(x) F(x) - phi(x)||^2
+        #     dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True)
+        #     errors = torch.abs(dot_prod - phi_x).detach().cpu().numpy()
+        #
+        #     phi_x = phi_x.detach().cpu().numpy()
+        #
+        #     ax = axs[0]
+        #     ax.scatter(np.repeat(log_probs[...,None],repeats=phi_x.shape[-1],axis=-1),np.abs(phi_x),s=10)
+        #     ax.set_ylabel(r'$|$KEF$(x)|$')
+        #     ax.set_yscale('log')
+        #     ax.set_xlabel(r'$\log p(x)$')
+        #
+        #     ax = axs[1]
+        #     ax.scatter(log_probs[..., None], errors, s=10)
+        #     ax.set_ylabel('PDE error')
+        #     ax.set_yscale('log')
+        #     ax.set_xlabel(r'$\log p(x)$')
+        # fig.tight_layout()
+        # fig.savefig(Path(cfg.savepath) / 'log_prob_and_KEF_amplitude.png')
 
-        samples = distribution.sample(
-            sample_shape=[num_samples] + ([cfg.dynamics.dim] if needs_dim else []))
-
-        samples.requires_grad_(True)
-
-        fig,axs = plt.subplots(2,1,sharex=True,figsize=(6,8))
-        for j in range(SL.num_models):
-            mod_model = compose(
-                lambda x: x.sum(axis=-1,keepdims=True),
-                torch.log,
-                torch.abs,
-                SL.models[j]
-            )
-            log_probs = distribution.log_prob(samples).detach().cpu().numpy()
-            phi_x = mod_model(samples.to(SL.device))#.detach().cpu().numpy()
-            # print(log_probs.shape,phi_x.shape)
-            # from learn_koopman_eig import eval_loss
-            # losses = eval_loss(
-            #     model,
-            #     normaliser=lambda x,y:(x - y) ** 2
-            # )
-            # Compute phi'(x)
-            phi_x_prime = torch.autograd.grad(
-                outputs=phi_x,
-                inputs=samples,
-                grad_outputs=torch.ones_like(phi_x),
-                create_graph=True
-            )[0]
-            # Compute F(x_batch)
-            F_x = dynamics_function(samples)
-
-            # Main loss term: ||phi'(x) F(x) - phi(x)||^2
-            dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True)
-            errors = torch.abs(dot_prod - phi_x).detach().cpu().numpy()
-
-            phi_x = phi_x.detach().cpu().numpy()
-
-            ax = axs[0]
-            ax.scatter(np.repeat(log_probs[...,None],repeats=phi_x.shape[-1],axis=-1),np.abs(phi_x),s=10)
-            ax.set_ylabel(r'$|$KEF$(x)|$')
-            ax.set_yscale('log')
-            ax.set_xlabel(r'$\log p(x)$')
-
-            ax = axs[1]
-            ax.scatter(log_probs[..., None], errors, s=10)
-            ax.set_ylabel('PDE error')
-            ax.set_yscale('log')
-            ax.set_xlabel(r'$\log p(x)$')
-        fig.tight_layout()
-        fig.savefig(Path(cfg.savepath) / 'log_prob_and_KEF_amplitude.png')
 
 
-
-        if cfg.dynamics.dim == 1:
+        if cfg.model.input_size == 1:
             pass
-        elif cfg.dynamics.dim == 2:
-            fig,axs = plt.subplots(10,5,figsize=np.array([5,10])*2.3,sharey=True,sharex=True)
+        elif cfg.model.input_size == 2:
+            fig,axs = plt.subplots(7,4,figsize=np.array([4,7])*2.3,sharey=True,sharex=True)
             for j in range(SL.num_models):
-                for i in range(axs.shape[0]):
+                for i in range(cfg.model.output_size):
                     mod_model = compose(
                         lambda x: x**0.01,
                         torch.log,
@@ -259,6 +270,7 @@ def main_multimodel(cfg):
                         y_limits=y_limits,
                     )
                     below_threshold_points = all_below_threshold_points[j] if all_below_threshold_points is not None else None
+                    # print(below_threshold_points.shape)
                     if below_threshold_points is not None:
                         xlim = ax.get_xlim()  # Store current x limits
                         ylim = ax.get_ylim()  # Store current y limits
@@ -267,13 +279,13 @@ def main_multimodel(cfg):
 
                         ax.set_xlim(xlim)  # Reset x limits
                         ax.set_ylim(ylim)  # Reset y limits
-                    ax.set_aspect('equal')
+                    # ax.set_aspect('auto')
                     ax.set_title(f'Model-{j},output{i}'+'\n'+f", loss:{scores[j, i]:.5f}")
                     ax.set_xlabel('')
                     ax.set_ylabel('')
 
-                    ax.scatter(*unique_fps.xstar[unique_fps.is_stable, :].T, c='blue',marker='x',s=100,zorder=1001)
-                    ax.scatter(*unique_fps.xstar[~unique_fps.is_stable, :].T, c='red',marker='x',s=100,zorder=1000)
+                    # ax.scatter(*unique_fps.xstar[unique_fps.is_stable, :].T, c='blue',marker='x',s=100,zorder=1001)
+                    # ax.scatter(*unique_fps.xstar[~unique_fps.is_stable, :].T, c='red',marker='x',s=100,zorder=1000)
             fig.tight_layout()
             fig.savefig(Path(cfg.savepath)/"all_KEF_contours.png",dpi=300)
             plt.close(fig)
@@ -283,6 +295,7 @@ def main_multimodel(cfg):
             if hasattr(cfg.dynamics, 'lims'):
                 x_limits = cfg.dynamics.lims.x
                 y_limits = cfg.dynamics.lims.y
+
             fig,ax = plt.subplots(1,1, figsize=(5,5))
             plot_kinetic_energy(
                 dynamics_function,
@@ -311,12 +324,24 @@ def main_multimodel(cfg):
             print('batch first',rnn.batch_first)
             outputs,hidden = rnn(inputs,return_hidden=True,deterministic=False)
 
+            ###
+            # fp_inputs = torch_inp.reshape(-1, torch_inp.shape[-1]).detach().cpu().numpy()
+            # initial_conditions = hidden_traj.reshape(-1, hidden_traj.shape[-1])
+            ###
+
             P = PCA(n_components=3)
             pc_hidden = P.fit_transform(hidden.reshape(-1,hidden.shape[-1]).detach().cpu()).reshape(*hidden.shape[:2],P.n_components)
 
             plt.figure()
             for i in range(pc_hidden.shape[1]):
-                plt.plot(pc_hidden[:,i,0])
+                plt.plot(inputs[:,i,2],pc_hidden[:,i,0],lw=1,alpha=0.5)
+
+            if cfg.run_fixed_point_finder:
+                pc_fps = P.transform(unique_fps.xstar)
+                # pc_IC  = P.transform(initial_conditions)
+                plt.scatter(unique_fps.inputs[unique_fps.is_stable,2],pc_fps[unique_fps.is_stable, 0], c='blue', marker='x', s=100, zorder=1001)
+                plt.scatter(unique_fps.inputs[~unique_fps.is_stable,2],pc_fps[~unique_fps.is_stable, 0], c='red', marker='x', s=100, zorder=1000)
+                # plt.scatter(fp_inputs[:,2],pc_IC[:,0],c='green')
             plt.savefig(Path(cfg.savepath) / "PCA_traj.png",dpi=300)
             plt.close()
 

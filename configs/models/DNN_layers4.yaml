@@ -3,7 +3,7 @@ target  :
   _target_  : torch.nn.Sequential
   _args_  :
     - _target_    : torch.nn.Linear
-      in_features : ${dynamics.dim}
+      in_features : ${....input_size}
       out_features: ${....hidden_size}
     - _target_    : torch.nn.Tanh
     - _target_    : torch.nn.Linear
@@ -17,6 +17,8 @@ target  :
     - _target_    : torch.nn.Linear
       in_features : ${....hidden_size}
       out_features: ${....output_size}
+
+input_size : ${dynamics.dim}
 hidden_size: 40
 output_size: 7 #10
 num_layers  : 4

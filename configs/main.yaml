@@ -19,6 +19,7 @@ defaults:
 
   - dynamical_systems@bistable1D : bistable1D
   - dynamical_systems@bistable2D : bistable2D
+  - dynamical_systems@bifurcating_bistable1D : bifurcating_bistable1D
   - dynamical_systems@duffing : duffing
   - dynamical_systems@1bitflipflop_2D  : 1bitflipflop_2D
   - dynamical_systems@2bitflipflop_2D  : 2bitflipflop_2D
@@ -57,21 +58,22 @@ defaults:
 
 
 save_KEF_model    : true
-load_KEF_model    : false
+load_KEF_model    : true
 plot_KEF_of_traj  : false
 save_results      : false
-run_analysis      : false
+run_analysis      : true
 runGD_analytical  : false
 runGD             : false
 run_fixed_point_finder  : false
 
-model_choice  : DNN_layers6
+model_choice  : DNN_layers8
 #model_choice  : DNN_layers2
 #model_choice  : DNN_softmax_layers8
 #model_choice  : RBF
 #model_choice  : AnisotropicRBF
 
-dynamics_choice : bistable1D #1bitflipflop_2D #bistable1D # # #duffing #  # #
+#dynamics_choice : bistable1D #1bitflipflop_2D #bistable1D # # #duffing #  # #
+#dynamics_choice : bifurcating_bistable1D
 #dynamics_choice : 2bitflipflop_2D #radial2D_bistable #2bitflipflop_2D #bistable2D #duffing #
 #dynamics_choice : radial2D_bistable_limit_cycle
 #dynamics_choice : 1bitflipflop_3D
@@ -80,7 +82,7 @@ dynamics_choice : bistable1D #1bitflipflop_2D #bistable1D # # #duffing #  # #
 #dynamics_choice : 1bitflipflop_32D_long_isotropic
 #dynamics_choice : 1bitflipflop_Vanilla64D_long_isotropic
 #dynamics_choice : 1bitflipflop_2D_long
-#dynamics_choice : finkelstein_fontolan_RNN
+dynamics_choice : finkelstein_fontolan_RNN
 
 
 ### main train func
@@ -104,9 +106,11 @@ separatrix_locator :
   device  : cpu
 
 separatrix_locator_fit_kwargs:
-  num_epochs: 1000 #5000
+  num_epochs: 2000 #2000 #0 #2000
   learning_rate: 5e-3 #5e-3 1e-2
   batch_size: 5000 #5000 #5000 #1000
+  ext_inp_batch_size  : 500
+  ext_inp_reg_coeff   : 0.1
 #  logger:
 #    _target_: torch.utils.tensorboard.SummaryWriter
 #    log_dir: ${...savepath}/experiment
@@ -130,28 +134,30 @@ separatrix_locator_score_kwargs:
     _partial_: true
   scale_dist  : 1
 
-separatrix_locator_score_kwargs_2:
-  batch_size: 10000
-  eigenvalue : 1
-  drop_values_outside_range: null
-  dist_requires_dim : ${dynamics.dist_requires_dim}
-  normaliser:
-    _target_: learn_koopman_eig.shuffle_normaliser
-    _partial_: true
-  scale_dist  : 2
+#separatrix_locator_score_kwargs_2:
+#  batch_size: 10000
+#  eigenvalue : 1
+#  drop_values_outside_range: null
+#  dist_requires_dim : ${dynamics.dist_requires_dim}
+#  normaliser:
+#    _target_: learn_koopman_eig.shuffle_normaliser
+#    _partial_: true
+#  scale_dist  : 2
 
 separatrix_find_separatrix_kwargs:
-  num_steps: 600 #000 #300 #0 #0 #5000
+  num_steps: 2000 #000 #300 #0 #0 #5000
   partial_optim:
     _target_: torch.optim.Adam
     _partial_: true
     lr: 5e-3
 #  threshold: 1e-5 #0.65 #,#0.1 #-20 #null #5e-4 #5e-2
   threshold :
-    start_threshold: 1e-5
-    end_threshold: 1e0
-#    start_threshold : 1e-2
-#    end_threshold : 1e-5
+#    start_threshold: 1e-5
+#    end_threshold: 1e0
+    start_threshold : 1.0 #5e-2
+    end_threshold : 1e-5
+#    start_threshold : 1.0
+#    end_threshold : 0.3
   lr_scheduler:
     _target_: torch.optim.lr_scheduler.StepLR
     _partial_: true
@@ -162,10 +168,11 @@ separatrix_find_separatrix_kwargs:
 
 #### Fixed point finder params
 fpf_hps :
-  max_iters: 5000  # 10000
+  max_iters: 10000 #00  # 10000
   n_iters_per_print_update: 500
-  lr_init: 0.5
-  lr_patience : 10
+  lr_init: 0.5 #1e-5 #0.5
+  lr_patience : 50
+#  lr_patience : 10
   lr_factor : 0.95
 #  max_iters : 1000  # 10000
 #  n_iters_per_print_update : 1000
@@ -198,6 +205,7 @@ model_options:
 
 dynamics_options:
   bistable1D : ${bistable1D}
+  bifurcating_bistable1D  : ${bifurcating_bistable1D}
   multistable1D : ${multistable1D}
   bistable2D : ${bistable2D}
   duffing : ${duffing}

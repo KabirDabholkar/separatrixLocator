@@ -62,7 +62,7 @@ class RNNModel(nn.Module):
         # Precompute effective noise standard deviation (applied to the first N entries only)
         self.noise_sigma_eff = (self.dt ** 0.5) * self.sigma_noise / self.tau
 
-    def forward(self, r_in, x_init=None, deterministic=False, batch_first=None, return_hidden=False):
+    def forward(self, r_in, x_init=None, deterministic=True, batch_first=None, return_hidden=True):
         """
         Simulate the RNN dynamics given an external input sequence.
 
@@ -119,7 +119,7 @@ class RNNModel(nn.Module):
         r = self.f0 / (1.0 + torch.exp(-self.beta0 * (x[:, :self.N] - self.theta0)))
 
         outputs = []  # to store firing rates at each time step
-
+        Xs = []
         # Iterate over time steps.
         for t in range(seq_len):
             # r_in[t] is shape (batch, input_size)
@@ -141,14 +141,17 @@ class RNNModel(nn.Module):
             r = self.f0 / (1.0 + torch.exp(-self.beta0 * (x[:, :self.N] - self.theta0)))
             outputs.append(r)
 
+            Xs.append(x[:, :self.N])
+
         # Stack outputs to form a tensor of shape (seq_len, batch, N)
         outputs = torch.stack(outputs, dim=0)
+        Xs = torch.stack(Xs, dim=0)
 
         if batch_first:
             outputs = outputs.transpose(0, 1)
 
         if return_hidden:
-            return outputs, outputs
+            return outputs, Xs
         return outputs, r
 
 def init_network(params_dict):

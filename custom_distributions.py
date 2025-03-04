@@ -2,6 +2,11 @@ import torch
 import torch.distributions as D
 import math
 
+def makeIIDMultiVariate(dist, dim):
+    # Expand the distribution so that its batch_shape becomes (dim,)
+    # Then wrap it with Independent to treat these as event dimensions.
+    return torch.distributions.Independent(dist.expand([dim]), 1)
+
 
 class MultiGapNormal(D.Distribution):
     """
@@ -122,4 +127,11 @@ if __name__ == '__main__':
     # plt.hist(samples, bins=100)
     # plt.show()
 
-
+    dist = torch.distributions.Normal(loc=0.0, scale=1.0)
+    print(
+        dist.sample(sample_shape=(10,)).shape
+    )
+    multivariate_dist = makeIIDMultiVariate(dist,dim=4)
+    print(
+        multivariate_dist.sample(sample_shape=(10,)).shape
+    )
