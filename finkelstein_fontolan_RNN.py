@@ -38,13 +38,14 @@ class RNNModel(nn.Module):
 
         # Ensure M is a tensor of shape (N+input_size, N+input_size)
         if not torch.is_tensor(M):
-            M = torch.tensor(M, dtype=torch.float32)
+            M = torch.tensor(M, dtype=torch.float32, requires_grad=False)
         # Make M a learnable parameter.
         self.M = nn.Parameter(M)
 
         # Ensure h is a tensor of shape (N+input_size,)
         if not torch.is_tensor(h):
             h = torch.tensor(h, dtype=torch.float32)
+            h = nn.Parameter(h, requires_grad=False)
         self.register_buffer('h', h)
 
         self.eff_dt = eff_dt
@@ -126,6 +127,7 @@ class RNNModel(nn.Module):
             r_in_t = r_in[t]
             # Concatenate current firing rates with external input.
             combined = torch.cat([r, r_in_t], dim=1)  # shape: (batch, N+input_size)
+
             dx = (-x + torch.matmul(combined, self.M.t()) + self.h) * self.eff_dt
 
             if deterministic:
@@ -154,7 +156,7 @@ class RNNModel(nn.Module):
             return outputs, Xs
         return outputs, r
 
-def init_network(params_dict):
+def init_network(params_dict,device=torch.device('cpu')):
     """
     Initializes the RNN network using parameters extracted from MATLAB files.
 
@@ -209,7 +211,7 @@ def init_network(params_dict):
     model = RNNModel(dt=dt, N=N, input_size=input_size, ramp_train=ramp_train, tau=tau,
                      f0=f0, beta0=beta0, theta0=theta0, M=M_tensor,
                      eff_dt=eff_dt, h=h_tensor, sigma_noise=sigma_noise,
-                     x_init=x_init_tensor, batch_first=False)
+                     x_init=x_init_tensor, batch_first=False).to(device)
     return model
 
 

@@ -34,7 +34,7 @@ target  :
       in_features : ${....hidden_size}
       out_features: ${....output_size}
 
-input_dim : ${dynamics.dim}
+input_size : ${dynamics.dim}
 hidden_size: 40
 output_size: 10
 num_layers : 8

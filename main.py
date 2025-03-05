@@ -120,7 +120,7 @@ def main_multimodel(cfg):
 
     if cfg.run_fixed_point_finder:
         assert hasattr(cfg.dynamics,"loaded_RNN_model")
-        rnn_model = instantiate(cfg.dynamics.loaded_RNN_model)
+        rnn_model = instantiate(cfg.dynamics.loaded_RNN_model_partial)(device=SL.device)
         # cfg.dynamics.RNN_dataset.batch_size = 5000
         # cfg.dynamics.RNN_dataset.n_trials = 1000
         dataset = instantiate(cfg.dynamics.RNN_dataset)
@@ -139,6 +139,7 @@ def main_multimodel(cfg):
         # initial_conditions = dist.sample(sample_shape=(num_trials,)).detach().cpu().numpy()
         # inputs = np.zeros((1, cfg.dynamics.RNN_model.act_size))
         # inputs[...,2] = 1.0
+        torch_inp[...,:2] = 0.0
         fp_inputs = torch_inp.reshape(-1, torch_inp.shape[-1]).detach().cpu().numpy()
 
         # inputs[...,0] = 1
@@ -323,6 +324,9 @@ def main_multimodel(cfg):
             print('inputs.shape',inputs.shape)
             print('batch first',rnn.batch_first)
             outputs,hidden = rnn(inputs,return_hidden=True,deterministic=False)
+            hidden = hidden.detach()
+
+
 
             ###
             # fp_inputs = torch_inp.reshape(-1, torch_inp.shape[-1]).detach().cpu().numpy()
@@ -330,6 +334,8 @@ def main_multimodel(cfg):
             ###
 
             P = PCA(n_components=3)
+            # non_linearity = lambda x: rnn_model.f0 / (1.0 + torch.exp(-rnn_model.beta0 * (x - rnn_model.theta0)))
+            # rates = non_linearity(hidden)
             pc_hidden = P.fit_transform(hidden.reshape(-1,hidden.shape[-1]).detach().cpu()).reshape(*hidden.shape[:2],P.n_components)
 
             plt.figure()
@@ -337,13 +343,58 @@ def main_multimodel(cfg):
                 plt.plot(inputs[:,i,2],pc_hidden[:,i,0],lw=1,alpha=0.5)
 
             if cfg.run_fixed_point_finder:
-                pc_fps = P.transform(unique_fps.xstar)
+                unique_fps_rates = torch.from_numpy(unique_fps.xstar)
+                pc_fps = P.transform(unique_fps_rates)
                 # pc_IC  = P.transform(initial_conditions)
                 plt.scatter(unique_fps.inputs[unique_fps.is_stable,2],pc_fps[unique_fps.is_stable, 0], c='blue', marker='x', s=100, zorder=1001)
                 plt.scatter(unique_fps.inputs[~unique_fps.is_stable,2],pc_fps[~unique_fps.is_stable, 0], c='red', marker='x', s=100, zorder=1000)
                 # plt.scatter(fp_inputs[:,2],pc_IC[:,0],c='green')
+
+
             plt.savefig(Path(cfg.savepath) / "PCA_traj.png",dpi=300)
             plt.close()
+
+            KEFvals = []
+            for i in range(SL.num_models):
+                mod_model = compose(
+                    torch.log,
+                    lambda x: x + 1,
+                    torch.exp,
+                    partial(torch.sum, dim=-1, keepdims=True),
+                    torch.log,
+                    torch.abs,
+                    SL.models[i]#.to('cpu')
+                )
+                samples_for_normalisation = 1000
+                needs_dim = True
+                if hasattr(cfg.dynamics, 'dist_requires_dim'):
+                    needs_dim = cfg.dynamics.dist_requires_dim
+
+                dist_option = dist
+                if hasattr(cfg.dynamics,"combined_distribution"):
+                    dist_option = instantiate(cfg.dynamics.combined_distribution)
+
+                samples = dist_option.sample(sample_shape=[samples_for_normalisation])
+
+                norm_val = float(
+                    torch.mean(torch.sum(mod_model(samples) ** 2, axis=-1)).sqrt().detach().numpy())
+
+                mod_model = compose(
+                    lambda x: x / norm_val,
+                    mod_model
+                )
+                KEFval = mod_model(torch.concat([hidden,inputs],dim=-1)).detach()
+                KEFvals.append(KEFval)
+
+            KEFvals = torch.concat(KEFvals,dim=-1).detach().cpu()
+
+            fig,axs = plt.subplots(2,2)
+            for i in range(SL.num_models):
+                ax = axs.flatten()[i]
+                ax.scatter(inputs[:,:,2],pc_hidden[:,:,0],c=KEFvals[:,:,i],s=10)
+            fig.tight_layout()
+            fig.savefig(Path(cfg.savepath) / "PCA1_inputs_KEFvals.png",dpi=300)
+
 
             plt.figure()
             for i in range(pc_hidden.shape[1]):

@@ -2,7 +2,7 @@ function :
   _target_  : rnn.discrete_to_continuous
   discrete_dynamics :
     _target_ : rnn.get_autonomous_dynamics_from_model
-    model    : ${...loaded_RNN_model}
+    model    : ${...loaded_RNN_model_cuda}
     rnn_submodule_name: null
     kwargs:
       deterministic : true
@@ -27,6 +27,12 @@ external_input_distribution:
     high    : 1
   dim : ${..external_input_dim}
 
+combined_distribution:
+  _target_  : custom_distributions.ConcatIIDDistribution
+  dists     :
+    - ${...IC_distribution}
+    - ${...external_input_distribution}
+
 dist_requires_dim : false
 
 loaded_RNN_model:
@@ -35,7 +41,12 @@ loaded_RNN_model:
     _target_  : load_RNN_ALM_gating.get_params_dict
     input_file_path : ${savepath}/input_data/
 
-
+loaded_RNN_model_cuda:
+  _target_    : finkelstein_fontolan_RNN.init_network
+  params_dict :
+    _target_  : load_RNN_ALM_gating.get_params_dict
+    input_file_path : ${savepath}/input_data/
+  device  : ${separatrix_locator.device}
 
 RNN_model:
   act_size  : 3

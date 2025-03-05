@@ -1,5 +1,6 @@
 import torch
 import torch.distributions as D
+from torch.distributions import Distribution
 import math
 
 def makeIIDMultiVariate(dist, dim):
@@ -111,6 +112,88 @@ class MultiGapNormal(D.Distribution):
         return cdf_val / self.Z
 
 
+
+
+class ConcatIIDDistribution(Distribution):
+    """
+    A distribution that concatenates a list of distributions.
+    When sampling, it independently samples from each distribution and
+    concatenates the results along the last dimension.
+    The log probability is computed as the sum of the log probabilities
+    from each individual distribution.
+    """
+
+    def __init__(self, dists):
+        # Save the list of distributions
+        self.dists = dists
+
+        # Check that all distributions have the same batch shape.
+        batch_shapes = [dist.batch_shape for dist in dists]
+        if not all(bs == batch_shapes[0] for bs in batch_shapes):
+            raise ValueError("All distributions must have the same batch shape.")
+        self._batch_shape = batch_shapes[0]
+
+        # Determine the event size for each distribution.
+        # If event_shape is empty, we treat the distribution as scalar (i.e. size 1).
+        self.event_sizes = []
+        for dist in dists:
+            if len(dist.event_shape) == 0:
+                size = 1
+            else:
+                size = 1
+                for d in dist.event_shape:
+                    size *= d
+            self.event_sizes.append(size)
+        total_size = sum(self.event_sizes)
+        # We define the new event shape to be a 1D vector whose length is the sum
+        # of the individual event sizes.
+        self._event_shape = (total_size,)
+
+    @property
+    def batch_shape(self):
+        return self._batch_shape
+
+    @property
+    def event_shape(self):
+        return self._event_shape
+
+    def sample(self, sample_shape=torch.Size()):
+        # For each distribution, sample and then ensure that the event dimension
+        # is a 1D vector (flatten if necessary).
+        samples = []
+        for dist in self.dists:
+            s = dist.sample(sample_shape)
+            # If the distribution is scalar, unsqueeze to get a last dim.
+            if len(dist.event_shape) == 0:
+                s = s.unsqueeze(-1)
+            else:
+                # If the event is multi-dimensional, flatten it into one dimension.
+                if len(dist.event_shape) > 1:
+                    s = s.reshape(s.shape[:-len(dist.event_shape)] + (-1,))
+            samples.append(s)
+        # Concatenate along the last dimension (the event dimension).
+        return torch.cat(samples, dim=-1)
+
+    def log_prob(self, value):
+        # 'value' is assumed to have shape sample_shape + (total_event_size,)
+        # We split 'value' along the last dimension according to each distribution's event size.
+        splits = torch.split(value, self.event_sizes, dim=-1)
+        log_probs = []
+        for split, dist in zip(splits, self.dists):
+            # For scalar distributions, remove the extra dimension.
+            if len(dist.event_shape) == 0:
+                split = split.squeeze(-1)
+            # Otherwise, if the event was flattened, we assume that log_prob accepts the flat vector.
+            log_probs.append(dist.log_prob(split))
+        # Since we assume independence, the overall log probability is the sum.
+        return sum(log_probs)
+
+
+def concat(dists):
+    """Convenience function to create a ConcatDistribution."""
+    return ConcatIIDDistribution(dists)
+
+
 if __name__ == '__main__':
     gap_points = [-2.0, 0.0, 2.0]
     epsilon = 0.5
@@ -135,3 +218,7 @@ if __name__ == '__main__':
     print(
         multivariate_dist.sample(sample_shape=(10,)).shape
     )
+
+    combined_dist = concat([multivariate_dist, multivariate_dist]*2)
+    sample = combined_dist.sample(sample_shape=(10,))
+    print("Combined sample shape):", sample.shape)

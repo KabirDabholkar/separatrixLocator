@@ -29,11 +29,12 @@ def get_autonomous_dynamics_from_model(model,device='cpu',rnn_submodule_name='rn
             submodule = getattr(model,rnn_submodule_name)
         hx = hx[None]
         inp = torch.zeros_like(hx)[..., :submodule.input_size] if inp is None else inp[None]
-        model.to(device)
+        # model.to(device)
         # print('in dynamics',inp.shape,hx.shape)
+        print(inp.device,hx.device)
         output = submodule(inp,hx,**kwargs)[0][0]
         # print(output)
-        model.to('cpu')
+        # model.to('cpu')
         return output
     return dynamics
 

@@ -40,10 +40,22 @@ class FinkelsteinFontolanTask:
         # Calculate number of time steps (assumes T_test is divisible by dt)
         self.num_steps = int(T_test / dt)
 
+    # def smooth(self, x, window_len):
+    #     """Simple moving average smoothing using a uniform window."""
+    #     window = np.ones(window_len) / window_len
+    #     return np.convolve(x, window, mode='same')
     def smooth(self, x, window_len):
-        """Simple moving average smoothing using a uniform window."""
+        """Smooth a 1D signal using a moving average with a window of length window_len,
+        while preserving the original length.
+
+        This function pads the signal with different numbers of elements on the left and right.
+        """
         window = np.ones(window_len) / window_len
-        return np.convolve(x, window, mode='same')
+        # Calculate asymmetric padding: total padding = window_len - 1
+        left_pad = int((window_len - 1) // 2)
+        right_pad = int(window_len - 1 - left_pad)
+        x_padded = np.pad(x, (left_pad, right_pad), mode='edge')
+        return np.convolve(x_padded, window, mode='valid')
 
     def __call__(self):
         """

@@ -1439,7 +1439,7 @@ def train_with_logger_ext_inp(
         )[0]
 
         # Compute F(x_batch)
-        F_inputs = [x_batch.to('cpu')] + ([] if external_input_dist is None else [external_inputs])
+        F_inputs = [x_batch] + ([] if external_input_dist is None else [external_inputs])
         F_x = F(*F_inputs).to(device)
 
         # Main loss term: ||φ'(x)·F(x) - eigenvalue·φ(x)||²
