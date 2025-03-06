@@ -716,6 +716,26 @@ class ScaledLinear(nn.Linear):
     def forward(self, x):
         return nn.functional.linear(x, self.weight * self.scale, self.bias)
 
+class InputScaler(nn.Module):
+    """A simple PyTorch module for scaling input data by a constant factor.
+    Can be used in nn.Sequential pipelines.
+    
+    Args:
+        scale_factor (float): Constant to multiply the input by
+        trainable (bool): If True, scale_factor will be learned during training
+    """
+    def __init__(self, scale_factor=1.0, trainable=False):
+        super().__init__()
+        self.scale = nn.Parameter(torch.tensor(scale_factor), requires_grad=trainable)
+            
+    def forward(self, x):
+        """Scale the input by multiplying with scale_factor."""
+        return x * self.scale
+            
+    def inverse_transform(self, x):
+        """Reverse the scaling transformation."""
+        return x / self.scale
+
 # Define the neural network as phi(x) using nn.Sequential
 def create_phi_network(input_dim=1, hidden_dim=200, output_dim=1, num_layers=4, nonlin = nn.Tanh):
     args = []
@@ -731,6 +751,7 @@ def create_phi_network(input_dim=1, hidden_dim=200, output_dim=1, num_layers=4, 
         *args
     )
     return model
+
 
 class AttentionSelectorDNN(nn.Module):
     def __init__(self, input_dim, hidden_dims, output_dim):

@@ -350,20 +350,20 @@ def main_multimodel(cfg):
                 plt.scatter(unique_fps.inputs[~unique_fps.is_stable,2],pc_fps[~unique_fps.is_stable, 0], c='red', marker='x', s=100, zorder=1000)
                 # plt.scatter(fp_inputs[:,2],pc_IC[:,0],c='green')
 
-
             plt.savefig(Path(cfg.savepath) / "PCA_traj.png",dpi=300)
             plt.close()
 
             KEFvals = []
             for i in range(SL.num_models):
                 mod_model = compose(
+                    # lambda x: x**0.1,
                     torch.log,
                     lambda x: x + 1,
                     torch.exp,
                     partial(torch.sum, dim=-1, keepdims=True),
                     torch.log,
                     torch.abs,
-                    SL.models[i]#.to('cpu')
+                    SL.models[i] #.to('cpu')
                 )
                 samples_for_normalisation = 1000
                 needs_dim = True
@@ -388,13 +388,102 @@ def main_multimodel(cfg):
 
             KEFvals = torch.concat(KEFvals,dim=-1).detach().cpu()
 
-            fig,axs = plt.subplots(2,2)
+            fig,axs = plt.subplots(2,2, sharex=True, sharey=True)
             for i in range(SL.num_models):
                 ax = axs.flatten()[i]
-                ax.scatter(inputs[:,:,2],pc_hidden[:,:,0],c=KEFvals[:,:,i],s=10)
+                scatter = ax.scatter(inputs[:,:,2], pc_hidden[:,:,0], c=KEFvals[:,:,i], s=10, cmap='viridis')
+                fig.colorbar(scatter, ax=ax)
             fig.tight_layout()
             fig.savefig(Path(cfg.savepath) / "PCA1_inputs_KEFvals.png",dpi=300)
 
+
+            # threshold = np.quantile(inputs[:,:,2].flatten(), 0.96)
+            # top_indices = np.where(inputs[:,:,2] >= threshold)
+            top_indices = np.where(
+                (0.5 <= inputs[:, :, 2]) & (inputs[:, :, 2] <= 0.52)
+            )
+
+            # Extract corresponding hidden states for those indices
+            top_hidden = hidden[top_indices[0], top_indices[1], :].detach().cpu().numpy()
+
+            # Compute pairwise euclidean distances between all points in top_hidden using torch
+            distances = torch.cdist(
+                torch.from_numpy(top_hidden), 
+                torch.from_numpy(top_hidden)
+            )
+            
+            # Get indices of points with maximum distance
+            max_dist_idx = torch.unravel_index(torch.argmax(distances), distances.shape)
+            
+            # Get the actual points with maximum distance
+            point1 = top_hidden[max_dist_idx[0]]
+            point2 = top_hidden[max_dist_idx[1]]
+            max_distance = distances[max_dist_idx[0], max_dist_idx[1]].item()
+            
+            print(f"Maximum distance: {max_distance}")
+
+            
+            print(f"Point 1: {point1}")
+            print(f"Point 2: {point2}")
+
+            plt.figure()
+            plt.hist(point1.flatten())
+            plt.hist(point2.flatten())
+            plt.savefig(Path(cfg.savepath) / "fixedpoint_histograms.png",dpi=300)
+            plt.close()
+
+            # Create 100 linearly interpolated points between point1 and point2
+            n_grid = 1000
+            alpha = torch.linspace(0, 1, n_grid)
+            interpolated_points = alpha[:, None] * point1[None, :] + (1 - alpha)[:, None] * point2[None, :]
+            interpolated_inputs = (inputs[top_indices[0][max_dist_idx[0]], top_indices[1][max_dist_idx[0]]] + 
+                                 inputs[top_indices[0][max_dist_idx[1]], top_indices[1][max_dist_idx[1]]]) / 2
+            
+            concat_interpolated = torch.concat([interpolated_points,interpolated_inputs.repeat(n_grid,1)],dim=-1)
+
+            KEFvals = []
+            for i in range(SL.num_models):
+                mod_model = compose(
+                    # lambda x: x**0.1,
+                    torch.log,
+                    lambda x: x + 1,
+                    # torch.exp,
+                    # partial(torch.sum, dim=-1, keepdims=True),
+                    # torch.log,
+                    torch.abs,
+                    SL.models[i]#.to('cpu')
+                )
+                samples_for_normalisation = 1000
+                needs_dim = True
+
+
+                samples = dist_option.sample(sample_shape=[samples_for_normalisation])
+
+                norm_val = float(
+                    torch.mean(torch.sum(mod_model(samples) ** 2, axis=-1)).sqrt().detach().numpy())
+
+                mod_model = compose(
+                    lambda x: x / norm_val,
+                    mod_model
+                )
+                KEFval = mod_model(concat_interpolated).detach()
+                KEFvals.append(KEFval)
+
+            KEFvals = torch.concat(KEFvals, dim=-1).detach().cpu()
+
+            fig,ax = plt.subplots()
+            ax.plot(KEFvals)
+            ax.set_ylabel(r'KEF value')
+            ax.set_xlabel('Position along decision axis')
+            plt.savefig(Path(cfg.savepath) / "KEFs_interpolated.png", dpi=300)
+            plt.close()
+
+            plt.figure()
+            for i in range(pc_hidden.shape[1]):
+                plt.plot(inputs[:,i,2],pc_hidden[:,i,0],lw=1,alpha=0.5)
+            pc_interpolated_points = P.transform(interpolated_points)
+            plt.plot(concat_interpolated[:,-1],pc_interpolated_points[:,0],lw=1,ls='dotted',c='black')
+            plt.savefig(Path(cfg.savepath) / "PCA_interpolation_line.png", dpi=300)
 
             plt.figure()
             for i in range(pc_hidden.shape[1]):

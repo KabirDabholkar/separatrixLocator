@@ -16,16 +16,28 @@ IC_distribution:
   dist  :
     _target_  : torch.distributions.Normal
     loc       : 0
-    scale     : 1
+    scale     : 4
   dim : ${..dim}
 
+#external_input_distribution:
+#  _target_  : custom_distributions.makeIIDMultiVariate
+#  dist  :
+#    _target_: torch.distributions.Uniform
+#    low     : 0
+#    high    : 1
+#  dim : ${..external_input_dim}
 external_input_distribution:
-  _target_  : custom_distributions.makeIIDMultiVariate
-  dist  :
-    _target_: torch.distributions.Uniform
-    low     : 0
-    high    : 1
-  dim : ${..external_input_dim}
+  _target_  : custom_distributions.ConcatIIDDistribution
+  dists     :
+    - _target_: torch.distributions.Uniform
+      low     : 0
+      high    : 0.01
+    - _target_: torch.distributions.Uniform
+      low     : 0
+      high    : 0.01
+    - _target_: torch.distributions.Uniform
+      low     : 0 #.6 #0
+      high    : 1
 
 combined_distribution:
   _target_  : custom_distributions.ConcatIIDDistribution

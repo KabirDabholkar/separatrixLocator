@@ -194,6 +194,57 @@ def concat(dists):
     return ConcatIIDDistribution(dists)
 
 
+class DiracDelta(Distribution):
+    """
+    Creates a Dirac delta distribution parameterized by a location (point mass).
+    
+    Args:
+        loc (Tensor): The location (point mass) of the distribution
+        validate_args (bool, optional): Defaults to False
+    """
+    arg_constraints = {}
+    support = D.constraints.real
+    has_rsample = True
+    
+    def __init__(self, loc, validate_args=None):
+        self.loc = torch.as_tensor(loc)
+        batch_shape = self.loc.size()
+        super(DiracDelta, self).__init__(batch_shape, validate_args=validate_args)
+        
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(DiracDelta, _instance)
+        batch_shape = torch.Size(batch_shape)
+        new.loc = self.loc.expand(batch_shape)
+        super(DiracDelta, new).__init__(batch_shape, validate_args=False)
+        return new
+        
+    def sample(self, sample_shape=torch.Size()):
+        shape = self._extended_shape(sample_shape)
+        return self.loc.expand(shape)
+        
+    def rsample(self, sample_shape=torch.Size()):
+        return self.sample(sample_shape)
+        
+    def log_prob(self, value):
+        # Return 0 where value equals loc, and -inf elsewhere
+        # Adding small epsilon for numerical stability
+        eps = 1e-7
+        return torch.where(torch.abs(value - self.loc) < eps,
+                         torch.tensor(0., device=self.loc.device),
+                         torch.tensor(float('-inf'), device=self.loc.device))
+    
+    def entropy(self):
+        return torch.zeros_like(self.loc)
+    
+    @property
+    def mean(self):
+        return self.loc
+    
+    @property
+    def variance(self):
+        return torch.zeros_like(self.loc)
+
+
 if __name__ == '__main__':
     gap_points = [-2.0, 0.0, 2.0]
     epsilon = 0.5

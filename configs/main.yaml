@@ -42,6 +42,8 @@ defaults:
   - models@DNN_layers4  : DNN_layers4
   - models@DNN_layers6  : DNN_layers6
   - models@DNN_layers8  : DNN_layers8
+  - models@input_scaled_DNN_layers6 : input_scaled_DNN_layers6
+  - models@input_scaled_DNN_layers8 : input_scaled_DNN_layers8
   - models@DNN_ReLU_layers8  : DNN_ReLU_layers8
   - models@richDNN_layers8  : richDNN_layers8
   - models@multimax_DNN_layers8 : multimax_DNN_layers8
@@ -66,7 +68,9 @@ runGD_analytical  : false
 runGD             : false
 run_fixed_point_finder  : false
 
-model_choice  : DNN_layers6
+#model_choice  : DNN_layers6
+model_choice  : input_scaled_DNN_layers6
+#model_choice  : input_scaled_DNN_layers8
 #model_choice  : DNN_layers2
 #model_choice  : DNN_softmax_layers8
 #model_choice  : RBF
@@ -194,6 +198,8 @@ model_options:
   DNN_layers4: ${DNN_layers4}
   DNN_layers6: ${DNN_layers6}
   DNN_layers8: ${DNN_layers8}
+  input_scaled_DNN_layers6  : ${input_scaled_DNN_layers6}
+  input_scaled_DNN_layers8  : ${input_scaled_DNN_layers8}
   DNN_ReLU_layers8: ${DNN_ReLU_layers8}
   richDNN_layers8: ${richDNN_layers8}
   RBF : ${RBF}
