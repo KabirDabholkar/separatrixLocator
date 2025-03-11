@@ -1,7 +1,7 @@
 _target_  : utils.setattrs_kwargs
 target  :
   _target_  : learn_koopman_eig.partialised_RBF_maker
-  in_features_dim : ${dynamics.dim}
+  in_features_dim : ${..input_size}
   num_kernels :  100 #00
   out_features_dim : 1
   normalization : false
@@ -10,6 +10,7 @@ target  :
     upper_bound_kernels: 2
     std_shapes: 3
 
+input_size  : ${dynamics.dim}
 param_specific_hyperparams:
   - params:
       - weights

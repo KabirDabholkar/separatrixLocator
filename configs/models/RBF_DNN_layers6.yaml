@@ -2,27 +2,8 @@ _target_  : utils.setattrs_kwargs
 target  :
   _target_  : torch.nn.Sequential
   _args_  :
-    - _target_    : learn_koopman_eig.InputScaler
-      scale_factor: 2.5
-      trainable   : true
     - _target_    : torch.nn.Linear
       in_features : ${....input_size}
-      out_features: 20 #400
-    - _target_    : torch.nn.Tanh
-    - _target_    : torch.nn.Linear
-      in_features : 20 #400
-      out_features: 20 #200
-    - _target_    : torch.nn.Tanh
-    - _target_    : torch.nn.Linear
-      in_features : 20 #200
-      out_features: ${....hidden_size}
-    - _target_    : torch.nn.Tanh
-    - _target_    : torch.nn.Linear
-      in_features : ${....hidden_size}
-      out_features: ${....hidden_size}
-    - _target_: torch.nn.Tanh
-    - _target_: torch.nn.Linear
-      in_features: ${....hidden_size}
       out_features: ${....hidden_size}
     - _target_    : torch.nn.Tanh
     - _target_    : torch.nn.Linear
@@ -35,13 +16,30 @@ target  :
     - _target_    : torch.nn.Tanh
     - _target_    : torch.nn.Linear
       in_features : ${....hidden_size}
-      out_features: ${....output_size}
+      out_features: ${....hidden_size}
+    - _target_    : torch.nn.Tanh
+    - _target_    : torch.nn.Linear
+      in_features : ${....hidden_size}
+      out_features: ${....hidden_size}
+    - _target_    : torch.nn.Tanh
+    - _target_    : torch.nn.Linear
+      in_features : ${....hidden_size}
+      out_features: ${....rbf_dim}
+    - _target_  : learn_koopman_eig.partialised_RBF_maker
+      in_features_dim : ${....rbf_dim}
+      num_kernels :  100 #00
+      out_features_dim : 1
+      normalization : false
+      reset_params  :
+        upper_bound_kernels: 2
+        std_shapes: 3
 
+rbf_dim : 2
 input_size : ${dynamics.dim}
-hidden_size: 70
-output_size: 15 #10
-num_layers : 8
-name  : DNN_layers${.num_layers}_Tanh_hidden${.hidden_size}_output${.output_size}
+hidden_size: 40
+output_size: 7 #10
+num_layers : 6
+name  : RBF_DNN_layers${.num_layers}_Tanh_hidden${.hidden_size}_output${.output_size}
 
 #param_specific_hyperparams:
 #  - params:

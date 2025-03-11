@@ -3,11 +3,12 @@ import torch
 import numpy as np
 from functools import wraps
 
-def discrete_to_continuous(discrete_dynamics):
+def discrete_to_continuous(discrete_dynamics, delta_t=1):
     @wraps(discrete_dynamics)
     def continuous_dynamics(*args):
-        return discrete_dynamics(*args) - args[0]
+        return (discrete_dynamics(*args) - args[0]) / delta_t
     return continuous_dynamics
+
 def multidimbatch(func):
     def new_func(*args):
         # new_inp = inp.reshape(-1,inp.shape[-1])
@@ -29,18 +30,13 @@ def get_autonomous_dynamics_from_model(model,device='cpu',rnn_submodule_name='rn
             submodule = getattr(model,rnn_submodule_name)
         hx = hx[None]
         inp = torch.zeros_like(hx)[..., :submodule.input_size] if inp is None else inp[None]
-        # model.to(device)
-        # print('in dynamics',inp.shape,hx.shape)
-        print(inp.device,hx.device)
         output = submodule(inp,hx,**kwargs)[0][0]
-        # print(output)
-        # model.to('cpu')
         return output
     return dynamics
 
 def hidden_distribution_from_model(model,dataset, alpha = 1e-4):
     inputs,targets = dataset()
-    _,hidden = model(torch.tensor(inputs),return_hidden=True)
+    _,hidden = model(torch.tensor(inputs,dtype=torch.float32),return_hidden=True)
     hidden = hidden.reshape(-1,hidden.shape[-1])
     print(hidden.shape)
     mean = hidden.mean(0)

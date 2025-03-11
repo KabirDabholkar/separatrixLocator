@@ -92,7 +92,7 @@ class SeparatrixLocator(BaseEstimator):
 
     def load_models(self,savedir):
         for i,model in enumerate(self.models):
-            state_dict = torch.load(Path(savedir) / "models" / f"{model.__class__.__name__}_{i}.pt",weights_only=True)
+            state_dict = torch.load(Path(savedir) / "models" / f"{model.__class__.__name__}_{i}.pt",weights_only=True,map_location=torch.device(self.device) )
             self.models[i].load_state_dict(state_dict)
 
     def filter_models(self, threshold):
@@ -154,7 +154,7 @@ class SeparatrixLocator(BaseEstimator):
             # If an external input distribution is provided, sample external inputs.
             if "external_input_dist" in kwargs:
                 ext_input_dist = kwargs["external_input_dist"]
-                ext_input_dim = kwargs.get("external_input_dim", self.dynamics_dim)
+                ext_input_dim = kwargs.get("external_input_dim", 0)
                 shape_ext = [1000] + ([ext_input_dim] if dist_needs_dim else [])
                 samples_ext = ext_input_dist.sample(sample_shape=shape_ext)
             else:

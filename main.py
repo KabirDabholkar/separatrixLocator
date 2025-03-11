@@ -66,6 +66,7 @@ def main_multimodel(cfg):
     distribution = instantiate(cfg.dynamics.IC_distribution)
     input_distribution = instantiate(cfg.dynamics.external_input_distribution) if hasattr(cfg.dynamics,'external_input_distribution') else None
 
+
     if input_distribution is not None:
         cfg.model.input_size = cfg.dynamics.dim + cfg.dynamics.external_input_dim
         OmegaConf.resolve(cfg.model)
@@ -80,7 +81,6 @@ def main_multimodel(cfg):
         external_input_dist = input_distribution,
         **instantiate(cfg.separatrix_locator_fit_kwargs)
     )
-    SL.models = [model.to('cpu') for model in SL.models]
 
     if cfg.save_KEF_model:
         SL.save_models(cfg.savepath)
@@ -103,6 +103,7 @@ def main_multimodel(cfg):
         )
         print('Scores over 2x scaled distribution:\n',scores2.detach().cpu().numpy())
 
+    SL.models = [model.to('cpu') for model in SL.models]
     #SL.filter_models(0.1)
 
     all_below_threshold_points = None
@@ -336,7 +337,9 @@ def main_multimodel(cfg):
             P = PCA(n_components=3)
             # non_linearity = lambda x: rnn_model.f0 / (1.0 + torch.exp(-rnn_model.beta0 * (x - rnn_model.theta0)))
             # rates = non_linearity(hidden)
-            pc_hidden = P.fit_transform(hidden.reshape(-1,hidden.shape[-1]).detach().cpu()).reshape(*hidden.shape[:2],P.n_components)
+            hidden_last = hidden[-3000:]
+            P.fit(hidden_last.reshape(-1,hidden_last.shape[-1]).detach().cpu())
+            pc_hidden = P.transform(hidden.reshape(-1,hidden.shape[-1]).detach().cpu()).reshape(*hidden.shape[:2],P.n_components)
 
             plt.figure()
             for i in range(pc_hidden.shape[1]):
@@ -400,7 +403,7 @@ def main_multimodel(cfg):
             # threshold = np.quantile(inputs[:,:,2].flatten(), 0.96)
             # top_indices = np.where(inputs[:,:,2] >= threshold)
             top_indices = np.where(
-                (0.5 <= inputs[:, :, 2]) & (inputs[:, :, 2] <= 0.52)
+                (0.7 <= inputs[:, :, 2]) & (inputs[:, :, 2] <= 0.72)
             )
 
             # Extract corresponding hidden states for those indices
@@ -413,7 +416,7 @@ def main_multimodel(cfg):
             )
             
             # Get indices of points with maximum distance
-            max_dist_idx = torch.unravel_index(torch.argmax(distances), distances.shape)
+            max_dist_idx = np.unravel_index(torch.argmax(distances), distances.shape)
             
             # Get the actual points with maximum distance
             point1 = top_hidden[max_dist_idx[0]]
@@ -423,8 +426,8 @@ def main_multimodel(cfg):
             print(f"Maximum distance: {max_distance}")
 
             
-            print(f"Point 1: {point1}")
-            print(f"Point 2: {point2}")
+            # print(f"Point 1: {point1}")
+            # print(f"Point 2: {point2}")
 
             plt.figure()
             plt.hist(point1.flatten())
@@ -434,7 +437,7 @@ def main_multimodel(cfg):
 
             # Create 100 linearly interpolated points between point1 and point2
             n_grid = 1000
-            alpha = torch.linspace(0, 1, n_grid)
+            alpha = torch.linspace(-.5, 1.5, n_grid)
             interpolated_points = alpha[:, None] * point1[None, :] + (1 - alpha)[:, None] * point2[None, :]
             interpolated_inputs = (inputs[top_indices[0][max_dist_idx[0]], top_indices[1][max_dist_idx[0]]] + 
                                  inputs[top_indices[0][max_dist_idx[1]], top_indices[1][max_dist_idx[1]]]) / 2
@@ -469,10 +472,11 @@ def main_multimodel(cfg):
                 KEFval = mod_model(concat_interpolated).detach()
                 KEFvals.append(KEFval)
 
-            KEFvals = torch.concat(KEFvals, dim=-1).detach().cpu()
+            KEFvals = torch.stack(KEFvals, dim=0).detach().cpu()
 
             fig,ax = plt.subplots()
-            ax.plot(KEFvals)
+            for i in range(SL.num_models):
+                ax.plot(KEFvals[i],c=f'C{i}')
             ax.set_ylabel(r'KEF value')
             ax.set_xlabel('Position along decision axis')
             plt.savefig(Path(cfg.savepath) / "KEFs_interpolated.png", dpi=300)
@@ -491,6 +495,204 @@ def main_multimodel(cfg):
             plt.savefig(Path(cfg.savepath) / "inputs.png", dpi=300)
             plt.close()
 
+
+            # Run from interpolated line
+            n_grid = 100
+            alpha = torch.linspace(-.4, 1.4, n_grid)
+            interpolated_points = alpha[:, None] * point1[None, :] + (1 - alpha)[:, None] * point2[None, :]
+            interpolated_inputs = (inputs[top_indices[0][max_dist_idx[0]], top_indices[1][max_dist_idx[0]]] +
+                                   inputs[top_indices[0][max_dist_idx[1]], top_indices[1][max_dist_idx[1]]]) / 2
+            # Set simulation length for interpolated points
+            run_T = 500
+
+            # Expand interpolated inputs over time dimension
+            interpolated_inputs_expanded = interpolated_inputs.repeat(n_grid, 1).unsqueeze(0).expand(run_T, -1, -1)
+
+            # Run RNN from interpolated initial conditions
+            interpolated_trajectories = rnn(
+                interpolated_inputs_expanded,
+                x_init=interpolated_points[None],
+                deterministic=True,
+                return_hidden=True
+            )[1]  # Only take second output, ignoring hidden states
+
+            # Reshape trajectories
+            interpolated_trajectories_r = interpolated_trajectories.reshape(run_T, n_grid, -1)
+
+            # Transform interpolated trajectories using PCA
+            interpolated_trajectories_pca = P.transform(interpolated_trajectories_r.reshape(-1, interpolated_trajectories_r.shape[-1]).detach().cpu().numpy())
+            interpolated_trajectories_pca = interpolated_trajectories_pca.reshape(*interpolated_trajectories_r.shape[:-1], -1)
+
+            # Create figure for PCA trajectories over time
+            fig, ax = plt.subplots(figsize=(10, 6))
+            # Create colormap based on alpha values
+            norm = plt.Normalize(alpha.min(), alpha.max())
+            cmap = plt.cm.viridis
+            mappable = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
+            for i in range(n_grid):
+                ax.plot(interpolated_trajectories_pca[:, i, 0],
+                        color=cmap(norm(alpha[i])),
+                        alpha=0.5, lw=1)
+            # Adjust layout and add colorbar
+            fig.subplots_adjust(right=0.85)
+            cbar_ax = fig.add_axes([0.88, 0.15, 0.03, 0.7])
+            fig.colorbar(mappable, cax=cbar_ax, label='Alpha')
+            ax.set_xlabel('time')
+            ax.set_ylabel('PC1')
+            ax.set_title('PCA Trajectories from Interpolated Initial Conditions')
+            fig.savefig(Path(cfg.savepath) / "interpolated_trajectories_pca.png", dpi=300)
+            plt.close(fig)
+
+            # Concatenate points and inputs for KEF evaluation
+            concat_traj = torch.cat([interpolated_trajectories_r, interpolated_inputs_expanded], dim=-1)
+
+            # Evaluate KEFs
+            KEFvals_traj = []
+            for i in range(SL.num_models):
+                mod_model = compose(
+                    # torch.log,
+                    # lambda x: x + 1,
+                    # torch.abs,
+                    SL.models[i]
+                )
+                samples_for_normalisation = 1000
+                samples = dist_option.sample(sample_shape=[samples_for_normalisation])
+                norm_val = float(
+                    torch.mean(torch.sum(mod_model(samples) ** 2, axis=-1)).sqrt().detach().numpy())
+                mod_model = compose(
+                    lambda x: x / norm_val,
+                    mod_model
+                )
+                KEFval = mod_model(concat_traj).detach()
+                KEFvals_traj.append(KEFval)
+
+            KEFvals_traj = torch.stack(KEFvals_traj, dim=0).detach().cpu()
+            # Plot KEFs
+            fig, axs = plt.subplots(2, 2, figsize=(12, 8))
+            axs = axs.ravel()
+            mappable = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
+            for i in range(SL.num_models):
+                for t in range(n_grid):
+                    axs[i].plot(KEFvals_traj[i, :, t],
+                              color=cmap(norm(alpha[t])),
+                              alpha=0.5, lw=1)
+                axs[i].set_title(f'KEF {i+1}')
+                axs[i].set_xlabel('Time')
+                axs[i].set_ylabel('KEF value')
+
+            # Adjust layout and add colorbar
+            fig.subplots_adjust(right=0.85)
+            cbar_ax = fig.add_axes([0.88, 0.15, 0.03, 0.7])
+            fig.colorbar(mappable, cax=cbar_ax, label='Alpha')
+            fig.savefig(Path(cfg.savepath) / "interpolated_trajectories_KEF.png", dpi=300)
+            plt.close(fig)
+            
+            
+            ### KEFs vs PCA
+            # Create a figure with two subplots stacked vertically
+            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(5, 6), sharex=True)
+
+            # Plot KEFs in top subplot
+            for i in range(SL.num_models):
+                ax1.plot(alpha, np.abs(KEFvals_traj[i, 0])**0.1, label=f'KEF {i+1}', c=f'C{i}')
+            ax1.set_xlabel('Alpha')
+            ax1.set_ylabel('KEF value')
+            # ax1.legend()
+
+            # Plot final PCA timepoint in bottom subplot
+            pca_final = interpolated_trajectories_pca[-1,:,0]  # Get final timepoint
+            ax2.plot(alpha, pca_final)
+            ax2.set_xlabel('Alpha')
+            ax2.set_ylabel('Final PC1')
+
+            plt.tight_layout()
+            fig.savefig(Path(cfg.savepath) / "KEF_pca_vs_alpha.png", dpi=300)
+            plt.close(fig)
+
+
+
+
+            # Sample every 100 timesteps
+            n_trials = 40
+            sample_every = 100
+            sampled_hidden = hidden[::sample_every,:n_trials].detach().clone()
+            sampled_inputs = inputs[::sample_every,:n_trials].detach().clone()
+
+            # Add multivariate Gaussian noise with PCA covariance statistics
+            pca_cov = torch.from_numpy(P.get_covariance()).float()
+            mvn = torch.distributions.MultivariateNormal(
+                loc=torch.zeros(sampled_hidden.shape[-1]),
+                covariance_matrix=pca_cov
+            )
+            noise = mvn.sample(sampled_hidden.shape[:-1])
+            perturbed_hidden = sampled_hidden + noise * 0.5
+
+            # Reshape sampled tensors to 2D (combining first two dimensions)
+            sampled_hidden_2d = sampled_hidden.reshape(-1, sampled_hidden.shape[-1])
+            sampled_inputs_2d = sampled_inputs.reshape(-1, sampled_inputs.shape[-1])
+            perturbed_hidden_2d = perturbed_hidden.reshape(-1, perturbed_hidden.shape[-1])
+
+            # Set simulation length
+            run_T = 100
+            
+            # Expand inputs by repeating along new middle dimension
+            sampled_inputs_2d = sampled_inputs_2d.unsqueeze(0).expand(run_T, -1, -1)
+
+            # Run RNN on perturbed initial conditions
+            perturbed_trajectories = rnn(
+                sampled_inputs_2d, #.to(rnn.device),
+                x_init=perturbed_hidden_2d[None], #.to(rnn.device),
+                deterministic=True,
+                return_hidden=True,
+            )[1]  # Only take second output, ignoring hidden states
+
+            perturbed_trajectories_r = perturbed_trajectories.reshape(run_T, *perturbed_hidden.shape)
+            # Expand sampled_inputs to match perturbed_trajectories_r shape
+            sampled_inputs_expanded = sampled_inputs.unsqueeze(0).expand(perturbed_trajectories_r.shape[0], -1, -1, -1)
+            # Concatenate perturbed trajectories and sampled inputs along last dimension
+            perturbed_trajectories_r_inp = torch.cat([perturbed_trajectories_r, sampled_inputs_expanded], dim=-1)
+
+            # Transform perturbed trajectories using PCA
+            # P.transform(hidden)
+            sampled_hidden_pca = P.transform(sampled_hidden.reshape(-1, sampled_hidden.shape[-1]).detach().cpu().numpy())
+            sampled_hidden_pca = sampled_hidden_pca.reshape(*sampled_hidden.shape[:-1], -1)
+            perturbed_hidden_pca = P.transform(perturbed_hidden.reshape(-1, perturbed_hidden.shape[-1]).detach().cpu().numpy())
+            perturbed_hidden_pca = perturbed_hidden_pca.reshape(*perturbed_hidden.shape[:-1], -1)
+            perturbed_trajectories_pca = P.transform(perturbed_trajectories_r.reshape(-1, perturbed_trajectories_r.shape[-1]).detach().cpu().numpy())
+            perturbed_trajectories_pca = perturbed_trajectories_pca.reshape(*perturbed_trajectories_r.shape[:-1], -1)
+
+            all_KEF_vals = []
+            for i in range(SL.num_models):
+                KEFvals = SL.models[i](perturbed_trajectories_r_inp.reshape(-1, perturbed_trajectories_r_inp.shape[-1]))
+                KEFvals = KEFvals.reshape(*perturbed_trajectories_r_inp.shape[:-1],-1)
+                all_KEF_vals.append(KEFvals)
+            all_KEF_vals = torch.stack(all_KEF_vals, dim=0).detach().cpu()
+            print(all_KEF_vals.shape)
+
+            # Create subplots with 5 rows and 10 columns
+            fig, axs = plt.subplots(5, 10, figsize=(20, 10), sharey='row',sharex='col')
+            
+            # Plot PCA trajectories in first row
+            for j in range(10):  # For each trajectory
+                axs[0,j].plot(perturbed_trajectories_pca[...,5*j,:,0])
+                if j == 0:  # Only leftmost column gets y labels
+                    axs[0,j].set_ylabel('PCA 1')
+            
+            # Plot each KEF value in remaining rows
+            for i in range(4):  # For each model
+                for j in range(10):  # For each trajectory
+                    axs[i+1,j].plot(all_KEF_vals[i,:,5*j,:,0])
+                    if i == 3:  # Only bottom row gets x labels
+                        axs[i+1,j].set_xlabel('time')
+                    if j == 0:  # Only leftmost column gets y labels
+                        axs[i+1,j].set_ylabel(f'KEF {i+1}')
+            
+            plt.tight_layout()
+            plt.savefig(Path(cfg.savepath) / "KEF_evolution.png", dpi=300)
+            plt.close()
+
+
+            # Reshape perturbed trajectories to match original shape
             plt.figure()
             neuron_id = 2
             for i in range(hidden.shape[1]):
@@ -501,156 +703,167 @@ def main_multimodel(cfg):
                 'hidden[:5,0,0]:',hidden[:5,0,0]
             )
 
-
-            GD_traj, all_below_threshold_points, all_below_threshold_masks  = SL.find_separatrix(
-                distribution,
-                initial_conditions = hidden.reshape(-1,hidden.shape[-1]).detach().clone(),
-                dist_needs_dim=cfg.dynamics.dist_requires_dim if hasattr(cfg.dynamics,
-                                                                         "dist_requires_dim") else True,
-                return_indices = False,
-                return_mask = True,
-                **instantiate(cfg.separatrix_find_separatrix_kwargs)
-            )
-
-
-            KEFvals = []
-            delta_dists = []
-            delta_hiddens = []
-            for i in range(SL.num_models):
-                mod_model = compose(
-                    torch.log,
-                    lambda x: x + 1,
-                    torch.exp,
-                    partial(torch.sum, dim=-1, keepdims=True),
-                    torch.log,
-                    torch.abs,
-                    SL.models[i]
-                )
-                samples_for_normalisation = 1000
-                needs_dim = True
-                if hasattr(cfg.dynamics, 'dist_requires_dim'):
-                    needs_dim = cfg.dynamics.dist_requires_dim
-
-                samples = dist.sample(
-                    sample_shape=[samples_for_normalisation] + ([cfg.dynamics.dim] if needs_dim else []))
-                norm_val = float(
-                    torch.mean(torch.sum(mod_model(samples) ** 2, axis=-1)).sqrt().detach().numpy())
-
-                mod_model = compose(
-                    lambda x: x / norm_val,
-                    mod_model
-                )
-                KEFval = mod_model(hidden).detach()
-                KEFvals.append(KEFval)
-
-                below_threshold_points = all_below_threshold_points[i]
-                below_threshold_mask = all_below_threshold_masks[i]
-                hidden_reshaped = hidden.clone().detach().reshape(-1, hidden.shape[-1]).detach()
-                hidden_reshaped[~below_threshold_mask] = torch.nan
-                delta_hidden = torch.zeros_like(hidden_reshaped)
-                delta_hidden[below_threshold_mask] = below_threshold_points - hidden_reshaped[below_threshold_mask]
-                delta_hidden[~below_threshold_mask] = torch.nan
-                delta_hidden = delta_hidden.reshape(*hidden.shape)
-                delta_hiddens.append(delta_hidden)
-                delta_dist = torch.nanmean(
-                    (delta_hidden)**2,
-                    axis = -1
-                )
-                delta_dists.append(delta_dist)
-
-                # hidden_onlyvalid = hidden_reshaped.reshape(*hidden.shape)
-            print('len(delta_dists)',len(delta_dists))
-
-            ### perturbation
-            scale = 1.0 #3.0
-            pert_rnn = instantiate(cfg.dynamics.perturbable_RNN_model)
-            delta_dists_st = torch.stack(delta_dists, axis=-1)
-            min_ids = np.argmin(np.nanmin(np.array(delta_dists_st), axis=-1), axis=0)
-            pert_inputs = torch.zeros((*delta_dists_st.shape[:2], rnn.rnn.hidden_size))
-            random_pert_inputs = pert_inputs.clone()
-            for i in range(len(min_ids)):
-                pert_vector = delta_hiddens[0][min_ids[i], i, :] * scale
-                pert_inputs[min_ids[i]:min_ids[i]+3, i, :] = pert_vector[None]
-                random_pert_inputs[min_ids[i]:min_ids[i]+3, i, :] = pert_vector[np.random.permutation(len(pert_vector))][None]
-            concat_inputs = torch.concat((inputs, pert_inputs), dim=-1)
-            random_concat_inputs = torch.concat((inputs, random_pert_inputs), dim=-1)
-            pert_outputs, pert_hidden = pert_rnn(concat_inputs, return_hidden=True)
-            random_pert_outputs, random_pert_hidden = pert_rnn(random_concat_inputs, return_hidden=True)
-
-            KEFvals = torch.concatenate(KEFvals,axis=-1).detach().cpu().numpy()
-            inputs = inputs.detach().cpu().numpy()
-            targets = targets.detach().cpu().numpy()
-            outputs = outputs.detach().cpu().numpy()
-            pert_outputs = pert_outputs.detach().cpu().numpy()
-            random_pert_outputs = random_pert_outputs.detach().cpu().numpy()
-
-
-
-
-            fig, axes = plt.subplots(5, 10, sharex=True, sharey='row', figsize=(15, 12))
-
-            for trial_num in range(axes.shape[1]):
-                axs = axes[:, trial_num]
-
-                # Column Titles (Above First Row)
-                axs[0].set_title(f"Trial-{trial_num}")
-
-                # First Row: Inputs
-                ax = axs[0]
-                ax.plot(inputs[:, trial_num])
-                ax.spines['top'].set_visible(False)
-                ax.spines['right'].set_visible(False)
-                ax.spines['left'].set_bounds(-1, 1)
-
-                ax = axs[1]
-                ax.plot(np.linalg.norm(pert_inputs[:,trial_num], axis=-1))
-                ax.spines['top'].set_visible(False)
-                ax.spines['right'].set_visible(False)
-                ax.spines['left'].set_bounds(0, 1)
-                ax.set_ylim(-0.1,1.1)
-
-
-                # Second Row: Outputs/Targets
-                ax = axs[2]
-                ax.plot(targets[:, trial_num])
-                ax.plot(outputs[:, trial_num], ls='solid',label='No pert', alpha=0.7)
-                ax.plot(pert_outputs[:, trial_num], ls='dashed', label='Calc pert', alpha=0.7)
-                ax.plot(random_pert_outputs[:, trial_num], ls='dashed', label='Random pert', alpha=0.7)
-                ax.spines['top'].set_visible(False)
-                ax.spines['right'].set_visible(False)
-                ax.spines['left'].set_bounds(-1,1)
-                # ax.set_ylim(-0.1, 1.1)
-
-                # Third Row: KEF values
-                ax = axs[3]
-                ax.plot(KEFvals[:, trial_num])
-                ax.spines['top'].set_visible(False)
-                ax.spines['right'].set_visible(False)
-                ax.set_yscale('log')
-
-                ## Fourth Row: dist to separatrix
-                ax = axs[4]
-                ax.plot(torch.stack(delta_dists,axis=-1)[:,trial_num],marker='o',markersize=1,alpha=0.5)
-                # ax.plot(dist.log_prob(hidden[:, trial_num]).detach().cpu().numpy())
-                # ax.set_ylabel('Log prob(hidden)')
-                ax.spines['top'].set_visible(False)
-                ax.spines['right'].set_visible(False)
-                ax.set_yscale('log')
-
-
-
-            # Set y-axis labels only for the first column
-            ylabel_texts = ['inputs', 'Norm of Pert input', 'outputs/targets', 'KEF values', 'Dist to Separatrix']
-            for row, label in enumerate(ylabel_texts):
-                axes[row, 0].set_ylabel(label)
-
-            axes[2,1].legend(fontsize=8)
-            # for ax in axes.flatten():
-            #     ax.set_xlim(230,300)
-
-            fig.tight_layout()
-            fig.savefig(Path(cfg.savepath) / "RNN_task_KEFvals_sweep.png", dpi=300)
-            plt.close(fig)
+            # inputs = inputs[:2]
+            # hidden = hidden[:2]
+            #
+            # select_every = 1
+            # external_inputs_select = inputs.reshape(-1,inputs.shape[-1]).detach().clone()[::select_every]
+            # hidden_select = hidden.reshape(-1, hidden.shape[-1]).detach().clone()[::select_every]
+            # GD_traj, all_below_threshold_points, all_below_threshold_masks  = SL.find_separatrix(
+            #     distribution,
+            #     initial_conditions = hidden_select,
+            #     external_inputs = external_inputs_select,
+            #     external_input_dist = input_distribution,
+            #     dist_needs_dim=cfg.dynamics.dist_requires_dim if hasattr(cfg.dynamics,
+            #                                                              "dist_requires_dim") else True,
+            #     return_indices = False,
+            #     return_mask = True,
+            #     **instantiate(cfg.separatrix_find_separatrix_kwargs)
+            # )
+            #
+            #
+            # KEFvals = []
+            # delta_dists = []
+            # delta_hiddens = []
+            # for i in range(SL.num_models):
+            #     mod_model = compose(
+            #         torch.log,
+            #         lambda x: x + 1,
+            #         torch.exp,
+            #         partial(torch.sum, dim=-1, keepdims=True),
+            #         torch.log,
+            #         torch.abs,
+            #         SL.models[i]
+            #     )
+            #     samples_for_normalisation = 1000
+            #     needs_dim = True
+            #     if hasattr(cfg.dynamics, 'dist_requires_dim'):
+            #         needs_dim = cfg.dynamics.dist_requires_dim
+            #
+            #     samples = dist.sample(
+            #         sample_shape=[samples_for_normalisation] + ([cfg.dynamics.dim] if needs_dim else []))
+            #     input_samples = input_distribution.sample(sample_shape=[samples_for_normalisation])
+            #     samples = torch.cat((samples,input_samples),dim=-1)
+            #     norm_val = float(
+            #         torch.mean(torch.sum(mod_model(samples) ** 2, axis=-1)).sqrt().detach().numpy())
+            #
+            #     mod_model = compose(
+            #         lambda x: x / norm_val,
+            #         mod_model
+            #     )
+            #     input_to_KEF = hidden
+            #     input_to_KEF = torch.cat([hidden,inputs],dim=-1)
+            #     KEFval = mod_model(input_to_KEF).detach()
+            #     KEFvals.append(KEFval)
+            #
+            #     below_threshold_points = all_below_threshold_points[i]
+            #     below_threshold_mask = all_below_threshold_masks[i]
+            #     hidden_reshaped = hidden.clone().detach().reshape(-1, hidden.shape[-1]).detach()
+            #     hidden_reshaped[~below_threshold_mask] = torch.nan
+            #     delta_hidden = torch.zeros_like(hidden_reshaped)
+            #     delta_hidden[below_threshold_mask] = below_threshold_points[...,:hidden.shape[-1]] - hidden_reshaped[below_threshold_mask]
+            #     delta_hidden[~below_threshold_mask] = torch.nan
+            #     delta_hidden = delta_hidden.reshape(*hidden.shape)
+            #     delta_hiddens.append(delta_hidden)
+            #     delta_dist = torch.nanmean(
+            #         (delta_hidden)**2,
+            #         axis = -1
+            #     )
+            #     delta_dists.append(delta_dist)
+            #
+            #     # hidden_onlyvalid = hidden_reshaped.reshape(*hidden.shape)
+            # print('len(delta_dists)',len(delta_dists))
+            #
+            # ### perturbation
+            # scale = 1.0 #3.0
+            # pert_rnn = instantiate(cfg.dynamics.perturbable_RNN_model)
+            # delta_dists_st = torch.stack(delta_dists, axis=-1)
+            # min_ids = np.argmin(np.nanmin(np.array(delta_dists_st), axis=-1), axis=0)
+            # pert_inputs = torch.zeros((*delta_dists_st.shape[:2], hidden.shape[-1]))
+            # random_pert_inputs = pert_inputs.clone()
+            # for i in range(len(min_ids)):
+            #     pert_vector = delta_hiddens[0][min_ids[i], i, :] * scale
+            #     pert_inputs[min_ids[i]:min_ids[i]+3, i, :] = pert_vector[None]
+            #     random_pert_inputs[min_ids[i]:min_ids[i]+3, i, :] = pert_vector[np.random.permutation(len(pert_vector))][None]
+            # concat_inputs = torch.concat((inputs, pert_inputs), dim=-1)
+            # random_concat_inputs = torch.concat((inputs, random_pert_inputs), dim=-1)
+            # pert_outputs, pert_hidden = pert_rnn(concat_inputs, return_hidden=True)
+            # random_pert_outputs, random_pert_hidden = pert_rnn(random_concat_inputs, return_hidden=True)
+            #
+            # KEFvals = torch.concatenate(KEFvals,axis=-1).detach().cpu().numpy()
+            # inputs = inputs.detach().cpu().numpy()
+            # targets = targets.detach().cpu().numpy()
+            # outputs = outputs.detach().cpu().numpy()
+            # pert_outputs = pert_outputs.detach().cpu().numpy()
+            # random_pert_outputs = random_pert_outputs.detach().cpu().numpy()
+            #
+            #
+            #
+            #
+            # fig, axes = plt.subplots(5, 10, sharex=True, sharey='row', figsize=(15, 12))
+            #
+            # for trial_num in range(axes.shape[1]):
+            #     axs = axes[:, trial_num]
+            #
+            #     # Column Titles (Above First Row)
+            #     axs[0].set_title(f"Trial-{trial_num}")
+            #
+            #     # First Row: Inputs
+            #     ax = axs[0]
+            #     ax.plot(inputs[:, trial_num])
+            #     ax.spines['top'].set_visible(False)
+            #     ax.spines['right'].set_visible(False)
+            #     ax.spines['left'].set_bounds(-1, 1)
+            #
+            #     ax = axs[1]
+            #     ax.plot(np.linalg.norm(pert_inputs[:,trial_num], axis=-1))
+            #     ax.spines['top'].set_visible(False)
+            #     ax.spines['right'].set_visible(False)
+            #     ax.spines['left'].set_bounds(0, 1)
+            #     ax.set_ylim(-0.1,1.1)
+            #
+            #
+            #     # Second Row: Outputs/Targets
+            #     # ax = axs[2]
+            #     # ax.plot(targets[:, trial_num])
+            #     # ax.plot(outputs[:, trial_num], ls='solid',label='No pert', alpha=0.7)
+            #     # ax.plot(pert_outputs[:, trial_num], ls='dashed', label='Calc pert', alpha=0.7)
+            #     # ax.plot(random_pert_outputs[:, trial_num], ls='dashed', label='Random pert', alpha=0.7)
+            #     # ax.spines['top'].set_visible(False)
+            #     # ax.spines['right'].set_visible(False)
+            #     # ax.spines['left'].set_bounds(-1,1)
+            #     # # ax.set_ylim(-0.1, 1.1)
+            #
+            #     # Third Row: KEF values
+            #     ax = axs[3]
+            #     ax.plot(KEFvals[:, trial_num])
+            #     ax.spines['top'].set_visible(False)
+            #     ax.spines['right'].set_visible(False)
+            #     ax.set_yscale('log')
+            #
+            #     ## Fourth Row: dist to separatrix
+            #     ax = axs[4]
+            #     ax.plot(torch.stack(delta_dists,axis=-1)[:,trial_num],marker='o',markersize=1,alpha=0.5)
+            #     # ax.plot(dist.log_prob(hidden[:, trial_num]).detach().cpu().numpy())
+            #     # ax.set_ylabel('Log prob(hidden)')
+            #     ax.spines['top'].set_visible(False)
+            #     ax.spines['right'].set_visible(False)
+            #     ax.set_yscale('log')
+            #
+            #
+            #
+            # # Set y-axis labels only for the first column
+            # ylabel_texts = ['inputs', 'Norm of Pert input', 'outputs/targets', 'KEF values', 'Dist to Separatrix']
+            # for row, label in enumerate(ylabel_texts):
+            #     axes[row, 0].set_ylabel(label)
+            #
+            # axes[2,1].legend(fontsize=8)
+            # # for ax in axes.flatten():
+            # #     ax.set_xlim(230,300)
+            #
+            # fig.tight_layout()
+            # fig.savefig(Path(cfg.savepath) / "RNN_task_KEFvals_sweep.png", dpi=300)
+            # plt.close(fig)
 
 
 

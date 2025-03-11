@@ -7,9 +7,16 @@ function :
     kwargs:
       deterministic : true
       batch_first   : false
+  delta_t  : 5.0 #10.0 #0.1 #1.0
 
 run_traj : true
 
+
+#IC_distribution:
+#  _target_  : rnn.hidden_distribution_from_model
+#  model     : ${..loaded_RNN_model}
+#  dataset   : ${..RNN_dataset}
+#  alpha     : 1e-2
 
 IC_distribution:
   _target_  : custom_distributions.makeIIDMultiVariate
@@ -60,13 +67,21 @@ loaded_RNN_model_cuda:
     input_file_path : ${savepath}/input_data/
   device  : ${separatrix_locator.device}
 
+loaded_RNN_model_partial:
+  _target_    : finkelstein_fontolan_RNN.init_network
+  _partial_   : true
+  params_dict :
+    _target_  : load_RNN_ALM_gating.get_params_dict
+    input_file_path : ${savepath}/input_data/
+  device  : ${separatrix_locator.device}
+
 RNN_model:
   act_size  : 3
   num_h     : ${..dim}
 
 
 perturbable_RNN_model:
-  _target_  : rnn.convert_to_perturbableRNN
+  _target_  : finkelstein_fontolan_RNN.convert_to_perturbable_RNNModel
   old_model : ${..loaded_RNN_model}
 
 dim  : 668

@@ -3,6 +3,66 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
+def convert_to_perturbable_RNNModel(old_model):
+    """
+    Convert an RNNModel to accept perturbations by expanding its input size.
+    The new model will accept inputs of size (old_input_size + N).
+    
+    Args:
+        old_model (RNNModel): Original RNNModel instance
+        
+    Returns:
+        RNNModel: New model with expanded input size
+    """
+    # Extract parameters from old model
+    old_N = old_model.N
+    old_input_size = old_model.input_size
+    new_input_size = old_input_size + old_N
+    
+    # Get the old weight matrix M
+    old_M = old_model.M.data
+    
+    # Create new M matrix with expanded input section
+    new_M = torch.zeros(old_N + new_input_size, old_N + new_input_size, 
+                       device=old_M.device)
+    
+    # Copy the neuron-to-neuron weights (top-left block)
+    new_M[:old_N, :old_N] = old_M[:old_N, :old_N]
+    
+    # Copy the old input-to-neuron weights (top-middle block)
+    new_M[:old_N, old_N:old_N+old_input_size] = old_M[:old_N, old_N:old_N+old_input_size]
+    
+    # Add identity mapping for perturbation inputs (top-right block)
+    new_M[:old_N, old_N+old_input_size:] = torch.eye(old_N, device=old_M.device)
+    
+    # Copy the old input feedback weights if they exist (middle blocks)
+    new_M[old_N:old_N+old_input_size, :old_N] = old_M[old_N:, :old_N]
+    new_M[old_N:old_N+old_input_size, old_N:old_N+old_input_size] = old_M[old_N:, old_N:]
+    
+    # Create new bias vector h with expanded size
+    new_h = torch.zeros(old_N + new_input_size, device=old_model.h.device)
+    new_h[:len(old_model.h)] = old_model.h
+    
+    # Create new model with expanded input size
+    new_model = RNNModel(
+        dt=old_model.dt,
+        N=old_N,
+        input_size=new_input_size,
+        ramp_train=old_model.ramp_train,
+        tau=old_model.tau,
+        f0=old_model.f0,
+        beta0=old_model.beta0,
+        theta0=old_model.theta0,
+        M=new_M,
+        eff_dt=old_model.eff_dt,
+        h=new_h,
+        sigma_noise=old_model.sigma_noise,
+        init_sigma=old_model.init_sigma,
+        batch_first=old_model.batch_first
+    )
+    
+    return new_model
+
 
 class RNNModel(nn.Module):
     def __init__(self, dt, N, input_size, ramp_train, tau, f0, beta0, theta0,
@@ -25,7 +85,7 @@ class RNNModel(nn.Module):
             x_init (Tensor or array-like): Default initial condition for the neurons (shape (N,)).
             batch_first (bool): If True, inputs/outputs are expected with shape (batch, seq, feature). Default: False.
         """
-        super(RNNModel, self).__init__()
+        super().__init__()
         self.dt = dt
         self.N = N
         self.input_size = input_size
@@ -111,6 +171,7 @@ class RNNModel(nn.Module):
             if not deterministic:
                 x_neurons = x_neurons * (1 + self.init_sigma * torch.randn(batch_size, self.N, device=r_in.device))
 
+        # Initialize extra dimensions (for external inputs) as zeros.
         # Initialize extra dimensions (for external inputs) as zeros.
         x_extra = torch.zeros(batch_size, self.input_size, device=r_in.device)
         # Combined state: first N entries for neurons, last input_size for external input (which remain zero)
@@ -205,7 +266,7 @@ def init_network(params_dict,device=torch.device('cpu')):
     mean_right = np.mean(trg_right[:, :10], axis=1)  # shape (N,)
     x_init = np.mean(np.stack([mean_left, mean_right], axis=0), axis=0)  # shape (N,)
     x_init_tensor = torch.from_numpy(x_init).to(torch.float32)
-    print(x_init_tensor[:5])
+    # print(x_init_tensor[:5])
 
     # Instantiate the model with the computed x_init.
     model = RNNModel(dt=dt, N=N, input_size=input_size, ramp_train=ramp_train, tau=tau,
@@ -294,3 +355,9 @@ if "__main__" == __name__:
         ),
         dynamics(x_init).shape
     )
+    new_model = convert_to_perturbable_RNNModel(model)
+    print(new_model.M.shape)
+
+    assert np.allclose(new_model.M[:model.N, :model.N].detach().numpy(), model.M[:model.N, :model.N].detach().numpy())
+
+    assert np.allclose(new_model.M[:model.N,model.N+model.input_size:].detach().numpy(),np.eye(model.N))

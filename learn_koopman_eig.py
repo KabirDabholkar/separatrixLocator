@@ -486,6 +486,7 @@ def runGD(
         optimize_external_inputs=False,
         return_indices=False,
         return_mask=False,
+        save_trajectories_every=10000,
 ):
     """
     Optimizes a scalar-valued function using full-batch Adam over initial conditions and optionally external inputs,
@@ -517,6 +518,7 @@ def runGD(
         optimize_external_inputs: If True, external_inputs are optimized. Otherwise, they remain fixed.
         return_indices: If True, also returns the original indices of the points that dropped below threshold.
         return_mask: If True, returns a mask indicating which initial conditions dropped below threshold.
+        save_trajectories_every: Save trajectories every N iterations.
 
     Returns:
         A tuple containing:
@@ -570,16 +572,16 @@ def runGD(
     optimizer = partial_optim(params_to_optimize)
     scheduler = lr_scheduler(optimizer) if lr_scheduler else None
 
-    trajectories_initial = torch.zeros((num_steps, batch_size, input_dim), dtype=torch.float32)
-    trajectories_external = torch.zeros((num_steps, batch_size, external_input_dim), dtype=torch.float32)
-
+    trajectories_initial = []
+    trajectories_external = []
     below_threshold_mask = torch.zeros(batch_size, dtype=torch.bool)
     below_threshold_points = []
     below_threshold_indices = []  # Tracks original indices of points that drop below threshold
 
     for step in range(num_steps):
-        trajectories_initial[step] = initial_conditions.detach()
-        trajectories_external[step] = external_inputs.detach()
+        # if step % save_trajectories_every == 0:
+        #     trajectories_initial.append(initial_conditions.detach())
+        #     trajectories_external.append(external_inputs.detach())
 
         optimizer.zero_grad()
 
@@ -604,6 +606,10 @@ def runGD(
             )
             below_threshold_indices.append(orig_indices[indices].detach().clone())
             below_threshold_mask[indices] = True
+
+    # Stack trajectories
+    trajectories_initial = None #torch.stack(trajectories_initial)
+    # trajectories_external = torch.stack(trajectories_external)
 
     if below_threshold_points:
         below_threshold_points = torch.cat(below_threshold_points, dim=0)
@@ -1491,6 +1497,7 @@ def train_with_logger_ext_inp(
         # External input regularisation term
         # This encourages the mean squared value of φ(x) (computed over each group of samples corresponding
         # to a unique external input) to be similar across the groups.
+        reg_term_value = None
         if external_input_dist is not None and ext_inp_reg_coeff > 0:
             # Build list of group sizes (each unique external input's count)
             group_counts = [repeats + (1 if i < remainder else 0) for i in range(ext_inp_batch_size)]
@@ -1507,7 +1514,7 @@ def train_with_logger_ext_inp(
             reg_loss = ext_inp_reg_coeff * reg_term_value
             total_loss = total_loss + reg_loss
             # Print the regularisation term if calculated
-            print("External input regularisation term:", reg_term_value.item())
+            # print()
 
         # Log metrics
         metrics = {
@@ -1539,7 +1546,8 @@ def train_with_logger_ext_inp(
             print(
                 f"Epoch {epoch}, Loss: {total_loss.item()}, Normalised loss: {normalised_loss}, "
                 f"param norm: {param_norm}, Learning Rate: {optimizer.param_groups[0]['lr']}, "
-                f"len(model.parameters()): {len(list(model.parameters()))}"
+                f"len(model.parameters()): {len(list(model.parameters()))},"
+                "" if reg_term_value is None else f"External input regularisation term: {reg_term_value.item()},"
             )
 
 

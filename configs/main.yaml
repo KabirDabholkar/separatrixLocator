@@ -50,6 +50,7 @@ defaults:
   - models@RBF : RBF
   - models@AnisotropicRBF : AnisotropicRBF
   - models@DNN_softmax_layers8 : DNN_softmax_layers8
+  - models@RBF_DNN_layers6  : RBF_DNN_layers6
 
   - _self_
 
@@ -68,8 +69,9 @@ runGD_analytical  : false
 runGD             : false
 run_fixed_point_finder  : false
 
-#model_choice  : DNN_layers6
-model_choice  : input_scaled_DNN_layers6
+model_choice  : DNN_layers6
+#model_choice  : RBF_DNN_layers6
+#model_choice  : input_scaled_DNN_layers6
 #model_choice  : input_scaled_DNN_layers8
 #model_choice  : DNN_layers2
 #model_choice  : DNN_softmax_layers8
@@ -109,11 +111,11 @@ separatrix_locator :
   device  : cpu
 
 separatrix_locator_fit_kwargs:
-  num_epochs: 0 #2000 #2000 #0 #2000
+  num_epochs: 0 #200 #2000 #0 #2000
   learning_rate: 5e-3 #5e-3 1e-2
   batch_size: 5000 #5000 #5000 #1000
-  ext_inp_batch_size  : 500
-  ext_inp_reg_coeff   : 0.1
+#  ext_inp_batch_size  : 500
+#  ext_inp_reg_coeff   : 0.1
 #  logger:
 #    _target_: torch.utils.tensorboard.SummaryWriter
 #    log_dir: ${...savepath}/experiment
@@ -205,6 +207,7 @@ model_options:
   RBF : ${RBF}
   AnisotropicRBF : ${AnisotropicRBF}
   DNN_softmax_layers8 : ${DNN_softmax_layers8}
+  RBF_DNN_layers6: ${RBF_DNN_layers6}
 
 
 
