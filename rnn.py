@@ -22,7 +22,7 @@ def multidimbatch(func):
 def set_model_with_checkpoint(model,checkpoint):
     model.load_state_dict(checkpoint) #['model_state_dict'])
     return model
-def get_autonomous_dynamics_from_model(model,device='cpu',rnn_submodule_name='rnn',kwargs={}):
+def get_autonomous_dynamics_from_model(model,device='cpu',rnn_submodule_name='rnn',kwargs={},output_id=0):
     @multidimbatch
     def dynamics(hx,inp=None):
         submodule = model
@@ -30,7 +30,7 @@ def get_autonomous_dynamics_from_model(model,device='cpu',rnn_submodule_name='rn
             submodule = getattr(model,rnn_submodule_name)
         hx = hx[None]
         inp = torch.zeros_like(hx)[..., :submodule.input_size] if inp is None else inp[None]
-        output = submodule(inp,hx,**kwargs)[0][0]
+        output = submodule(inp,hx,**kwargs)[output_id][0]
         return output
     return dynamics
 

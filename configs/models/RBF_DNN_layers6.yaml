@@ -36,7 +36,7 @@ target  :
 
 rbf_dim : 2
 input_size : ${dynamics.dim}
-hidden_size: 40
+hidden_size: 1000 #40
 output_size: 7 #10
 num_layers : 6
 name  : RBF_DNN_layers${.num_layers}_Tanh_hidden${.hidden_size}_output${.output_size}

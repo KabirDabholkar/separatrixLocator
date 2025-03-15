@@ -1,22 +1,24 @@
 function :
   _target_  : rnn.discrete_to_continuous
   discrete_dynamics :
-    _target_ : rnn.get_autonomous_dynamics_from_model
-    model    : ${...loaded_RNN_model_cuda}
+    _target_  : rnn.get_autonomous_dynamics_from_model
+    model     : ${...loaded_RNN_model_cuda}
     rnn_submodule_name: null
-    kwargs:
+    kwargs    :
       deterministic : true
       batch_first   : false
-  delta_t  : 5.0 #10.0 #0.1 #1.0
+    output_id : 1
+  delta_t  : 1.0 #0.1 #5.0 #0.1 #5.0 #10.0 #0.1 #1.0
 
 run_traj : true
 
 
-#IC_distribution:
-#  _target_  : rnn.hidden_distribution_from_model
-#  model     : ${..loaded_RNN_model}
-#  dataset   : ${..RNN_dataset}
-#  alpha     : 1e-2
+IC_distribution_task_relevant:
+  _target_  : rnn.hidden_distribution_from_model
+  model     : ${..loaded_RNN_model}
+  dataset   : ${..RNN_dataset}
+  alpha     : 1e-2
+
 
 IC_distribution:
   _target_  : custom_distributions.makeIIDMultiVariate

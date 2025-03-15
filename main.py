@@ -306,13 +306,158 @@ def main_multimodel(cfg):
                 y_limits=y_limits,
                 below_threshold_points = np.concatenate(all_below_threshold_points,axis=0) if all_below_threshold_points is not None else None,
             )
-            ax.scatter(*unique_fps.xstar[unique_fps.is_stable, :].T, c='blue', marker='x', s=100, zorder=1001)
-            ax.scatter(*unique_fps.xstar[~unique_fps.is_stable, :].T, c='red', marker='x', s=100, zorder=1000)
+            if cfg.run_fixed_point_finder:
+                ax.scatter(*unique_fps.xstar[unique_fps.is_stable, :].T, c='blue', marker='x', s=100, zorder=1001)
+                ax.scatter(*unique_fps.xstar[~unique_fps.is_stable, :].T, c='red', marker='x', s=100, zorder=1000)
             fig.tight_layout()
             fig.savefig(Path(cfg.savepath) / "kinetic_energy.png",dpi=300)
             plt.close(fig)
 
-        # elif cfg.dynamics.dim > 2:
+        if 'hypercube' in cfg.dynamics.name:
+            # Number of models and number of random vectors
+            num_models = SL.num_models
+            num_positions = 10
+            n_trials = 20
+            num_random_vectors = 10
+
+            # Create subplots with 10 rows and 10 columns
+            fig, axs = plt.subplots(10, 10, figsize=(20, 20), sharex=True, sharey=True)
+
+            # Iterate over each model
+            for model_idx, model in enumerate(SL.models):
+                # Iterate over each position for x
+                for pos in range(10):
+                    ax = axs[model_idx, pos]
+                    # Generate multiple random vectors for n_1 to n_10
+                    for trial in range(n_trials):
+                        n_values = np.random.uniform(-1, 1, cfg.dynamics.dim)
+                        x_values = np.linspace(-2, 2, 100)
+
+                        # Create an array to store the results for this trial
+                        trial_results = []
+
+                        # Create a batch of input arrays with x values swept from -2 to 2
+                        input_batch = np.tile(n_values, (len(x_values), 1))
+                        input_batch[:, pos] = x_values
+
+                        # Convert input_batch to torch tensor
+                        input_tensor = torch.from_numpy(input_batch).float()
+
+                        # Run the model on the input tensor
+                        with torch.no_grad():
+                            output = model(input_tensor)
+
+                        # Store the results
+                        trial_results = output[:, 0].tolist()  # Assuming single output
+
+                        # Plot the results for this trial
+                        axs[model_idx, pos].plot(x_values, trial_results, lw=1, alpha=0.5)
+
+            # Set labels for the first column and first row
+            # Set titles for the top row and labels for the first column
+            for pos in range(10):
+                axs[0, pos].set_title(f'Position {pos}')
+            for model_idx in range(len(SL.models)):
+                axs[model_idx, 0].set_ylabel(f'Model {model_idx}')
+
+            plt.tight_layout()
+            fig.savefig(Path(cfg.savepath) / "model_output_vs_x_positions.png", dpi=300)
+            plt.close(fig)
+
+
+        elif cfg.dynamics.dim > 2:
+            # pass
+            num_trials = 50
+            times = torch.linspace(0, 500, 100)
+            needs_dim = True
+            if hasattr(cfg.dynamics, 'dist_requires_dim'):
+                needs_dim = cfg.dynamics.dist_requires_dim
+
+            distribution_relevant = instantiate(cfg.dynamics.IC_distribution_task_relevant)
+
+            initial_conditions = distribution_relevant.sample(
+                sample_shape=[num_trials] + ([cfg.dynamics.dim] if needs_dim else []))
+            external_inputs = input_distribution.sample(sample_shape=[num_trials] + ([cfg.dynamics.dim] if needs_dim else []))
+
+            trajectories = odeint(lambda t, x: dynamics_function(x, external_inputs), initial_conditions, times)
+            trajectories = trajectories.detach().cpu().numpy()
+
+            # Instantiate the dataset
+            dataset = instantiate(cfg.dynamics.RNN_analysis_dataset)
+            inputs, targets = dataset()
+            inputs = torch.from_numpy(inputs).type(torch.float)
+
+            inputs = inputs
+
+            # Run trajectories using rnn and inputs from dataset
+            rnn = instantiate(cfg.dynamics.loaded_RNN_model)
+            outputs, hidden_trajectories = rnn(inputs, return_hidden=True, deterministic=False)
+            hidden_trajectories = hidden_trajectories.detach().cpu().numpy()
+
+            # Perform another odeint run using the first time step from hidden_trajectories as the initial conditions
+            hidden_initial_conditions = torch.from_numpy(hidden_trajectories[0]).type(torch.float)
+            external_inputs_last_step = inputs[-1000]  # Use the last time step of inputs as external inputs
+            new_trajectories = odeint(lambda t, x: dynamics_function(x, external_inputs_last_step), hidden_initial_conditions, times)
+            new_trajectories = new_trajectories.detach().cpu().numpy()
+
+
+            # Option to fit PCA on one set of trajectories, the other, or both
+            fit_on = 'both'  # Options: 'hidden', 'trajectories', 'both'
+
+            if fit_on == 'hidden':
+                pca = PCA(n_components=2)
+                hidden_trajectories_reshaped = hidden_trajectories.reshape(-1, hidden_trajectories.shape[-1])
+                pca.fit(hidden_trajectories_reshaped)
+            elif fit_on == 'trajectories':
+                pca = PCA(n_components=2)
+                trajectories_reshaped = trajectories.reshape(-1, trajectories.shape[-1])
+                pca.fit(trajectories_reshaped)
+            else:  # fit_on == 'both'
+                combined_trajectories = np.concatenate((hidden_trajectories.reshape(-1, hidden_trajectories.shape[-1]),
+                                                        trajectories.reshape(-1, trajectories.shape[-1])), axis=0)
+                pca = PCA(n_components=2)
+                pca.fit(combined_trajectories)
+
+            # Transform the new trajectories using PCA
+            pca_new_trajectories = pca.transform(new_trajectories.reshape(-1, new_trajectories.shape[-1]))
+            pca_new_trajectories = pca_new_trajectories.reshape(new_trajectories.shape[0], new_trajectories.shape[1], -1)
+
+            # Transform both sets of trajectories
+            pca_hidden_trajectories = pca.transform(hidden_trajectories.reshape(-1, hidden_trajectories.shape[-1]))
+            pca_hidden_trajectories = pca_hidden_trajectories.reshape(hidden_trajectories.shape[0], hidden_trajectories.shape[1], -1)
+
+            pca_trajectories = pca.transform(trajectories.reshape(-1, trajectories.shape[-1]))
+            pca_trajectories = pca_trajectories.reshape(trajectories.shape[0], trajectories.shape[1], -1)
+
+            from_t = 0
+
+            # Plot combined PCA of both sets of trajectories
+            plt.figure(figsize=(10, 6))
+            for i in range(pca_hidden_trajectories.shape[1]):
+                plt.plot(pca_hidden_trajectories[:, i, 0], pca_hidden_trajectories[:, i, 1], lw=1, alpha=0.5, label='Hidden Trajectories' if i == 0 else "")
+                plt.scatter(pca_hidden_trajectories[0, i, 0], pca_hidden_trajectories[0, i, 1], c='blue', marker='o', zorder=5)
+                plt.scatter(pca_hidden_trajectories[-1, i, 0], pca_hidden_trajectories[-1, i, 1], c='orange', marker='o', zorder=5)
+
+            for i in range(num_trials):
+                plt.plot(pca_trajectories[from_t:, i, 0], pca_trajectories[from_t:, i, 1], lw=1, alpha=0.5, label='Trajectories' if i == 0 else "")
+                plt.scatter(pca_trajectories[from_t, i, 0], pca_trajectories[from_t, i, 1], c='green', marker='o', zorder=5)
+                plt.scatter(pca_trajectories[-1, i, 0], pca_trajectories[-1, i, 1], c='red', marker='o', zorder=5)
+
+            for i in range(pca_new_trajectories.shape[1]):
+                plt.plot(pca_new_trajectories[:, i, 0], pca_new_trajectories[:, i, 1], lw=1, alpha=0.5, label='New Trajectories' if i == 0 else "")
+                plt.scatter(pca_new_trajectories[0, i, 0], pca_new_trajectories[0, i, 1], c='purple', marker='o', zorder=5)
+                plt.scatter(pca_new_trajectories[-1, i, 0], pca_new_trajectories[-1, i, 1], c='yellow', marker='o', zorder=5)
+
+            plt.xlabel('PC1')
+            plt.ylabel('PC2')
+            plt.title('Combined PCA of Hidden and Regular Trajectories')
+            plt.legend()
+            plt.tight_layout()
+            # plt.show()
+            plt.savefig(Path(cfg.savepath) / "pca_trajectories.png", dpi=300)
+            plt.close()
+
+
         if hasattr(cfg.dynamics,'RNN_dataset'):
             dataset = instantiate(cfg.dynamics.RNN_analysis_dataset)
             dataset.N_trials_cd = 20
@@ -322,8 +467,8 @@ def main_multimodel(cfg):
             inputs = torch.from_numpy(inputs).type(torch.float)
             targets = torch.from_numpy(targets)
             # inputs = inputs * 0
-            print('inputs.shape',inputs.shape)
-            print('batch first',rnn.batch_first)
+            # print('inputs.shape',inputs.shape)
+            # print('batch first',rnn.batch_first)
             outputs,hidden = rnn(inputs,return_hidden=True,deterministic=False)
             hidden = hidden.detach()
 
@@ -391,7 +536,7 @@ def main_multimodel(cfg):
 
             KEFvals = torch.concat(KEFvals,dim=-1).detach().cpu()
 
-            fig,axs = plt.subplots(2,2, sharex=True, sharey=True)
+            fig,axs = plt.subplots(2,5, figsize=(10,4), sharex=True, sharey=True)
             for i in range(SL.num_models):
                 ax = axs.flatten()[i]
                 scatter = ax.scatter(inputs[:,:,2], pc_hidden[:,:,0], c=KEFvals[:,:,i], s=10, cmap='viridis')
@@ -503,18 +648,29 @@ def main_multimodel(cfg):
             interpolated_inputs = (inputs[top_indices[0][max_dist_idx[0]], top_indices[1][max_dist_idx[0]]] +
                                    inputs[top_indices[0][max_dist_idx[1]], top_indices[1][max_dist_idx[1]]]) / 2
             # Set simulation length for interpolated points
-            run_T = 500
+            run_T = 1000
 
             # Expand interpolated inputs over time dimension
             interpolated_inputs_expanded = interpolated_inputs.repeat(n_grid, 1).unsqueeze(0).expand(run_T, -1, -1)
 
-            # Run RNN from interpolated initial conditions
-            interpolated_trajectories = rnn(
-                interpolated_inputs_expanded,
-                x_init=interpolated_points[None],
-                deterministic=True,
-                return_hidden=True
-            )[1]  # Only take second output, ignoring hidden states
+            use_odeint = True
+
+            if use_odeint:
+                dynamics_function = instantiate(cfg.dynamics.function)
+
+                def ode_dynamics(t, x):
+                    return dynamics_function(x, interpolated_inputs_expanded[0, :, :])
+
+                times = torch.linspace(0, run_T, run_T)
+                interpolated_trajectories = odeint(ode_dynamics, interpolated_points, times)
+            else:
+                # Run RNN from interpolated initial conditions
+                interpolated_trajectories = rnn(
+                    interpolated_inputs_expanded,
+                    x_init=interpolated_points[None],
+                    deterministic=True,
+                    return_hidden=True
+                )[1]  # Only take second output, ignoring hidden states
 
             # Reshape trajectories
             interpolated_trajectories_r = interpolated_trajectories.reshape(run_T, n_grid, -1)
@@ -559,16 +715,17 @@ def main_multimodel(cfg):
                 samples = dist_option.sample(sample_shape=[samples_for_normalisation])
                 norm_val = float(
                     torch.mean(torch.sum(mod_model(samples) ** 2, axis=-1)).sqrt().detach().numpy())
-                mod_model = compose(
-                    lambda x: x / norm_val,
-                    mod_model
-                )
+                # mod_model = compose(
+                #     lambda x: x / norm_val,
+                #     mod_model
+                # )
                 KEFval = mod_model(concat_traj).detach()
                 KEFvals_traj.append(KEFval)
 
             KEFvals_traj = torch.stack(KEFvals_traj, dim=0).detach().cpu()
+
             # Plot KEFs
-            fig, axs = plt.subplots(2, 2, figsize=(12, 8))
+            fig, axs = plt.subplots(2, 5, figsize=(10, 4))
             axs = axs.ravel()
             mappable = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
             for i in range(SL.num_models):
@@ -579,10 +736,11 @@ def main_multimodel(cfg):
                 axs[i].set_title(f'KEF {i+1}')
                 axs[i].set_xlabel('Time')
                 axs[i].set_ylabel('KEF value')
-
+                axs[i].set_xlim(0,20)
             # Adjust layout and add colorbar
             fig.subplots_adjust(right=0.85)
             cbar_ax = fig.add_axes([0.88, 0.15, 0.03, 0.7])
+            # fig.tight_layout()
             fig.colorbar(mappable, cax=cbar_ax, label='Alpha')
             fig.savefig(Path(cfg.savepath) / "interpolated_trajectories_KEF.png", dpi=300)
             plt.close(fig)

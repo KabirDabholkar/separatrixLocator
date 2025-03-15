@@ -1,0 +1,20 @@
+function :
+  _target_  : compose.compose
+  _args_    :
+    - ${eval:'lambda x:x-x**3'}
+IC_distribution:
+  _target_  : custom_distributions.makeIIDMultiVariate
+  dist  :
+    _target_  : torch.distributions.Normal
+    loc       : 0
+    scale     : 1
+  dim : ${..dim}
+dist_requires_dim : false
+
+name : hypercube_${.dim}D
+dim  : 10
+equation_latex  : x-x^3
+analytical_eigenfunction:
+  _target_: compose.compose
+  _args_:
+    - ${eval:'lambda x,y:x/((x**2-1)**2)**0.25'}

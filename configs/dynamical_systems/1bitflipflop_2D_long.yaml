@@ -17,10 +17,13 @@ IC_distribution :
 #  covariance_matrix:
 #    _target_  : torch.eye
 #    n  : ${...dim}
-  _target_  : torch.distributions.Normal
-  loc       : 0
-  scale     : 2
-dist_requires_dim : true
+  _target_  : custom_distributions.makeIIDMultiVariate
+  dist  :
+    _target_  : torch.distributions.Normal
+    loc       : 0
+    scale     : 2
+  dim : ${..dim}
+dist_requires_dim : false
 
 loaded_RNN_model:
   _target_: rnn.set_model_with_checkpoint

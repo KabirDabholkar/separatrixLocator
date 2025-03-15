@@ -34,6 +34,7 @@ defaults:
   - dynamical_systems@radial2D_bistable  : radial2D_bistable
   - dynamical_systems@multistable1D : multistable1D
   - dynamical_systems@radial2D_bistable_limit_cycle : radial2D_bistable_limit_cycle
+  - dynamical_systems@hypercube : hypercube
 
 ####### Models #########
 #  - models@DNN_model  : DNN_layers6
@@ -89,6 +90,7 @@ model_choice  : DNN_layers6
 #dynamics_choice : 1bitflipflop_Vanilla64D_long_isotropic
 #dynamics_choice : 1bitflipflop_2D_long
 dynamics_choice : finkelstein_fontolan_RNN
+#dynamics_choice : hypercube
 
 
 ### main train func
@@ -103,7 +105,7 @@ dynamics_choice : finkelstein_fontolan_RNN
 
 separatrix_locator :
   _target_    : separatrixLocator.SeparatrixLocator
-  num_models  : 4 #5 #0 #0
+  num_models  : 10 #10 #4 #5 #0 #0
   dynamics_dim : ${dynamics.dim}
   use_multiprocessing : false
   verbose : true
@@ -111,19 +113,23 @@ separatrix_locator :
   device  : cpu
 
 separatrix_locator_fit_kwargs:
-  num_epochs: 0 #200 #2000 #0 #2000
-  learning_rate: 5e-3 #5e-3 1e-2
+  num_epochs: 0 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
+  learning_rate: 1e-3 #45e-3 #5e-3 1e-2
   batch_size: 5000 #5000 #5000 #1000
-#  ext_inp_batch_size  : 500
-#  ext_inp_reg_coeff   : 0.1
+  ext_inp_batch_size  : 500
+  ext_inp_reg_coeff   : 0.1
 #  logger:
 #    _target_: torch.utils.tensorboard.SummaryWriter
 #    log_dir: ${...savepath}/experiment
+  logger:
+    _target_    : csv_logger.CSVLogger
+    log_dir     : ${...savepath}/experiment_${model.name}
+    flush_every : 10
   eigenvalue: 1
   lr_scheduler:
     _target_: torch.optim.lr_scheduler.StepLR
     _partial_: true
-    step_size: 500
+    step_size: 50
     gamma: 0.90
   print_every_num_epochs: 10
   dist_requires_dim : ${dynamics.dist_requires_dim}
@@ -229,6 +235,7 @@ dynamics_options:
   1bitflipflop_32D_long_isotropic : ${1bitflipflop_32D_long_isotropic}
   1bitflipflop_Vanilla64D_long_isotropic  : ${1bitflipflop_Vanilla64D_long_isotropic}
   finkelstein_fontolan_RNN  : ${finkelstein_fontolan_RNN}
+  hypercube  : ${hypercube}
 
 ### Analytical solution
 #model: ${dynamics.analytical_eigenfunction}

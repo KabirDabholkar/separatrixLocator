@@ -1377,34 +1377,16 @@ def train_with_logger_ext_inp(
         normaliser=partial(shuffle_normaliser, axis=None, return_terms=True),
         verbose=False,
         restrict_to_distribution_lambda=1e-3,
-        ext_inp_batch_size=None,  # New: number of unique external input samples (should be < batch_size)
-        ext_inp_reg_coeff=0  # New: coefficient for the external-input regularisation term
+        ext_inp_batch_size=None,
+        ext_inp_reg_coeff=0,
+        metadata=None  # New parameter for additional metadata
 ):
     """
     Train the model with optional decay, logging, learning rate scheduling, and external input regularisation.
-
+    
     Args:
-        model (torch.nn.Module): The model being trained.
-        F (callable): Dynamical system function.
-        dist (torch.distributions.Distribution): Distribution for sampling inputs.
-        external_input_dist (torch.distributions.Distribution, optional): Distribution for sampling additional inputs.
-        dist_requires_dim (bool): Whether to sample inputs with an extra dimension.
-        num_epochs (int): Number of epochs for training.
-        learning_rate (float): Learning rate for the optimizer.
-        batch_size (int): Batch size for training.
-        dynamics_dim (int): Dimensionality of the dynamical system.
-        decay_module (DecayModule, optional): Module for handling decay.
-        logger (None, callable, list of callables): Logger(s) to log metrics.
-        lr_scheduler (torch.optim.lr_scheduler._LRScheduler, optional): Learning rate scheduler.
-        eigenvalue (float): Eigenvalue used in the PDE loss term.
-        print_every_num_epochs (int): Print log every N epochs.
-        device (str): Device to perform training on.
-        param_specific_hyperparams (list): List specifying parameter-specific hyperparameters.
-        normaliser (callable): Function to normalise losses.
-        verbose (bool): Whether to print log messages.
-        restrict_to_distribution_lambda (float): Additional lambda parameter (unused in this snippet).
-        ext_inp_batch_size (int, optional): Number of unique samples to draw for external inputs (if provided).
-        ext_inp_reg_coeff (float, optional): Coefficient for external input regularisation term.
+        ... (existing args) ...
+        metadata (dict, optional): Additional metadata to include in logged metrics.
     """
     # Evaluate parameter-specific hyperparameters if provided
     if len(param_specific_hyperparams) == 0:
@@ -1526,6 +1508,10 @@ def train_with_logger_ext_inp(
         }
         if external_input_dist is not None and ext_inp_reg_coeff > 0:
             metrics["Loss/ExtInpRegularisation"] = reg_loss.item()
+            
+        # Add metadata to metrics if provided
+        if metadata is not None:
+            metrics.update(metadata)
 
         log_metrics(logger, metrics, epoch)
 
@@ -1547,7 +1533,7 @@ def train_with_logger_ext_inp(
                 f"Epoch {epoch}, Loss: {total_loss.item()}, Normalised loss: {normalised_loss}, "
                 f"param norm: {param_norm}, Learning Rate: {optimizer.param_groups[0]['lr']}, "
                 f"len(model.parameters()): {len(list(model.parameters()))},"
-                "" if reg_term_value is None else f"External input regularisation term: {reg_term_value.item()},"
+                +("" if reg_term_value is None else f"External input regularisation term: {reg_term_value.item()},")
             )
 
 

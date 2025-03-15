@@ -48,10 +48,10 @@ class SeparatrixLocator(BaseEstimator):
     def init_models(self):
         self.models = [self.model_class(self.dynamics_dim) for _ in range(self.num_models)]
 
-    def fit(self, func, distribution, **kwargs):
-        train_single_model_ = partial(train_with_logger_ext_inp,F=func,dist=distribution, dynamics_dim=self.dynamics_dim,**kwargs)
+    def fit(self, func, distribution, log_dir=None, **kwargs):
+        train_single_model_ = partial(train_with_logger_ext_inp, F=func, dist=distribution, dynamics_dim=self.dynamics_dim, **kwargs)
 
-        if len(self.models)==0:
+        if len(self.models) == 0:
             self.init_models()
 
         print(self.models)
@@ -63,17 +63,18 @@ class SeparatrixLocator(BaseEstimator):
                 results = [
                     pool.apply_async(
                         train_single_model_,
-                        args = (self.models[i]),
-                        kwds = dict(verbose=self.verbose,device=self.device),
+                        args=(self.models[i],),
+                        kwds=dict(verbose=self.verbose, device=self.device, metadata={"model_id": int(i)}),
                     ) for i in range(self.num_models)
                 ]
-
-                # for i, result in enumerate(results):
-                #     self.models[i].load_state_dict(result.get())
         else:
-            for model in self.models:
-                train_single_model_(model,verbose=self.verbose,device=self.device)
-                # model.load_state_dict(trained_state_dict)
+            for i, model in enumerate(self.models):
+                train_single_model_(
+                    model,
+                    verbose=self.verbose,
+                    device=self.device,
+                    metadata={"model_id": int(i)}
+                )
 
         return self
 

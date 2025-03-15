@@ -171,7 +171,7 @@ class RNNModel(nn.Module):
             if not deterministic:
                 x_neurons = x_neurons * (1 + self.init_sigma * torch.randn(batch_size, self.N, device=r_in.device))
 
-        # Initialize extra dimensions (for external inputs) as zeros.
+
         # Initialize extra dimensions (for external inputs) as zeros.
         x_extra = torch.zeros(batch_size, self.input_size, device=r_in.device)
         # Combined state: first N entries for neurons, last input_size for external input (which remain zero)
