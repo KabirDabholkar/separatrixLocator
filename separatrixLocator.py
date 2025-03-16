@@ -77,6 +77,27 @@ class SeparatrixLocator(BaseEstimator):
                 )
 
         return self
+    
+    def predict(self, inputs, no_grad=True):
+        """
+        Predict the KEF outputs for the given inputs using the trained models.
+
+        Args:
+            inputs (torch.Tensor): Input tensor of shape (batch_size, input_dim).
+            no_grad (bool): If True, run without gradient computation.
+
+        Returns:
+            torch.Tensor: KEF outputs of shape (num_models, batch_size, output_dim).
+        """
+        kef_outputs = []
+        for model in self.models:
+            if no_grad:
+                with torch.no_grad():
+                    kef_output = model(inputs.to(self.device))
+            else:
+                kef_output = model(inputs.to(self.device))
+            kef_outputs.append(kef_output.cpu())
+        return torch.concat(kef_outputs, axis=-1)
 
     def score(self, func, distribution, **kwargs):
         scores = []
@@ -190,8 +211,9 @@ class SeparatrixLocator(BaseEstimator):
 if __name__ == '__main__':
     # model_class = KoopmanEigenfunctionModel
     from learn_koopman_eig import create_phi_network as model_class
+    from torch.distributions import Normal, Uniform
     model_class = partial(model_class, num_layers=7, output_dim=10)
-
+    dist = Normal(0, 1)
     SL = SeparatrixLocator(
         num_models = 2,
         dynamics_dim = 2,
@@ -199,10 +221,14 @@ if __name__ == '__main__':
         verbose = True,
         model_class = model_class
     )
-    from torch.distributions import Normal, Uniform
-    SL.fit(
-        func = lambda x: x-x**3,
-        distribution = Normal(0, 1),
-        dist_requires_dim = True,
-        batch_size = 2000
+    SL.init_models()
+    # SL.fit(
+    #     func = lambda x: x-x**3,
+    #     distribution = dist,
+    #     dist_requires_dim = True,
+    #     batch_size = 2 #000
+    # )
+    inputs = dist.sample(sample_shape = (2,2))
+    print(
+        SL.predict(inputs).shape
     )

@@ -194,31 +194,102 @@ def concat(dists):
     return ConcatIIDDistribution(dists)
 
 
+class MixtureDistribution(torch.distributions.Distribution):
+    def __init__(self, distributions, weights=None):
+        """
+        A mixture of multiple distributions.
+
+        Args:
+            distributions (list of torch.distributions.Distribution): The component distributions.
+            weights (list of float, optional): The weights for each component distribution. If None, all components are equally weighted.
+        """
+        self.distributions = distributions
+        if weights is None:
+            self.weights = torch.ones(len(distributions)) / len(distributions)
+        else:
+            self.weights = torch.tensor(weights) / sum(weights)
+        self.categorical = torch.distributions.Categorical(self.weights)
+
+    @property
+    def batch_shape(self):
+        return self.distributions[0].batch_shape
+
+    @property
+    def event_shape(self):
+        return self.distributions[0].event_shape
+
+    def sample(self, sample_shape=torch.Size()):
+        # Sample from the categorical distribution to choose which component to sample from
+        mixture_indices = self.categorical.sample(sample_shape)
+        samples = []
+        for i, dist in enumerate(self.distributions):
+            mask = (mixture_indices == i).float().unsqueeze(-1)
+            samples.append(dist.sample(sample_shape) * mask)
+        return sum(samples)
+
+    def log_prob(self, value):
+        log_probs = torch.stack([dist.log_prob(value) for dist in self.distributions], dim=-1)
+        weighted_log_probs = log_probs + torch.log(self.weights)
+        return torch.logsumexp(weighted_log_probs, dim=-1)
+
+# Example usage:
 if __name__ == '__main__':
-    gap_points = [-2.0, 0.0, 2.0]
-    epsilon = 0.5
-    dist = MultiGapNormal(gap_points, epsilon, loc=0.0, scale=1.0)
+    dist1 = torch.distributions.Normal(loc=0.0, scale=1.0)
+    dist2 = torch.distributions.Normal(loc=5.0, scale=1.0)
+    mixture_dist = MixtureDistribution([dist1, dist2], weights=[0.3, 0.7])
 
-    # Sample from the modified distribution:
-    samples = dist.sample((10000,))
+    # Sample from the mixture distribution:
+    samples = mixture_dist.sample((1000,))
     # print(samples)
+
+    # Compute the log probability of a value:
+    # print(mixture_dist.log_prob(torch.tensor([1.0])))
+
+    import matplotlib.pyplot as plt
+    plt.hist(samples.numpy().flatten(), bins=100)
+    plt.show()
+
+
+    # gap_points = [-2.0, 0.0, 2.0]
+    # epsilon = 0.5
+    # # dist = MultiGapNormal(gap_points, epsilon, loc=0.0, scale=1.0)
     #
-    # # Compute the log probability of a value:
-    # print(dist.log_prob(torch.tensor([1.0])))
+    # # Sample from the modified distribution:
+    # samples = dist.sample((10000,))
+    # # print(samples)
+    # #
+    # # # Compute the log probability of a value:
+    # # print(dist.log_prob(torch.tensor([1.0])))
+    #
+    # # import matplotlib.pyplot as plt
+    # # plt.hist(samples, bins=100)
+    # # plt.show()
+    #
+    # dist = torch.distributions.Normal(loc=0.0, scale=1.0)
+    # print(
+    #     dist.sample(sample_shape=(10,)).shape
+    # )
+    # multivariate_dist = makeIIDMultiVariate(dist,dim=4)
+    # print(
+    #     multivariate_dist.sample(sample_shape=(10,)).shape
+    # )
+    #
+    # combined_dist = concat([multivariate_dist, multivariate_dist]*2)
+    # sample = combined_dist.sample(sample_shape=(10,))
+    # print("Combined sample shape):", sample.shape)
 
-    # import matplotlib.pyplot as plt
-    # plt.hist(samples, bins=100)
+    # mixture_dist = MixtureDistribution(
+    #     [
+    #         torch.distributions.Normal(loc=-1.0, scale=1.0),
+    #         torch.distributions.Normal(loc=1.0, scale=1.0),
+    #     ],
+    #     weights=[0.3, 0.7]
+    # )
+    # sample = mixture_dist.sample(sample_shape=(10,))
+    # print("Mixture sample shape):", sample.shape)
+    # x = torch.linspace(-3,3)
+    #
+    # plt.plot(x,mixture_dist.log_prob(x))
     # plt.show()
-
-    dist = torch.distributions.Normal(loc=0.0, scale=1.0)
-    print(
-        dist.sample(sample_shape=(10,)).shape
-    )
-    multivariate_dist = makeIIDMultiVariate(dist,dim=4)
-    print(
-        multivariate_dist.sample(sample_shape=(10,)).shape
-    )
-
-    combined_dist = concat([multivariate_dist, multivariate_dist]*2)
-    sample = combined_dist.sample(sample_shape=(10,))
-    print("Combined sample shape):", sample.shape)
+    #
+    #

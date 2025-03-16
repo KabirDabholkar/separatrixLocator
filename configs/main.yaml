@@ -105,7 +105,7 @@ dynamics_choice : finkelstein_fontolan_RNN
 
 separatrix_locator :
   _target_    : separatrixLocator.SeparatrixLocator
-  num_models  : 10 #10 #4 #5 #0 #0
+  num_models  : 1 #10 #10 #4 #5 #0 #0
   dynamics_dim : ${dynamics.dim}
   use_multiprocessing : false
   verbose : true
@@ -113,7 +113,7 @@ separatrix_locator :
   device  : cpu
 
 separatrix_locator_fit_kwargs:
-  num_epochs: 0 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
+  num_epochs: 0 #400 #200 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
   learning_rate: 1e-3 #45e-3 #5e-3 1e-2
   batch_size: 5000 #5000 #5000 #1000
   ext_inp_batch_size  : 500
@@ -137,6 +137,7 @@ separatrix_locator_fit_kwargs:
 
 separatrix_locator_score_kwargs:
   batch_size: 10000
+  ext_inp_batch_size  : 50
   eigenvalue : 1
   drop_values_outside_range: null
   dist_requires_dim : ${dynamics.dist_requires_dim}

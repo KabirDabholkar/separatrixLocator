@@ -19,14 +19,21 @@ IC_distribution_task_relevant:
   dataset   : ${..RNN_dataset}
   alpha     : 1e-2
 
-
-IC_distribution:
+IC_distribution_full:
   _target_  : custom_distributions.makeIIDMultiVariate
   dist  :
     _target_  : torch.distributions.Normal
     loc       : 0
     scale     : 4
   dim : ${..dim}
+
+
+IC_distribution:
+  _target_  : custom_distributions.MixtureDistribution
+  distributions :
+    - ${...IC_distribution_full}
+    - ${...IC_distribution_task_relevant}
+#IC_distribution : ${.IC_distribution_task_relevant}
 
 #external_input_distribution:
 #  _target_  : custom_distributions.makeIIDMultiVariate

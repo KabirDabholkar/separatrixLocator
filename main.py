@@ -672,8 +672,78 @@ def main_multimodel(cfg):
                     return_hidden=True
                 )[1]  # Only take second output, ignoring hidden states
 
+
             # Reshape trajectories
             interpolated_trajectories_r = interpolated_trajectories.reshape(run_T, n_grid, -1)
+
+            setattr(cfg.separatrix_locator_fit_kwargs, 'num_epochs', 5000)
+            SL.fit(
+                dynamics_function,
+                distribution,
+                external_input_dist=input_distribution,
+                fixed_x_batch = interpolated_points,
+                fixed_external_inputs = interpolated_inputs_expanded[0],
+                **instantiate(cfg.separatrix_locator_fit_kwargs)
+            )
+
+
+            #### Computing PDE error
+            from learn_koopman_eig import shuffle_normaliser
+
+            # Define three sets of points
+            point_sets = [
+                instantiate(cfg.dynamics.IC_distribution_full).sample(sample_shape=(interpolated_points.shape[0],)),
+                instantiate(cfg.dynamics.IC_distribution_task_relevant).sample(sample_shape=(interpolated_points.shape[0],)),
+                interpolated_points
+            ]
+            colors = ['g', 'b', 'r']  # Colors for each set
+            labels = ['Isotropic','Task data', 'line']
+
+            plt.close()
+            plt.figure()
+            for i, (points, label) in enumerate(zip(point_sets,labels)):
+                points.requires_grad_(True)
+                inputs = torch.concat([points, interpolated_inputs_expanded[0]], axis=-1)
+                phi_x = SL.predict(inputs, no_grad=False)
+
+                phi_x_prime = torch.autograd.grad(
+                    outputs=phi_x,
+                    inputs=points,
+                    grad_outputs=torch.ones_like(phi_x),
+                    create_graph=True
+                )[0]
+
+                # Compute F(x_batch)
+                F_x = dynamics_function(points, interpolated_inputs_expanded[0])
+
+                # Main loss term: ||phi'(x) F(x) - phi(x)||^2
+                dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True)
+
+                # Use shuffle_normaliser to compute the normalized loss
+                normalised_loss = shuffle_normaliser(dot_prod, phi_x)
+                print(f"Normalised loss for set {i+1}:", normalised_loss)
+
+                # Evaluate the log likelihood at the points
+                log_likelihoods = dist.log_prob(points)
+                print(f"Log likelihoods at points for set {i+1}:", log_likelihoods)
+
+                # Evaluate the log likelihood at zero
+                zero_point = torch.zeros_like(points)
+                log_likelihoods_zero = dist.log_prob(zero_point)
+                print(f"Log likelihoods at zero for set {i+1}:", log_likelihoods_zero)
+
+                # Plot PDE errors for each set
+                plt.scatter(
+                    dot_prod.detach().cpu().repeat(1, phi_x.shape[-1]), phi_x.detach().cpu(), color=colors[i], label=label, alpha=0.4
+                )
+
+            plt.xlabel(r'$\nabla \psi(x) \cdot f(x)$')
+            plt.ylabel(r'$\lambda \psi(x)$')
+            plt.legend()
+            plt.tight_layout()
+            plt.show()
+            plt.savefig(Path(cfg.savepath) / "PDE_scatter.png", dpi=300)
+
 
             # Transform interpolated trajectories using PCA
             interpolated_trajectories_pca = P.transform(interpolated_trajectories_r.reshape(-1, interpolated_trajectories_r.shape[-1]).detach().cpu().numpy())
@@ -696,6 +766,7 @@ def main_multimodel(cfg):
             ax.set_xlabel('time')
             ax.set_ylabel('PC1')
             ax.set_title('PCA Trajectories from Interpolated Initial Conditions')
+            plt.show()
             fig.savefig(Path(cfg.savepath) / "interpolated_trajectories_pca.png", dpi=300)
             plt.close(fig)
 
@@ -763,8 +834,9 @@ def main_multimodel(cfg):
             ax2.set_xlabel('Alpha')
             ax2.set_ylabel('Final PC1')
 
-            plt.tight_layout()
+            # plt.tight_layout()
             fig.savefig(Path(cfg.savepath) / "KEF_pca_vs_alpha.png", dpi=300)
+            plt.show()
             plt.close(fig)
 
 

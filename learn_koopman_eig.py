@@ -1035,7 +1035,7 @@ def shuffle_normaliser(x,y,axis=0,return_terms=False):
     return ratio
 
 
-def eval_loss(model,F,dist,external_input_dist=None,dist_requires_dim=True,batch_size=64,dynamics_dim=1,eigenvalue=1,drop_values_outside_range = None, normaliser=shuffle_normaliser,scale_dist=1):
+def eval_loss(model, F, dist, external_input_dist=None, dist_requires_dim=True, batch_size=64, dynamics_dim=1, eigenvalue=1, drop_values_outside_range=None, normaliser=shuffle_normaliser, scale_dist=1, ext_inp_batch_size=None):
     sample_shape = [batch_size]
     if dist_requires_dim:
         sample_shape += [dynamics_dim]
@@ -1048,15 +1048,28 @@ def eval_loss(model,F,dist,external_input_dist=None,dist_requires_dim=True,batch
 
     input_to_model = x_batch
     if external_input_dist is not None:
-        external_inputs = external_input_dist.sample(sample_shape=sample_shape)
+        # Use provided ext_inp_batch_size if given; otherwise, fall back to batch_size
+        if ext_inp_batch_size is None:
+            ext_inp_batch_size = batch_size
+        else:
+            assert batch_size % ext_inp_batch_size == 0, "ext_inp_batch_size must divide batch_size evenly."
+
+        ext_sample_shape = [ext_inp_batch_size]
+        if dist_requires_dim:
+            ext_sample_shape += [dynamics_dim]
+        external_inputs = external_input_dist.sample(sample_shape=ext_sample_shape)
+
+        # Repeat each unique external input to match the batch size
+        repeats = batch_size // ext_inp_batch_size
+        external_inputs = external_inputs.repeat(repeats, *([1] * (external_inputs.dim() - 1)))
+
         input_to_model = torch.concat((input_to_model, external_inputs), dim=-1)
-        # print('eval loss shapes',input_to_model.shape, external_inputs.shape,input_to_model.shape)
 
     # Forward pass and compute phi(x)
     phi_x = model(input_to_model)
-    points_to_use = torch.ones_like(x_batch)[...,0:1]
+    points_to_use = torch.ones_like(x_batch)[..., 0:1]
     if drop_values_outside_range is not None:
-        points_to_use = (phi_x>drop_values_outside_range[0]) & (phi_x<drop_values_outside_range[1])
+        points_to_use = (phi_x > drop_values_outside_range[0]) & (phi_x < drop_values_outside_range[1])
 
     # Compute phi'(x)
     phi_x_prime = torch.autograd.grad(
@@ -1072,16 +1085,20 @@ def eval_loss(model,F,dist,external_input_dist=None,dist_requires_dim=True,batch
 
     # Main loss term: ||phi'(x) F(x) - phi(x)||^2
     dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True)
-    # main_loss = torch.mean((dot_prod - eigenvalue * phi_x) ** 2 * points_to_use,axis=(0))/torch.mean(points_to_use.to(float))
-    # dot_prod = torch.log(torch.abs(dot_prod))
-    # phi_x = torch.log(torch.abs(phi_x))
 
-    main_loss = normaliser(dot_prod,eigenvalue * phi_x)
 
-    # Variance penalty: |Var(phi(x)) - 1|^2
-    # phi_mean = torch.mean(phi_x)
-    # standard_dev = torch.std(phi_x * points_to_use,axis=-2)
-    # main_loss /= standard_dev
+    if batch_size != ext_inp_batch_size:
+        # Reshape dot_prod
+        new_shape_dot_prod = (batch_size // ext_inp_batch_size, ext_inp_batch_size) + dot_prod.shape[1:]
+        dot_prod = dot_prod.view(new_shape_dot_prod)
+        
+        # Reshape phi_x
+        new_shape_phi_x = (batch_size // ext_inp_batch_size, ext_inp_batch_size) + phi_x.shape[1:]
+        phi_x = phi_x.view(new_shape_phi_x)
+        
+        main_loss = normaliser(dot_prod, eigenvalue * phi_x, axis=(0, 1))
+    else:
+        main_loss = normaliser(dot_prod, eigenvalue * phi_x)
 
     return main_loss
 
@@ -1379,7 +1396,9 @@ def train_with_logger_ext_inp(
         restrict_to_distribution_lambda=1e-3,
         ext_inp_batch_size=None,
         ext_inp_reg_coeff=0,
-        metadata=None  # New parameter for additional metadata
+        metadata=None,  # New parameter for additional metadata
+        fixed_x_batch=None,  # New parameter for fixed x_batch
+        fixed_external_inputs=None  # New parameter for fixed external_inputs
 ):
     """
     Train the model with optional decay, logging, learning rate scheduling, and external input regularisation.
@@ -1387,6 +1406,8 @@ def train_with_logger_ext_inp(
     Args:
         ... (existing args) ...
         metadata (dict, optional): Additional metadata to include in logged metrics.
+        fixed_x_batch (torch.Tensor, optional): Fixed x_batch to use instead of sampling from the distribution.
+        fixed_external_inputs (torch.Tensor, optional): Fixed external_inputs to use instead of sampling from the distribution.
     """
     # Evaluate parameter-specific hyperparameters if provided
     if len(param_specific_hyperparams) == 0:
@@ -1408,18 +1429,26 @@ def train_with_logger_ext_inp(
         sample_shape = (batch_size,)
 
     for epoch in range(num_epochs):
-        # Generate a batch of samples for x
-        x_batch = dist.sample(sample_shape=sample_shape).to(device)
+        # Generate a batch of samples for x or use fixed_x_batch if provided
+        if fixed_x_batch is not None:
+            x_batch = fixed_x_batch.to(device)
+            batch_size = x_batch.shape[0]  # Set batch_size from the tensor
+        else:
+            x_batch = dist.sample(sample_shape=sample_shape).to(device)
         x_batch.requires_grad_(True)
         input_to_model = x_batch
 
         if external_input_dist is not None:
             # Use provided ext_inp_batch_size if given; otherwise, fall back to batch_size (old behavior)
-            if ext_inp_batch_size is None:
-                ext_inp_batch_size = batch_size
-            # Determine sample shape for external inputs
-            ext_sample_shape = (ext_inp_batch_size, dynamics_dim) if dist_requires_dim else (ext_inp_batch_size,)
-            external_inputs_sampled = external_input_dist.sample(sample_shape=ext_sample_shape).to(device)
+            if fixed_external_inputs is not None:
+                external_inputs_sampled = fixed_external_inputs.to(device)
+                ext_inp_batch_size = external_inputs_sampled.shape[0]  # Set ext_inp_batch_size from the tensor
+            else:
+                if ext_inp_batch_size is None:
+                    ext_inp_batch_size = batch_size
+                # Determine sample shape for external inputs
+                ext_sample_shape = (ext_inp_batch_size, dynamics_dim) if dist_requires_dim else (ext_inp_batch_size,)
+                external_inputs_sampled = external_input_dist.sample(sample_shape=ext_sample_shape).to(device)
 
             # Repeat each unique external input to match the batch size approximately evenly.
             repeats = batch_size // ext_inp_batch_size
