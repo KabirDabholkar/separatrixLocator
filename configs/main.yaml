@@ -113,7 +113,7 @@ separatrix_locator :
   device  : cpu
 
 separatrix_locator_fit_kwargs:
-  num_epochs: 0 #400 #200 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
+  num_epochs: 0 #2000 #2000 #1000 #2000 #500 #500 #500 #1000 #1500 #400 #200 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
   learning_rate: 1e-3 #45e-3 #5e-3 1e-2
   batch_size: 5000 #5000 #5000 #1000
   ext_inp_batch_size  : 500

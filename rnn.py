@@ -34,15 +34,32 @@ def get_autonomous_dynamics_from_model(model,device='cpu',rnn_submodule_name='rn
         return output
     return dynamics
 
-def hidden_distribution_from_model(model,dataset, alpha = 1e-4):
-    inputs,targets = dataset()
-    _,hidden = model(torch.tensor(inputs,dtype=torch.float32),return_hidden=True)
-    hidden = hidden.reshape(-1,hidden.shape[-1])
-    print(hidden.shape)
+def extract_hidden_from_model(model, dataset):
+    inputs, _ = dataset()
+    _, hidden = model(torch.tensor(inputs, dtype=torch.float32), return_hidden=True)
+    return hidden
+
+def extract_after(data, after):
+    return data[:, after:, :]
+
+
+def reshape_hidden(hidden):
+    return hidden.reshape(-1, hidden.shape[-1])
+
+def hidden_distribution(hidden, alpha=1e-4):
+    hidden = reshape_hidden(hidden)
     mean = hidden.mean(0)
-    cov = torch.cov((hidden-mean[None]).T)
+    cov = torch.cov((hidden - mean[None]).T)
     cov += torch.eye(cov.shape[0]) * alpha
-    return torch.distributions.MultivariateNormal(mean,cov)
+    return torch.distributions.MultivariateNormal(mean, cov)
+
+def hidden_distribution_with_spectral_norm(hidden, alpha=1e-4):
+    hidden = reshape_hidden(hidden)
+    mean = hidden.mean(0)
+    cov = torch.cov((hidden - mean[None]).T)
+    spectral_norm = torch.linalg.norm(cov, ord=2)
+    cov = torch.eye(cov.shape[0]) * spectral_norm
+    return torch.distributions.MultivariateNormal(mean, cov)
 
 class GRU_RNN(nn.Module):
     def __init__(self, num_h, ob_size, act_size):
@@ -128,9 +145,6 @@ if __name__ == '__main__':
     def dataset():
         return (np.array(inp),None)
 
-    print(
-        hidden_distribution_from_model(model, dataset)
-    )
 
     hx = torch.zeros((1, 2, 10))
     inp = torch.ones((1, 2, 3))

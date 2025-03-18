@@ -2,6 +2,9 @@ import torch
 import torch.distributions as D
 from torch.distributions import Distribution
 import math
+from sklearn.decomposition import PCA
+from rnn import reshape_hidden
+from typing import Union
 
 def makeIIDMultiVariate(dist, dim):
     # Expand the distribution so that its batch_shape becomes (dim,)
@@ -232,6 +235,70 @@ class MixtureDistribution(torch.distributions.Distribution):
         weighted_log_probs = log_probs + torch.log(self.weights)
         return torch.logsumexp(weighted_log_probs, dim=-1)
 
+
+class ProjectedDistribution:
+    def __init__(self, base_distribution, projection_layer):
+        """
+        A distribution that samples from a base distribution and projects the samples to a higher dimension using a linear layer.
+
+        Args:
+            base_distribution (torch.distributions.Distribution): The base distribution to sample from.
+            projection_layer (torch.nn.Linear): The linear layer to project the samples to a higher dimension.
+        """
+        self.base_distribution = base_distribution
+        self.projection_layer = projection_layer
+
+    @property
+    def batch_shape(self):
+        return self.base_distribution.batch_shape
+
+    @property
+    def event_shape(self):
+        return self.projection_layer.weight.shape[0],
+
+    def sample(self, sample_shape=torch.Size()):
+        base_samples = self.base_distribution.sample(sample_shape)
+        projected_samples = self.projection_layer(base_samples)
+        return projected_samples
+
+# Define the union type for extended distributions
+from typing import Any
+
+class ExtendedDistributions:
+    @staticmethod
+    def is_instance(obj: Any) -> bool:
+        return isinstance(obj, (torch.distributions.Distribution, ProjectedDistribution))
+
+
+
+def initialize_linear_layer(input_dim, output_dim, weights, biases):
+    linear_layer = torch.nn.Linear(input_dim, output_dim)
+    linear_layer.weight.data = torch.tensor(weights, dtype=torch.float32)
+    # print('weights shape',torch.tensor(weights, dtype=torch.float32).shape)
+    linear_layer.bias.data = torch.tensor(biases, dtype=torch.float32)
+    return linear_layer
+
+def singlePC_distribution_from_hidden(hidden, component_id=0):
+    hidden = reshape_hidden(hidden)
+    P = PCA()
+    P.fit(hidden.detach().cpu().numpy())
+    weights = P.components_[component_id][:, None]
+    biases = P.mean_
+    print(weights,biases)
+    # layer = torch.nn.Linear(1,hidden.shape[-1])
+    layer = initialize_linear_layer(hidden.shape[-1], 1, weights, biases)
+    # Adjust the scale of the base distribution to reflect the variance along the principal component
+    scale = math.sqrt(P.explained_variance_[component_id])
+    dist = ProjectedDistribution(
+        makeIIDMultiVariate(
+            torch.distributions.Normal(loc=0.0, scale=scale),
+            dim=1),
+        layer
+    )
+    return dist
+
+
+
 # Example usage:
 if __name__ == '__main__':
     dist1 = torch.distributions.Normal(loc=0.0, scale=1.0)
@@ -245,11 +312,26 @@ if __name__ == '__main__':
     # Compute the log probability of a value:
     # print(mixture_dist.log_prob(torch.tensor([1.0])))
 
-    import matplotlib.pyplot as plt
-    plt.hist(samples.numpy().flatten(), bins=100)
-    plt.show()
+    # import matplotlib.pyplot as plt
+    # plt.hist(samples.numpy().flatten(), bins=100)
+    # plt.show()
 
 
+
+    # Define specific weights and biases
+    specific_weights = [[0.1] * 1] * 10  # Replace with your specific weights
+    specific_biases = [0.1] * 10         # Replace with your specific biases
+
+    projected_dist = ProjectedDistribution(
+        makeIIDMultiVariate(torch.distributions.Normal(loc=0.0, scale=1.0), 1),
+        initialize_linear_layer(1, 10, specific_weights, specific_biases)
+    )
+    samples = projected_dist.sample((1000,))
+    print(samples.shape)
+
+    # import matplotlib.pyplot as plt
+    # plt.hist(samples[:, 0].numpy().flatten(), bins=100)
+    # plt.show()
     # gap_points = [-2.0, 0.0, 2.0]
     # epsilon = 0.5
     # # dist = MultiGapNormal(gap_points, epsilon, loc=0.0, scale=1.0)
@@ -293,3 +375,15 @@ if __name__ == '__main__':
     # plt.show()
     #
     #
+
+
+    print(
+        singlePC_distribution_from_hidden(torch.randn((3,4,5)))
+    )
+
+    print(
+        isinstance( torch.distributions.Normal(loc=0.0, scale=1.0) , ExtendedDistributions )
+    )
+    print(
+        isinstance(torch.distributions.Normal(loc=0.0, scale=1.0), torch.distributions.Distribution )
+    )

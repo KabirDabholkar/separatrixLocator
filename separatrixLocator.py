@@ -8,7 +8,8 @@ from functools import partial
 from pathlib import Path
 from compose import compose
 import os
-from learn_koopman_eig import train_with_logger, train_with_logger_ext_inp, eval_loss, runGD
+from typing import Iterable
+from learn_koopman_eig import train_with_logger, train_with_logger_multiple_dists, train_with_logger_ext_inp, eval_loss, runGD
 
 
 class KoopmanEigenfunctionModel(nn.Module):
@@ -49,7 +50,12 @@ class SeparatrixLocator(BaseEstimator):
         self.models = [self.model_class(self.dynamics_dim) for _ in range(self.num_models)]
 
     def fit(self, func, distribution, log_dir=None, **kwargs):
-        train_single_model_ = partial(train_with_logger_ext_inp, F=func, dist=distribution, dynamics_dim=self.dynamics_dim, **kwargs)
+        if isinstance(distribution, torch.distributions.Distribution):
+            train_single_model_ = partial(train_with_logger_ext_inp, F=func, dist=distribution, dynamics_dim=self.dynamics_dim, **kwargs)
+        elif isinstance(distribution,Iterable):
+            train_single_model_ = partial(train_with_logger_multiple_dists, F=func, dists=distribution, dynamics_dim=self.dynamics_dim, **kwargs)
+        else:
+            raise ValueError("Invalid distribution type. Must be a torch.distributions.Distribution or a list of them.")
 
         if len(self.models) == 0:
             self.init_models()

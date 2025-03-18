@@ -63,22 +63,26 @@ def main_multimodel(cfg):
     # print(OmegaConf.to_yaml(cfg))
 
     dynamics_function = instantiate(cfg.dynamics.function)
+    input_distribution = instantiate(cfg.dynamics.external_input_distribution) if hasattr(cfg.dynamics, 'external_input_distribution') else None
     distribution = instantiate(cfg.dynamics.IC_distribution)
-    input_distribution = instantiate(cfg.dynamics.external_input_distribution) if hasattr(cfg.dynamics,'external_input_distribution') else None
+    if hasattr(cfg.dynamics, 'IC_distribution_fit'):
+        distribution_fit = instantiate(cfg.dynamics.IC_distribution_fit)
+    else:
+        distribution_fit = distribution
 
+    
 
     if input_distribution is not None:
         cfg.model.input_size = cfg.dynamics.dim + cfg.dynamics.external_input_dim
         OmegaConf.resolve(cfg.model)
-        # print(cfg.model)
 
     SL = instantiate(cfg.separatrix_locator)
     SL.models = [instantiate(cfg.model).to(SL.device) for _ in range(cfg.separatrix_locator.num_models)]
 
     SL.fit(
         dynamics_function,
-        distribution,
-        external_input_dist = input_distribution,
+        distribution_fit,
+        external_input_dist=input_distribution,
         **instantiate(cfg.separatrix_locator_fit_kwargs)
     )
 
@@ -90,7 +94,7 @@ def main_multimodel(cfg):
     scores = SL.score(
         dynamics_function,
         distribution,
-        external_input_dist = input_distribution,
+        external_input_dist=input_distribution,
         **instantiate(cfg.separatrix_locator_score_kwargs)
     )
     print('Scores:\n', scores.detach().cpu().numpy())
@@ -548,7 +552,7 @@ def main_multimodel(cfg):
             # threshold = np.quantile(inputs[:,:,2].flatten(), 0.96)
             # top_indices = np.where(inputs[:,:,2] >= threshold)
             top_indices = np.where(
-                (0.7 <= inputs[:, :, 2]) & (inputs[:, :, 2] <= 0.72)
+                (0.9 <= inputs[:, :, 2]) & (inputs[:, :, 2] <= 0.92)
             )
 
             # Extract corresponding hidden states for those indices
@@ -676,15 +680,15 @@ def main_multimodel(cfg):
             # Reshape trajectories
             interpolated_trajectories_r = interpolated_trajectories.reshape(run_T, n_grid, -1)
 
-            setattr(cfg.separatrix_locator_fit_kwargs, 'num_epochs', 5000)
-            SL.fit(
-                dynamics_function,
-                distribution,
-                external_input_dist=input_distribution,
-                fixed_x_batch = interpolated_points,
-                fixed_external_inputs = interpolated_inputs_expanded[0],
-                **instantiate(cfg.separatrix_locator_fit_kwargs)
-            )
+            # setattr(cfg.separatrix_locator_fit_kwargs, 'num_epochs', 5000)
+            # SL.fit(
+            #     dynamics_function,
+            #     distribution,
+            #     external_input_dist=input_distribution,
+            #     fixed_x_batch = interpolated_points,
+            #     fixed_external_inputs = interpolated_inputs_expanded[0],
+            #     **instantiate(cfg.separatrix_locator_fit_kwargs)
+            # )
 
 
             #### Computing PDE error
@@ -694,10 +698,40 @@ def main_multimodel(cfg):
             point_sets = [
                 instantiate(cfg.dynamics.IC_distribution_full).sample(sample_shape=(interpolated_points.shape[0],)),
                 instantiate(cfg.dynamics.IC_distribution_task_relevant).sample(sample_shape=(interpolated_points.shape[0],)),
-                interpolated_points
+                instantiate(cfg.dynamics.IC_distribution_task_relevant_PC1).sample(sample_shape=(interpolated_points.shape[0],)),
+                interpolated_points + torch.normal(mean=0.0, std=0.4, size=interpolated_points.shape),
+                interpolated_points,
             ]
-            colors = ['g', 'b', 'r']  # Colors for each set
-            labels = ['Isotropic','Task data', 'line']
+
+            #dist_PC1 = instantiate(cfg.dynamics.IC_distribution_task_relevant_PC1)
+
+            colors = ['g', 'b', 'y',  'purple', 'r']  # Colors for each set
+            labels = ['Isotropic','Task data', 'Task data PC1', 'line+noise0.4', 'line']
+
+            from mpl_toolkits.mplot3d import Axes3D
+
+            plt.close()
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection='3d')
+            for i, (points, label) in enumerate(zip(point_sets, labels)):
+                if i<2:
+                    continue
+                # Transform points using PCA
+                transformed_points = P.transform(points.detach().cpu().numpy())
+                # Plot PC1, PC2, and PC3
+                ax.scatter(transformed_points[:, 0], transformed_points[:, 1], transformed_points[:, 2], label=label, alpha=0.4, c=colors[i])
+            ax.set_xlabel('PC1')
+            ax.set_ylabel('PC2')
+            ax.set_zlabel('PC3')
+            ax.legend()
+            plt.show()
+
+            vector_1 = point_sets[2][1] - point_sets[2][0]
+            vector_2 = point_sets[4][1] - point_sets[4][0]  # Adjusted index to match the provided point_sets
+            from scipy.stats import pearsonr
+            pearson_corr, _ = pearsonr(vector_1.detach().cpu(), vector_2.detach().cpu())
+            print(f"Pearson's correlation of the two vectors: {pearson_corr}")
+            
 
             plt.close()
             plt.figure()
@@ -723,14 +757,14 @@ def main_multimodel(cfg):
                 normalised_loss = shuffle_normaliser(dot_prod, phi_x)
                 print(f"Normalised loss for set {i+1}:", normalised_loss)
 
-                # Evaluate the log likelihood at the points
-                log_likelihoods = dist.log_prob(points)
-                print(f"Log likelihoods at points for set {i+1}:", log_likelihoods)
+                # # Evaluate the log likelihood at the points
+                # log_likelihoods = dist.log_prob(points)
+                # print(f"Log likelihoods at points for set {i+1}:", log_likelihoods)
 
                 # Evaluate the log likelihood at zero
-                zero_point = torch.zeros_like(points)
-                log_likelihoods_zero = dist.log_prob(zero_point)
-                print(f"Log likelihoods at zero for set {i+1}:", log_likelihoods_zero)
+                # zero_point = torch.zeros_like(points)
+                # log_likelihoods_zero = dist.log_prob(zero_point)
+                # print(f"Log likelihoods at zero for set {i+1}:", log_likelihoods_zero)
 
                 # Plot PDE errors for each set
                 plt.scatter(
@@ -740,9 +774,12 @@ def main_multimodel(cfg):
             plt.xlabel(r'$\nabla \psi(x) \cdot f(x)$')
             plt.ylabel(r'$\lambda \psi(x)$')
             plt.legend()
+            # plt.aspect('equal')
             plt.tight_layout()
             plt.show()
             plt.savefig(Path(cfg.savepath) / "PDE_scatter.png", dpi=300)
+
+
 
 
             # Transform interpolated trajectories using PCA
@@ -823,7 +860,7 @@ def main_multimodel(cfg):
 
             # Plot KEFs in top subplot
             for i in range(SL.num_models):
-                ax1.plot(alpha, np.abs(KEFvals_traj[i, 0])**0.1, label=f'KEF {i+1}', c=f'C{i}')
+                ax1.plot(alpha, np.abs(KEFvals_traj[i, 0]), label=f'KEF {i+1}', c=f'C{i}')
             ax1.set_xlabel('Alpha')
             ax1.set_ylabel('KEF value')
             # ax1.legend()

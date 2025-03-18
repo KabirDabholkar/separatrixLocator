@@ -13,35 +13,57 @@ function :
 run_traj : true
 
 
+IC_distribution_task_relevant_PC1:
+  _target_  : custom_distributions.singlePC_distribution_from_hidden
+  hidden    : ${..hidden_data_last}
+  component_id  : 0
+
 IC_distribution_task_relevant:
-  _target_  : rnn.hidden_distribution_from_model
-  model     : ${..loaded_RNN_model}
-  dataset   : ${..RNN_dataset}
+  _target_  : rnn.hidden_distribution
+  hidden    : ${..hidden_data_last}
   alpha     : 1e-2
 
-IC_distribution_full:
-  _target_  : custom_distributions.makeIIDMultiVariate
-  dist  :
-    _target_  : torch.distributions.Normal
-    loc       : 0
-    scale     : 4
-  dim : ${..dim}
+### too small
+#IC_distribution_full:
+#  _target_  : custom_distributions.makeIIDMultiVariate
+#  dist  :
+#    _target_  : torch.distributions.Normal
+#    loc       : 0
+#    scale     : 4
+#  dim : ${..dim}
 
+hidden_data_last :
+  _target_  : rnn.extract_after
+  data  : ${..hidden_full}
+  after : -2000
+
+hidden_full :
+  _target_ : rnn.extract_hidden_from_model
+  model: ${..loaded_RNN_model}
+  dataset: ${..RNN_dataset}
+
+IC_distribution_full:
+  _target_  : rnn.hidden_distribution_with_spectral_norm
+  hidden    : ${..hidden_full}
+  alpha     : 1e-2
 
 IC_distribution:
   _target_  : custom_distributions.MixtureDistribution
   distributions :
     - ${...IC_distribution_full}
-    - ${...IC_distribution_task_relevant}
-#IC_distribution : ${.IC_distribution_task_relevant}
+    - ${...IC_distribution_task_relevant_PC1}
 
-#external_input_distribution:
-#  _target_  : custom_distributions.makeIIDMultiVariate
-#  dist  :
-#    _target_: torch.distributions.Uniform
-#    low     : 0
-#    high    : 1
-#  dim : ${..external_input_dim}
+IC_distribution_fit:
+  - ${..IC_distribution_full}
+  - ${..IC_distribution_task_relevant_PC1}
+
+
+
+
+#IC_distribution : ${.IC_distribution_full}
+
+#external_input_distribution : ${.external_input_distribution_narrow}
+
 external_input_distribution:
   _target_  : custom_distributions.ConcatIIDDistribution
   dists     :
@@ -54,6 +76,20 @@ external_input_distribution:
     - _target_: torch.distributions.Uniform
       low     : 0 #.6 #0
       high    : 1
+
+external_input_distribution_narrow:
+  _target_  : custom_distributions.ConcatIIDDistribution
+  dists     :
+    - _target_: torch.distributions.Uniform
+      low     : 0
+      high    : 0.01
+    - _target_: torch.distributions.Uniform
+      low     : 0
+      high    : 0.01
+    - _target_: torch.distributions.Uniform
+      low     : 0.6 #.6 #0
+      high    : 1.0
+
 
 combined_distribution:
   _target_  : custom_distributions.ConcatIIDDistribution

@@ -1034,6 +1034,30 @@ def shuffle_normaliser(x,y,axis=0,return_terms=False):
         return ratio, numerator, denominator
     return ratio
 
+def distance_weighted_normaliser(x, y, positions, axis=0, return_terms=False, distance_threshold=1.0):
+    permutation = np.random.permutation(x.shape[0])
+    # numerator = torch.mean((x - y) ** 2, axis=axis)
+    #
+    # Compute pairwise distances using the provided positions
+    distances = torch.norm(positions - positions[permutation], dim=-1) / positions.shape[0]
+
+    distance_threshold = np.quantile(distances.flatten().detach().cpu().numpy(),0.05) #0.3
+
+    # Compute weights based on distances, giving higher weight to nearby points
+    weights = torch.exp(-distances / distance_threshold)
+    #
+    # # Compute the weighted denominator
+    # denominator = torch.sum((x - y[permutation]) ** 2 * weights[:,None], axis=axis) / torch.sum(weights, axis=axis)
+
+    numerators = (x-y)**2
+    denominators = (x-y[permutation])**2
+    ratios = numerators / denominators
+    ratio = torch.sum( numerators * weights[:, None], axis=axis)/torch.sum(denominators * weights[:, None], axis=axis)
+
+    # ratio = numerator / denominator
+    if return_terms:
+        return ratio, ratio, ratio
+    return ratio
 
 def eval_loss(model, F, dist, external_input_dist=None, dist_requires_dim=True, batch_size=64, dynamics_dim=1, eigenvalue=1, drop_values_outside_range=None, normaliser=shuffle_normaliser, scale_dist=1, ext_inp_batch_size=None):
     sample_shape = [batch_size]
@@ -1391,7 +1415,8 @@ def train_with_logger_ext_inp(
         batch_size=64,
         dynamics_dim=1, decay_module=None, logger=None, lr_scheduler=None,
         eigenvalue=1, print_every_num_epochs=10, device='cpu', param_specific_hyperparams=[],
-        normaliser=partial(shuffle_normaliser, axis=None, return_terms=True),
+        # normaliser=partial(shuffle_normaliser, axis=None, return_terms=True),
+        normaliser=partial(distance_weighted_normaliser, axis=None, return_terms=True),
         verbose=False,
         restrict_to_distribution_lambda=1e-3,
         ext_inp_batch_size=None,
@@ -1502,7 +1527,8 @@ def train_with_logger_ext_inp(
                 torch.zeros_like(torch.mean((x - y) ** 2)),
                 torch.zeros_like(torch.mean((x - y) ** 2))
             )
-        normalised_loss, main_loss, shuffle_loss = normaliser(dot_prod, eigenvalue * phi_x)
+        # normalised_loss, main_loss, shuffle_loss = normaliser(dot_prod, eigenvalue * phi_x)
+        normalised_loss, main_loss, shuffle_loss = normaliser(dot_prod, eigenvalue * phi_x, x_batch)
         total_loss = normalised_loss
 
         # External input regularisation term
@@ -1565,6 +1591,193 @@ def train_with_logger_ext_inp(
                 +("" if reg_term_value is None else f"External input regularisation term: {reg_term_value.item()},")
             )
 
+def train_with_logger_multiple_dists(
+        model, F, dists, external_input_dist=None, dist_requires_dim=True, num_epochs=1000, learning_rate=1e-3,
+        batch_size=64,
+        dynamics_dim=1, decay_module=None, logger=None, lr_scheduler=None,
+        eigenvalue=1, print_every_num_epochs=10, device='cpu', param_specific_hyperparams=[],
+        normaliser=partial(distance_weighted_normaliser, axis=None, return_terms=True),
+        verbose=False,
+        restrict_to_distribution_lambda=0,
+        ext_inp_batch_size=None,
+        ext_inp_reg_coeff=0,
+        metadata=None,  # New parameter for additional metadata
+        fixed_x_batch=None,  # New parameter for fixed x_batch
+        fixed_external_inputs=None  # New parameter for fixed external_inputs
+):
+    """
+    Train the model with optional decay, logging, learning rate scheduling, and external input regularisation.
+    
+    Args:
+        model (torch.nn.Module): The model being trained.
+        F (callable): Dynamical system function.
+        dists (list of torch.distributions.Distribution): List of distributions for sampling inputs.
+        external_input_dist (torch.distributions.Distribution, optional): Distribution for sampling external inputs.
+        dist_requires_dim (bool): Whether the distributions require a specific dimension.
+        num_epochs (int): Number of epochs for training.
+        learning_rate (float): Learning rate for the optimizer.
+        batch_size (int): Batch size for training.
+        dynamics_dim (int): Dimensionality of the dynamical system.
+        decay_module (DecayModule, optional): Module for handling decay. Defaults to None.
+        logger (None, callable, list of callables): Logger(s) to log metrics.
+        lr_scheduler (torch.optim.lr_scheduler._LRScheduler, optional): Learning rate scheduler.
+        eigenvalue (float): Eigenvalue used in the PDE loss term.
+        print_every_num_epochs (int): Print log every N epochs.
+        device (str): Device to perform training on.
+        param_specific_hyperparams (list): List specifying parameter-specific hyperparameters.
+        normaliser (callable): Function to normalise the loss.
+        verbose (bool): Whether to print verbose logs.
+        restrict_to_distribution_lambda (float): Regularisation coefficient for restricting to distribution.
+        ext_inp_batch_size (int, optional): Batch size for external inputs.
+        ext_inp_reg_coeff (float): Coefficient for external input regularisation.
+        metadata (dict, optional): Additional metadata to include in logged metrics.
+        fixed_x_batch (torch.Tensor, optional): Fixed x_batch to use instead of sampling from the distribution.
+        fixed_external_inputs (torch.Tensor, optional): Fixed external_inputs to use instead of sampling from the distribution.
+    """
+    # Evaluate parameter-specific hyperparameters if provided
+    if len(param_specific_hyperparams) == 0:
+        param_specific_hyperparams = model.parameters()
+    else:
+        param_specific_hyperparams = evaluate_param_specific_hyperparams(model, param_specific_hyperparams)
+
+    optimizer = torch.optim.Adam(
+        param_specific_hyperparams,
+        lr=learning_rate
+    )
+    if lr_scheduler is not None:
+        lr_scheduler = lr_scheduler(optimizer)
+
+    # Determine the shape for sampling x
+    if dist_requires_dim:
+        sample_shape = (batch_size, dynamics_dim)
+    else:
+        sample_shape = (batch_size,)
+
+    for epoch in range(num_epochs):
+        total_loss = 0
+        normalised_losses = []  # List to store normalised losses for each distribution
+        reg_term_values = []
+        for dist in dists:
+            # Generate a batch of samples for x or use fixed_x_batch if provided
+            if fixed_x_batch is not None:
+                x_batch = fixed_x_batch.to(device)
+                batch_size = x_batch.shape[0]  # Set batch_size from the tensor
+            else:
+                x_batch = dist.sample(sample_shape=sample_shape).to(device)
+
+            # Enable gradient computation for x_batch
+            x_batch.requires_grad_(True)
+
+            input_to_model = x_batch
+            if external_input_dist is not None:
+                # Use provided ext_inp_batch_size if given; otherwise, fall back to batch_size
+                if ext_inp_batch_size is None:
+                    ext_inp_batch_size = batch_size
+                else:
+                    assert batch_size % ext_inp_batch_size == 0, "ext_inp_batch_size must divide batch_size evenly."
+
+                ext_sample_shape = [ext_inp_batch_size]
+                if dist_requires_dim:
+                    ext_sample_shape += [dynamics_dim]
+                external_inputs = external_input_dist.sample(sample_shape=ext_sample_shape).to(device)
+
+                # Repeat each unique external input to match the batch size
+                repeats = batch_size // ext_inp_batch_size
+                remainder = batch_size % ext_inp_batch_size
+                external_inputs = external_inputs.repeat(repeats, *([1] * (external_inputs.dim() - 1)))
+
+                input_to_model = torch.concat((input_to_model, external_inputs), dim=-1)
+
+            # Forward pass and compute phi(x)
+            phi_x = model(input_to_model)
+
+            # Compute phi'(x)
+            phi_x_prime = torch.autograd.grad(
+                outputs=phi_x,
+                inputs=x_batch,
+                grad_outputs=torch.ones_like(phi_x),
+                create_graph=True
+            )[0]
+
+            # Compute F(x_batch)
+            F_inputs = [x_batch] + ([] if external_input_dist is None else [external_inputs])
+            F_x = F(*F_inputs)
+
+            # Main loss term: ||phi'(x) F(x) - phi(x)||^2
+            dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True)
+
+            main_loss = torch.mean((dot_prod - eigenvalue * phi_x) ** 2)
+            
+            # Normalised loss
+            normalised_loss, numerator, denominator = normaliser(dot_prod, phi_x, x_batch, axis=None, return_terms=True)
+            normalised_losses.append(normalised_loss.item())  # Store the normalised loss
+            
+            # Total loss
+            total_loss += normalised_loss 
+
+            # Restrict to distribution loss
+            if restrict_to_distribution_lambda > 0:
+                reg_loss = restrict_to_distribution_loss(x_batch, phi_x, dist, threshold=-4.0)
+                total_loss += restrict_to_distribution_lambda * reg_loss
+
+            
+            if external_input_dist is not None and ext_inp_reg_coeff > 0:
+                # Build list of group sizes (each unique external input's count)
+                group_counts = [repeats + (1 if i < remainder else 0) for i in range(ext_inp_batch_size)]
+                start_idx = 0
+                group_mean_squared_values = []
+                for count in group_counts:
+                    group_phi = phi_x[start_idx:start_idx + count]
+                    group_mean_sq = torch.mean(group_phi ** 2)
+                    group_mean_squared_values.append(group_mean_sq)
+                    start_idx += count
+                group_mean_squared_values = torch.stack(group_mean_squared_values)
+                # Compute the regularisation term value and corresponding loss
+                reg_term_value = (torch.std(group_mean_squared_values) / torch.mean(group_mean_squared_values)) ** 2
+                reg_loss = ext_inp_reg_coeff * reg_term_value
+                total_loss = total_loss + reg_loss
+                reg_term_values.append(reg_term_value.item())
+
+        # Log metrics
+        metrics = {
+            "Loss/Total": total_loss.item(),
+            "Loss/Main": main_loss.item(),
+            "Learning Rate": optimizer.param_groups[0]['lr'],
+        }
+        
+        # Add normalised losses for each distribution to metrics
+        for i, (n_loss, reg_term_value) in enumerate(zip(normalised_losses, reg_term_values)):
+            metrics[f"Loss/NormalisedLoss_Dist_{i}"] = n_loss
+            metrics[f"Loss/RegTermValue_Dist_{i}"] = reg_term_value
+            
+            
+        # Add metadata to metrics if provided
+        if metadata is not None:
+            metrics.update(metadata)
+
+        log_metrics(logger, metrics, epoch)
+
+        # Backpropagation and optimization step
+        optimizer.zero_grad()
+        total_loss.backward()
+        param_norm = sum([torch.linalg.norm(p.grad) for p in model.parameters()]).item()
+        # Replace any NaN gradients with 0 to maintain stability
+        for param in model.parameters():
+            if param.grad is not None:
+                param.grad.data[torch.isnan(param.grad.data)] = 0
+        optimizer.step()
+
+        if lr_scheduler is not None:
+            lr_scheduler.step()
+
+        if epoch % print_every_num_epochs == 0 and verbose:
+            print(
+                f"Epoch {epoch}, Loss: {total_loss.item()}, Normalised losses: {[n_loss for n_loss in normalised_losses]}, "
+                f"Regularisation term values: {[reg_term_value for reg_term_value in reg_term_values]}, "
+                f"param norm: {param_norm}, Learning Rate: {optimizer.param_groups[0]['lr']}, "
+                f"len(model.parameters()): {len(list(model.parameters()))}, "
+                # +("" if reg_term_value is None else f"External input regularisation term: {reg_term_value.item()},")
+            )
 
 def train_with_logger(
         model, F, dist, external_input_dist=None, dist_requires_dim=True, num_epochs=1000, learning_rate=1e-3, batch_size=64,
