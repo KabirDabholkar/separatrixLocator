@@ -278,8 +278,9 @@ def initialize_linear_layer(input_dim, output_dim, weights, biases):
     linear_layer.bias.data = torch.tensor(biases, dtype=torch.float32)
     return linear_layer
 
-def singlePC_distribution_from_hidden(hidden, component_id=0):
-    hidden = reshape_hidden(hidden)
+def singlePC_distribution_from_hidden(hidden, component_id=0,squeeze_first_two_dims=True):
+    if squeeze_first_two_dims:
+        hidden = reshape_hidden(hidden)
     P = PCA()
     P.fit(hidden.detach().cpu().numpy())
     weights = P.components_[component_id][:, None]

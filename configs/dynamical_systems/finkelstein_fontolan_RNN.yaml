@@ -12,6 +12,28 @@ function :
 
 run_traj : true
 
+#####################
+
+IC_distribution_fit:
+  - ${..IC_distribution_full}
+  - ${..IC_interpolation_line_1}
+  - ${..IC_interpolation_line_2}
+
+external_input_distribution_fit:
+  - ${..external_input_distribution_full}
+  - ${..external_input_distribution_narrow1}
+  - ${..external_input_distribution_narrow2}
+
+IC_distribution:
+  _target_  : custom_distributions.MixtureDistribution
+  distributions :
+    - ${...IC_distribution_full}
+    - ${...IC_distribution_task_relevant_PC1}
+
+external_input_distribution: ${.external_input_distribution_full}
+
+
+#####################
 
 IC_distribution_task_relevant_PC1:
   _target_  : custom_distributions.singlePC_distribution_from_hidden
@@ -47,24 +69,13 @@ IC_distribution_full:
   hidden    : ${..hidden_full}
   alpha     : 1e-2
 
-IC_distribution:
-  _target_  : custom_distributions.MixtureDistribution
-  distributions :
-    - ${...IC_distribution_full}
-    - ${...IC_distribution_task_relevant_PC1}
-
-IC_distribution_fit:
-  - ${..IC_distribution_full}
-  - ${..IC_distribution_task_relevant_PC1}
-
-
 
 
 #IC_distribution : ${.IC_distribution_full}
 
 #external_input_distribution : ${.external_input_distribution_narrow}
 
-external_input_distribution:
+external_input_distribution_full:
   _target_  : custom_distributions.ConcatIIDDistribution
   dists     :
     - _target_: torch.distributions.Uniform
@@ -77,7 +88,11 @@ external_input_distribution:
       low     : 0 #.6 #0
       high    : 1
 
-external_input_distribution_narrow:
+
+####### Interpolation line 1  #####
+input_range_1: [0.7,0.72]
+
+external_input_distribution_narrow1:
   _target_  : custom_distributions.ConcatIIDDistribution
   dists     :
     - _target_: torch.distributions.Uniform
@@ -87,8 +102,53 @@ external_input_distribution_narrow:
       low     : 0
       high    : 0.01
     - _target_: torch.distributions.Uniform
-      low     : 0.6 #.6 #0
-      high    : 1.0
+      low     : ${....input_range_1[0]} #.6 #0
+      high    : ${....input_range_1[1]}
+
+### a line interpolating the two fixed point attractors at input_range_1
+IC_interpolation_line_1:
+  _target_  : custom_distributions.singlePC_distribution_from_hidden
+  hidden    : ${..attractors1}
+  component_id  : 0
+  squeeze_first_two_dims  : false
+
+attractors1 :
+  _target_    : finkelstein_fontolan_RNN.extract_opposite_attractors_from_model
+  model       : ${..loaded_RNN_model}
+  dataset     : ${..RNN_dataset}
+  input_range : ${..input_range_1}
+
+
+####### Interpolation line 2 #######
+input_range_2: [0.9,0.92]
+
+external_input_distribution_narrow2:
+  _target_  : custom_distributions.ConcatIIDDistribution
+  dists     :
+    - _target_: torch.distributions.Uniform
+      low     : 0
+      high    : 0.01
+    - _target_: torch.distributions.Uniform
+      low     : 0
+      high    : 0.01
+    - _target_: torch.distributions.Uniform
+      low     : ${....input_range_2[0]} #.6 #0
+      high    : ${....input_range_2[1]}
+
+### a line interpolating the two fixed point attractors at input_range_1
+IC_interpolation_line_2:
+  _target_  : custom_distributions.singlePC_distribution_from_hidden
+  hidden    : ${..attractors1}
+  component_id  : 0
+  squeeze_first_two_dims  : false
+
+attractors2 :
+  _target_    : finkelstein_fontolan_RNN.extract_opposite_attractors_from_model
+  model       : ${..loaded_RNN_model}
+  dataset     : ${..RNN_dataset}
+  input_range : ${..input_range_1}
+
+
 
 
 combined_distribution:

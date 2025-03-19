@@ -132,7 +132,7 @@ class FinkelsteinFontolanTask:
         return r_in_cd,targets
 
 
-def initialize_task(input_file_path,N_trials_cd = 10):
+def initialize_task(input_file_path="./RNN_ALM_gating/input_data/",N_trials_cd = 10):
     """
     Loads input and parameter data from the specified path and initializes the task object.
 

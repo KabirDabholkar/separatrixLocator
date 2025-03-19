@@ -70,6 +70,11 @@ def main_multimodel(cfg):
     else:
         distribution_fit = distribution
 
+    if hasattr(cfg.dynamics, 'external_input_distribution_fit'):
+        input_distribution_fit = instantiate(cfg.dynamics.external_input_distribution_fit)
+    else:
+        input_distribution_fit = input_distribution
+
     
 
     if input_distribution is not None:
@@ -82,7 +87,7 @@ def main_multimodel(cfg):
     SL.fit(
         dynamics_function,
         distribution_fit,
-        external_input_dist=input_distribution,
+        external_input_dist=input_distribution_fit,
         **instantiate(cfg.separatrix_locator_fit_kwargs)
     )
 
@@ -651,6 +656,7 @@ def main_multimodel(cfg):
             interpolated_points = alpha[:, None] * point1[None, :] + (1 - alpha)[:, None] * point2[None, :]
             interpolated_inputs = (inputs[top_indices[0][max_dist_idx[0]], top_indices[1][max_dist_idx[0]]] +
                                    inputs[top_indices[0][max_dist_idx[1]], top_indices[1][max_dist_idx[1]]]) / 2
+
             # Set simulation length for interpolated points
             run_T = 1000
 

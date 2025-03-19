@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from compose import compose
 
 def convert_to_perturbable_RNNModel(old_model):
     """
@@ -276,8 +277,55 @@ def init_network(params_dict,device=torch.device('cpu')):
     return model
 
 
+def get_points_on_opposite_attractors(inputs,hidden,input_range = (0.9,0.92), return_separately=False):
+    """
+    Get points on the attractors of the RNN model.
+
+    Args:
+        inputs (Tensor): External input tensor of shape (batch_size, T, input_dim).
+        hidden (Tensor): Hidden state tensor of shape (batch_size, T, N).
+    """
+
+    top_indices = np.where(
+        (input_range[0] <= inputs[:, :, 2]) & (inputs[:, :, 2] <= input_range[1])
+    )
+
+    # Extract corresponding hidden states for those indices
+    top_hidden = hidden[top_indices[0], top_indices[1], :].detach().cpu().numpy()
+
+    # Compute pairwise euclidean distances between all points in top_hidden using torch
+    distances = torch.cdist(
+        torch.from_numpy(top_hidden), 
+        torch.from_numpy(top_hidden)
+    )
+    
+    # Get indices of points with maximum distance
+    max_dist_idx = np.unravel_index(torch.argmax(distances), distances.shape)
+    
+    # Get the actual points with maximum distance
+    point1 = top_hidden[max_dist_idx[0]]
+    point2 = top_hidden[max_dist_idx[1]]
+    max_distance = distances[max_dist_idx[0], max_dist_idx[1]].item()
+    
+    # print(f"Maximum distance: {max_distance}")
+
+    average_inputs = (inputs[top_indices[0][max_dist_idx[0]], top_indices[1][max_dist_idx[0]]] + 
+                            inputs[top_indices[0][max_dist_idx[1]], top_indices[1][max_dist_idx[1]]]) / 2
+    if return_separately:
+        return point1, point2, average_inputs
+    return torch.from_numpy(np.stack([point1,point2]))
 
 
+def extract_opposite_attractors_from_model(model,dataset,input_range=(0.9,0.92)):
+    model.eval()
+    inputs,_ = dataset()
+    inputs = torch.from_numpy(inputs).type(torch.float32)
+
+    # Run the simulation
+    _,hidden = model(inputs,deterministic=True)
+
+    attractors = get_points_on_opposite_attractors(inputs,hidden,return_separately=False,input_range=input_range)
+    return attractors
 
 if "__main__" == __name__:
     torch.manual_seed(2)
@@ -323,20 +371,17 @@ if "__main__" == __name__:
 
     model = init_network(get_params_dict())
     model.eval()
-    model.batch_first = True
-    # Suppose r_in_cd is your external input tensor of shape (batch_size, 3, T)
-    # For illustration, we create a dummy input:
-    batch_size = 10
-    T = 10000
-    r_in_cd = torch.zeros(batch_size, T, input_dim)
-    x_init = torch.zeros(batch_size, model.N)
-    # (Fill r_in_cd with your chirp/stimulus/ramp values as needed)
+
+    from finkelstein_fontolan_task import initialize_task
+    dataset = initialize_task(N_trials_cd=30)
+    inputs,_ = dataset()
+    inputs = torch.from_numpy(inputs).type(torch.float32)
 
     # Run the simulation
-    rp_vec_nd,_ = model(r_in_cd,deterministic=True)  # rp_vec_nd will have shape (batch_size, N, T)
+    _,hidden = model(inputs,deterministic=True)
 
-    print(rp_vec_nd.shape)
 
+    point1,point2,average_input = get_points_on_opposite_attractors(inputs,hidden,input_range = (0.9,0.92))
 
 
     # model(r_in_cd[:,0],x_init=x_init)
@@ -344,23 +389,23 @@ if "__main__" == __name__:
     # import matplotlib.pyplot as plt
     # plt.plot(rp_vec_nd[0,:2,:].T)
     # plt.show()
-
-    from rnn import get_autonomous_dynamics_from_model
-
-    dynamics = get_autonomous_dynamics_from_model(
-        model,rnn_submodule_name=None,kwargs={'deterministic':True,'batch_first':False}
-    )
-    inp = r_in_cd.swapaxes(0,1)[:1]
-    print(
-        model(
-            inp,
-            # x_init=torch.zeros(1, batch_size, model.N),
-        ),
-        dynamics(x_init).shape
-    )
-    new_model = convert_to_perturbable_RNNModel(model)
-    print(new_model.M.shape)
-
-    assert np.allclose(new_model.M[:model.N, :model.N].detach().numpy(), model.M[:model.N, :model.N].detach().numpy())
-
-    assert np.allclose(new_model.M[:model.N,model.N+model.input_size:].detach().numpy(),np.eye(model.N))
+    #
+    # from rnn import get_autonomous_dynamics_from_model
+    #
+    # dynamics = get_autonomous_dynamics_from_model(
+    #     model,rnn_submodule_name=None,kwargs={'deterministic':True,'batch_first':False}
+    # )
+    # inp = inputs[:1]
+    # print(
+    #     model(
+    #         inp,
+    #         # x_init=torch.zeros(1, batch_size, model.N),
+    #     ),
+    #     dynamics(x_init).shape
+    # )
+    # new_model = convert_to_perturbable_RNNModel(model)
+    # print(new_model.M.shape)
+    #
+    # assert np.allclose(new_model.M[:model.N, :model.N].detach().numpy(), model.M[:model.N, :model.N].detach().numpy())
+    #
+    # assert np.allclose(new_model.M[:model.N,model.N+model.input_size:].detach().numpy(),np.eye(model.N))

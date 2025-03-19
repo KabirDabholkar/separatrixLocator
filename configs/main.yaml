@@ -61,8 +61,8 @@ defaults:
 
 
 
-save_KEF_model    : false
-load_KEF_model    : true
+save_KEF_model    : true
+load_KEF_model    : false
 plot_KEF_of_traj  : false
 save_results      : false
 run_analysis      : true
@@ -110,10 +110,10 @@ separatrix_locator :
   use_multiprocessing : false
   verbose : true
   model_class: null
-  device  : cpu
+  device  : cuda
 
 separatrix_locator_fit_kwargs:
-  num_epochs: 0 #2000 #2000 #1000 #2000 #500 #500 #500 #1000 #1500 #400 #200 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
+  num_epochs: 200 #2000 #2000 #1000 #2000 #500 #500 #500 #1000 #1500 #400 #200 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
   learning_rate: 1e-3 #45e-3 #5e-3 1e-2
   batch_size: 5000 #5000 #5000 #1000
   ext_inp_batch_size  : 500

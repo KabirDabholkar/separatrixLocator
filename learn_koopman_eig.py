@@ -1036,27 +1036,18 @@ def shuffle_normaliser(x,y,axis=0,return_terms=False):
 
 def distance_weighted_normaliser(x, y, positions, axis=0, return_terms=False, distance_threshold=1.0):
     permutation = np.random.permutation(x.shape[0])
-    # numerator = torch.mean((x - y) ** 2, axis=axis)
-    #
-    # Compute pairwise distances using the provided positions
     distances = torch.norm(positions - positions[permutation], dim=-1) / positions.shape[0]
-
-    distance_threshold = np.quantile(distances.flatten().detach().cpu().numpy(),0.05) #0.3
+    distance_threshold = np.quantile(distances.flatten().detach().cpu().numpy(),0.3)
 
     # Compute weights based on distances, giving higher weight to nearby points
     weights = torch.exp(-distances / distance_threshold)
-    #
-    # # Compute the weighted denominator
-    # denominator = torch.sum((x - y[permutation]) ** 2 * weights[:,None], axis=axis) / torch.sum(weights, axis=axis)
-
     numerators = (x-y)**2
     denominators = (x-y[permutation])**2
-    ratios = numerators / denominators
-    ratio = torch.sum( numerators * weights[:, None], axis=axis)/torch.sum(denominators * weights[:, None], axis=axis)
-
-    # ratio = numerator / denominator
+    numerator_sum = torch.sum( numerators * weights[:, None], axis=axis)
+    denominator_sum = torch.sum(denominators * weights[:, None], axis=axis)
+    ratio = numerator_sum/denominator_sum
     if return_terms:
-        return ratio, ratio, ratio
+        return ratio, numerator_sum, denominator_sum
     return ratio
 
 def eval_loss(model, F, dist, external_input_dist=None, dist_requires_dim=True, batch_size=64, dynamics_dim=1, eigenvalue=1, drop_values_outside_range=None, normaliser=shuffle_normaliser, scale_dist=1, ext_inp_batch_size=None):
@@ -1612,7 +1603,7 @@ def train_with_logger_multiple_dists(
         model (torch.nn.Module): The model being trained.
         F (callable): Dynamical system function.
         dists (list of torch.distributions.Distribution): List of distributions for sampling inputs.
-        external_input_dist (torch.distributions.Distribution, optional): Distribution for sampling external inputs.
+        external_input_dist (list of torch.distributions.Distribution, optional): List of distributions for sampling external inputs.
         dist_requires_dim (bool): Whether the distributions require a specific dimension.
         num_epochs (int): Number of epochs for training.
         learning_rate (float): Learning rate for the optimizer.
@@ -1657,7 +1648,7 @@ def train_with_logger_multiple_dists(
         total_loss = 0
         normalised_losses = []  # List to store normalised losses for each distribution
         reg_term_values = []
-        for dist in dists:
+        for dist, external_input_dist_single in zip(dists, external_input_dist):
             # Generate a batch of samples for x or use fixed_x_batch if provided
             if fixed_x_batch is not None:
                 x_batch = fixed_x_batch.to(device)
@@ -1669,7 +1660,7 @@ def train_with_logger_multiple_dists(
             x_batch.requires_grad_(True)
 
             input_to_model = x_batch
-            if external_input_dist is not None:
+            if external_input_dist_single is not None:
                 # Use provided ext_inp_batch_size if given; otherwise, fall back to batch_size
                 if ext_inp_batch_size is None:
                     ext_inp_batch_size = batch_size
@@ -1679,7 +1670,7 @@ def train_with_logger_multiple_dists(
                 ext_sample_shape = [ext_inp_batch_size]
                 if dist_requires_dim:
                     ext_sample_shape += [dynamics_dim]
-                external_inputs = external_input_dist.sample(sample_shape=ext_sample_shape).to(device)
+                external_inputs = external_input_dist_single.sample(sample_shape=ext_sample_shape).to(device)
 
                 # Repeat each unique external input to match the batch size
                 repeats = batch_size // ext_inp_batch_size
@@ -1700,7 +1691,7 @@ def train_with_logger_multiple_dists(
             )[0]
 
             # Compute F(x_batch)
-            F_inputs = [x_batch] + ([] if external_input_dist is None else [external_inputs])
+            F_inputs = [x_batch] + ([] if external_input_dist_single is None else [external_inputs])
             F_x = F(*F_inputs)
 
             # Main loss term: ||phi'(x) F(x) - phi(x)||^2
@@ -1721,7 +1712,7 @@ def train_with_logger_multiple_dists(
                 total_loss += restrict_to_distribution_lambda * reg_loss
 
             
-            if external_input_dist is not None and ext_inp_reg_coeff > 0:
+            if external_input_dist_single is not None and ext_inp_reg_coeff > 0:
                 # Build list of group sizes (each unique external input's count)
                 group_counts = [repeats + (1 if i < remainder else 0) for i in range(ext_inp_batch_size)]
                 start_idx = 0
