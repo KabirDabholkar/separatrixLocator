@@ -322,7 +322,7 @@ def extract_opposite_attractors_from_model(model,dataset,input_range=(0.9,0.92))
     inputs = torch.from_numpy(inputs).type(torch.float32)
 
     # Run the simulation
-    _,hidden = model(inputs,deterministic=True)
+    _,hidden = model(inputs,deterministic=False)
 
     attractors = get_points_on_opposite_attractors(inputs,hidden,return_separately=False,input_range=input_range)
     return attractors
@@ -381,7 +381,41 @@ if "__main__" == __name__:
     _,hidden = model(inputs,deterministic=True)
 
 
-    point1,point2,average_input = get_points_on_opposite_attractors(inputs,hidden,input_range = (0.9,0.92))
+    point1, point2, average_input = get_points_on_opposite_attractors(inputs, hidden, input_range=(0.9, 0.92), return_separately=True)
+    point1_additional, point2_additional, average_input_additional = get_points_on_opposite_attractors(inputs, hidden, input_range=(0.7, 0.72), return_separately=True)
+
+    from sklearn.decomposition import PCA
+    import matplotlib.pyplot as plt
+
+    # Detach and convert hidden to numpy
+    hidden_np = hidden.detach().cpu().numpy()
+
+    # Fit PCA on the hidden states
+    pca = PCA(n_components=2)
+    pca.fit(hidden_np.reshape(-1, hidden_np.shape[-1]))
+    hidden_pca = pca.transform(hidden_np.reshape(-1, hidden_np.shape[-1]))
+    hidden_pca = hidden_pca.reshape(hidden_np.shape[0], hidden_np.shape[1], -1)  
+
+    # Transform point1 and point2
+    point1_transformed = pca.transform(point1.reshape(-1, point1.shape[-1]))
+    point2_transformed = pca.transform(point2.reshape(-1, point2.shape[-1]))
+    point1_additional_transformed = pca.transform(point1_additional.reshape(-1, point1_additional.shape[-1]))
+    point2_additional_transformed = pca.transform(point2_additional.reshape(-1, point2_additional.shape[-1]))
+
+    # Plot PC1 and PC2 of hidden as well as the two sets of points
+    plt.figure(figsize=(8, 6))
+    plt.plot(hidden_pca[:,:, 0], hidden_pca[:,:, 1], alpha=0.5)
+    plt.scatter(point1_transformed[:, 0], point1_transformed[:, 1], color='red', label='Point 1 (0.9, 0.92)', marker='x', s=100)
+    plt.scatter(point2_transformed[:, 0], point2_transformed[:, 1], color='blue', label='Point 2 (0.9, 0.92)', marker='x', s=100)
+    plt.scatter(point1_additional_transformed[:, 0], point1_additional_transformed[:, 1], color='green', label='Point 1 (0.7, 0.72)', marker='x', s=100)
+    plt.scatter(point2_additional_transformed[:, 0], point2_additional_transformed[:, 1], color='orange', label='Point 2 (0.7, 0.72)', marker='x', s=100)
+    plt.xlabel('PC1')
+    plt.ylabel('PC2')
+    plt.title('PCA of Hidden States and Points')
+    plt.legend()
+    plt.grid()
+    plt.show()
+
 
 
     # model(r_in_cd[:,0],x_init=x_init)

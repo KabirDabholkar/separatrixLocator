@@ -1,0 +1,32 @@
+_target_: utils.setattrs_kwargs
+target:
+  _target_: torch.nn.Sequential
+  _args_:
+    - _target_: torch.nn.Linear
+      in_features: ${....input_size}
+      out_features: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: torch.nn.Linear
+      in_features: ${....hidden_size}
+      out_features: ${....output_size}
+
+input_size: ${dynamics.dim}
+hidden_size: 100
+output_size: 7
+num_layers: 10
+name: ResidualMLP_layers${.num_layers}_hidden${.hidden_size}_output${.output_size}

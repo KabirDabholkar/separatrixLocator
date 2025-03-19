@@ -14,21 +14,22 @@ run_traj : true
 
 #####################
 
-IC_distribution_fit:
-  - ${..IC_distribution_full}
-  - ${..IC_interpolation_line_1}
-  - ${..IC_interpolation_line_2}
+#IC_distribution_fit:
+#  - ${..IC_distribution_full}
+##  - ${..IC_interpolation_line_1}
+#  - ${..IC_interpolation_line_2}
+#
+#external_input_distribution_fit:
+#  - ${..external_input_distribution_full}
+##  - ${..external_input_distribution_narrow1}
+#  - ${..external_input_distribution_narrow2}
 
-external_input_distribution_fit:
-  - ${..external_input_distribution_full}
-  - ${..external_input_distribution_narrow1}
-  - ${..external_input_distribution_narrow2}
-
+#IC_distribution: ${.IC_distribution_full}
 IC_distribution:
   _target_  : custom_distributions.MixtureDistribution
   distributions :
     - ${...IC_distribution_full}
-    - ${...IC_distribution_task_relevant_PC1}
+    - ${...IC_distribution_task_relevant}
 
 external_input_distribution: ${.external_input_distribution_full}
 
@@ -85,12 +86,12 @@ external_input_distribution_full:
       low     : 0
       high    : 0.01
     - _target_: torch.distributions.Uniform
-      low     : 0 #.6 #0
+      low     : 0.6 #0
       high    : 1
 
 
 ####### Interpolation line 1  #####
-input_range_1: [0.7,0.72]
+input_range_1: [0.7,0.71]
 
 external_input_distribution_narrow1:
   _target_  : custom_distributions.ConcatIIDDistribution
@@ -111,6 +112,7 @@ IC_interpolation_line_1:
   hidden    : ${..attractors1}
   component_id  : 0
   squeeze_first_two_dims  : false
+  multiply_scale : 0.5
 
 attractors1 :
   _target_    : finkelstein_fontolan_RNN.extract_opposite_attractors_from_model
@@ -138,15 +140,16 @@ external_input_distribution_narrow2:
 ### a line interpolating the two fixed point attractors at input_range_1
 IC_interpolation_line_2:
   _target_  : custom_distributions.singlePC_distribution_from_hidden
-  hidden    : ${..attractors1}
+  hidden    : ${..attractors2}
   component_id  : 0
   squeeze_first_two_dims  : false
+  multiply_scale : 0.5
 
 attractors2 :
   _target_    : finkelstein_fontolan_RNN.extract_opposite_attractors_from_model
   model       : ${..loaded_RNN_model}
   dataset     : ${..RNN_dataset}
-  input_range : ${..input_range_1}
+  input_range : ${..input_range_2}
 
 
 

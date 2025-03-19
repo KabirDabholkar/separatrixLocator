@@ -5,6 +5,7 @@ from collections.abc import Iterable
 import numpy as np
 import os
 
+
 def indicator_func_to_matrix(size,indicator_func,dtype=bool):
     A = np.zeros(size)
     for i in range(size[0]):

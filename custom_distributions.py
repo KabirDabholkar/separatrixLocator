@@ -117,7 +117,7 @@ class MultiGapNormal(D.Distribution):
 
 
 
-class ConcatIIDDistribution(Distribution):
+class ConcatIIDDistribution: #(Distribution)
     """
     A distribution that concatenates a list of distributions.
     When sampling, it independently samples from each distribution and
@@ -248,26 +248,18 @@ class ProjectedDistribution:
         self.base_distribution = base_distribution
         self.projection_layer = projection_layer
 
-    @property
-    def batch_shape(self):
-        return self.base_distribution.batch_shape
-
-    @property
-    def event_shape(self):
-        return self.projection_layer.weight.shape[0],
+    # @property
+    # def batch_shape(self):
+    #     return self.base_distribution.batch_shape
+    #
+    # @property
+    # def event_shape(self):
+    #     return self.projection_layer.weight.shape[0],
 
     def sample(self, sample_shape=torch.Size()):
         base_samples = self.base_distribution.sample(sample_shape)
         projected_samples = self.projection_layer(base_samples)
         return projected_samples
-
-# Define the union type for extended distributions
-from typing import Any
-
-class ExtendedDistributions:
-    @staticmethod
-    def is_instance(obj: Any) -> bool:
-        return isinstance(obj, (torch.distributions.Distribution, ProjectedDistribution))
 
 
 
@@ -278,7 +270,7 @@ def initialize_linear_layer(input_dim, output_dim, weights, biases):
     linear_layer.bias.data = torch.tensor(biases, dtype=torch.float32)
     return linear_layer
 
-def singlePC_distribution_from_hidden(hidden, component_id=0,squeeze_first_two_dims=True):
+def singlePC_distribution_from_hidden(hidden, component_id=0,squeeze_first_two_dims=True,multiply_scale=1):
     if squeeze_first_two_dims:
         hidden = reshape_hidden(hidden)
     P = PCA()
@@ -292,13 +284,16 @@ def singlePC_distribution_from_hidden(hidden, component_id=0,squeeze_first_two_d
     scale = math.sqrt(P.explained_variance_[component_id])
     dist = ProjectedDistribution(
         makeIIDMultiVariate(
-            torch.distributions.Normal(loc=0.0, scale=scale),
+            torch.distributions.Normal(loc=0.0, scale=scale * multiply_scale),
             dim=1),
         layer
     )
     return dist
 
-
+def get_stacked_one_hot(pos=0,length=1):
+    vec = torch.nn.functional.one_hot(torch.tensor(pos), num_classes=length)
+    vec = vec.type(torch.float32)
+    return torch.stack([vec,-vec])
 
 # Example usage:
 if __name__ == '__main__':

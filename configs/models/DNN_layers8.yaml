@@ -35,7 +35,7 @@ target  :
       out_features: ${....output_size}
 
 input_size : ${dynamics.dim}
-hidden_size: 40
+hidden_size: 1000 #40
 output_size: 10
 num_layers : 8
 name  : DNN_layers${.num_layers}_Tanh_hidden${.hidden_size}_output${.output_size}

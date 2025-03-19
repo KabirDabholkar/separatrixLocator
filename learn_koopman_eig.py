@@ -1022,8 +1022,17 @@ def compute_loss(model, x, F, epoch, decay_factor=1.0):
 
     return total_loss
 
-def variance_normaliser(x,y):
-    return torch.mean((x-y)**2,axis=0)/torch.mean(y**2,axis=0)
+def variance_normaliser(x,y,axis=None,return_terms=False):
+    numerator = torch.mean((x-y)**2,axis=axis)
+    # denominator = torch.mean(y**2,axis=0)
+    # denominator = torch.sqrt(
+    #     torch.mean(x ** 2, axis=axis) * torch.mean(y ** 2, axis=axis)
+    # )
+    denominator = torch.std(x, axis=axis) * torch.std(y, axis=axis)
+    ratio = numerator/denominator
+    if return_terms:
+        return ratio, numerator, denominator
+    return ratio
 
 def shuffle_normaliser(x,y,axis=0,return_terms=False):
     permutation = np.random.permutation(x.shape[0])
@@ -1406,8 +1415,8 @@ def train_with_logger_ext_inp(
         batch_size=64,
         dynamics_dim=1, decay_module=None, logger=None, lr_scheduler=None,
         eigenvalue=1, print_every_num_epochs=10, device='cpu', param_specific_hyperparams=[],
-        # normaliser=partial(shuffle_normaliser, axis=None, return_terms=True),
-        normaliser=partial(distance_weighted_normaliser, axis=None, return_terms=True),
+        normaliser=partial(shuffle_normaliser, axis=None, return_terms=True),
+        # normaliser=partial(distance_weighted_normaliser, axis=None, return_terms=True),
         verbose=False,
         restrict_to_distribution_lambda=1e-3,
         ext_inp_batch_size=None,
@@ -1519,7 +1528,7 @@ def train_with_logger_ext_inp(
                 torch.zeros_like(torch.mean((x - y) ** 2))
             )
         # normalised_loss, main_loss, shuffle_loss = normaliser(dot_prod, eigenvalue * phi_x)
-        normalised_loss, main_loss, shuffle_loss = normaliser(dot_prod, eigenvalue * phi_x, x_batch)
+        normalised_loss, main_loss, shuffle_loss = normaliser(dot_prod, eigenvalue * phi_x)
         total_loss = normalised_loss
 
         # External input regularisation term
@@ -1587,7 +1596,8 @@ def train_with_logger_multiple_dists(
         batch_size=64,
         dynamics_dim=1, decay_module=None, logger=None, lr_scheduler=None,
         eigenvalue=1, print_every_num_epochs=10, device='cpu', param_specific_hyperparams=[],
-        normaliser=partial(distance_weighted_normaliser, axis=None, return_terms=True),
+        # normaliser=partial(distance_weighted_normaliser, axis=None, return_terms=True),
+        normaliser=partial(variance_normaliser, axis=None, return_terms=True),
         verbose=False,
         restrict_to_distribution_lambda=0,
         ext_inp_batch_size=None,
@@ -1648,7 +1658,8 @@ def train_with_logger_multiple_dists(
         total_loss = 0
         normalised_losses = []  # List to store normalised losses for each distribution
         reg_term_values = []
-        for dist, external_input_dist_single in zip(dists, external_input_dist):
+        for i, dist in enumerate(dists):
+            external_input_dist_single = None if external_input_dist is None else external_input_dist[i]
             # Generate a batch of samples for x or use fixed_x_batch if provided
             if fixed_x_batch is not None:
                 x_batch = fixed_x_batch.to(device)
@@ -1661,16 +1672,20 @@ def train_with_logger_multiple_dists(
 
             input_to_model = x_batch
             if external_input_dist_single is not None:
-                # Use provided ext_inp_batch_size if given; otherwise, fall back to batch_size
-                if ext_inp_batch_size is None:
-                    ext_inp_batch_size = batch_size
+                if fixed_external_inputs is not None:
+                    external_inputs = fixed_external_inputs.to(device)
+                    ext_inp_batch_size = external_inputs.shape[0]  # Set ext_inp_batch_size from the tensor
                 else:
-                    assert batch_size % ext_inp_batch_size == 0, "ext_inp_batch_size must divide batch_size evenly."
+                    # Use provided ext_inp_batch_size if given; otherwise, fall back to batch_size
+                    if ext_inp_batch_size is None:
+                        ext_inp_batch_size = batch_size
+                    else:
+                        assert batch_size % ext_inp_batch_size == 0, "ext_inp_batch_size must divide batch_size evenly."
 
-                ext_sample_shape = [ext_inp_batch_size]
-                if dist_requires_dim:
-                    ext_sample_shape += [dynamics_dim]
-                external_inputs = external_input_dist_single.sample(sample_shape=ext_sample_shape).to(device)
+                    ext_sample_shape = [ext_inp_batch_size]
+                    if dist_requires_dim:
+                        ext_sample_shape += [dynamics_dim]
+                    external_inputs = external_input_dist_single.sample(sample_shape=ext_sample_shape).to(device)
 
                 # Repeat each unique external input to match the batch size
                 repeats = batch_size // ext_inp_batch_size
@@ -1700,7 +1715,8 @@ def train_with_logger_multiple_dists(
             main_loss = torch.mean((dot_prod - eigenvalue * phi_x) ** 2)
             
             # Normalised loss
-            normalised_loss, numerator, denominator = normaliser(dot_prod, phi_x, x_batch, axis=None, return_terms=True)
+            # normalised_loss, numerator, denominator = normaliser(dot_prod, phi_x, x_batch, axis=None, return_terms=True)
+            normalised_loss, numerator, denominator = normaliser(dot_prod, phi_x, axis=None, return_terms=True)
             normalised_losses.append(normalised_loss.item())  # Store the normalised loss
             
             # Total loss

@@ -322,21 +322,21 @@ def main_multimodel(cfg):
             fig.savefig(Path(cfg.savepath) / "kinetic_energy.png",dpi=300)
             plt.close(fig)
 
-        if 'hypercube' in cfg.dynamics.name:
+        if 'hypercube' in cfg.dynamics.name or 'bistable' in cfg.dynamics.name:
             # Number of models and number of random vectors
             num_models = SL.num_models
-            num_positions = 10
+            num_positions = cfg.dynamics.dim
             n_trials = 20
             num_random_vectors = 10
 
             # Create subplots with 10 rows and 10 columns
-            fig, axs = plt.subplots(10, 10, figsize=(20, 20), sharex=True, sharey=True)
+            fig, axs = plt.subplots(num_models, num_positions, figsize=(num_positions, num_models+1), sharex=True, sharey=True)
 
             # Iterate over each model
             for model_idx, model in enumerate(SL.models):
                 # Iterate over each position for x
-                for pos in range(10):
-                    ax = axs[model_idx, pos]
+                for pos in range(num_positions):
+                    ax = axs[model_idx, pos] if SL.num_models>1 else axs[pos]
                     # Generate multiple random vectors for n_1 to n_10
                     for trial in range(n_trials):
                         n_values = np.random.uniform(-1, 1, cfg.dynamics.dim)
@@ -360,17 +360,31 @@ def main_multimodel(cfg):
                         trial_results = output[:, 0].tolist()  # Assuming single output
 
                         # Plot the results for this trial
-                        axs[model_idx, pos].plot(x_values, trial_results, lw=1, alpha=0.5)
+                        ax.plot(x_values, trial_results, lw=1, alpha=0.5)
 
+                    # Evaluate when all n_values are zero
+                    zero_values = np.zeros(cfg.dynamics.dim)
+                    zero_input_batch = np.tile(zero_values, (len(x_values), 1))
+                    zero_input_batch[:, pos] = x_values
+
+                    zero_input_tensor = torch.from_numpy(zero_input_batch).float()
+
+                    with torch.no_grad():
+                        zero_output = model(zero_input_tensor)
+
+                    ax.plot(x_values, zero_output[:, 0].tolist(), lw=1, alpha=1, color='black', ls='dashed')
             # Set labels for the first column and first row
             # Set titles for the top row and labels for the first column
-            for pos in range(10):
-                axs[0, pos].set_title(f'Position {pos}')
+            for pos in range(num_positions):
+                ax = axs[0, pos] if SL.num_models>1 else axs[pos]
+                ax.set_title(f'Position {pos}')
             for model_idx in range(len(SL.models)):
-                axs[model_idx, 0].set_ylabel(f'Model {model_idx}')
+                ax = axs[model_idx, 0] if SL.num_models > 1 else axs[0]
+                ax.set_ylabel(f'Model {model_idx}')
 
             plt.tight_layout()
-            fig.savefig(Path(cfg.savepath) / "model_output_vs_x_positions.png", dpi=300)
+            fig.savefig(Path(cfg.savepath) / "model_output_vs_x_positions.png", dpi=50)
+            # fig.savefig(Path(cfg.savepath) / "model_output_vs_x_positions.pdf")
             plt.close(fig)
 
 
@@ -557,7 +571,7 @@ def main_multimodel(cfg):
             # threshold = np.quantile(inputs[:,:,2].flatten(), 0.96)
             # top_indices = np.where(inputs[:,:,2] >= threshold)
             top_indices = np.where(
-                (0.9 <= inputs[:, :, 2]) & (inputs[:, :, 2] <= 0.92)
+                (0.7 <= inputs[:, :, 2]) & (inputs[:, :, 2] <= 0.71)
             )
 
             # Extract corresponding hidden states for those indices
@@ -652,7 +666,7 @@ def main_multimodel(cfg):
 
             # Run from interpolated line
             n_grid = 100
-            alpha = torch.linspace(-.4, 1.4, n_grid)
+            alpha = torch.linspace(-0.4, 1.4, n_grid)
             interpolated_points = alpha[:, None] * point1[None, :] + (1 - alpha)[:, None] * point2[None, :]
             interpolated_inputs = (inputs[top_indices[0][max_dist_idx[0]], top_indices[1][max_dist_idx[0]]] +
                                    inputs[top_indices[0][max_dist_idx[1]], top_indices[1][max_dist_idx[1]]]) / 2
@@ -686,15 +700,15 @@ def main_multimodel(cfg):
             # Reshape trajectories
             interpolated_trajectories_r = interpolated_trajectories.reshape(run_T, n_grid, -1)
 
-            # setattr(cfg.separatrix_locator_fit_kwargs, 'num_epochs', 5000)
-            # SL.fit(
-            #     dynamics_function,
-            #     distribution,
-            #     external_input_dist=input_distribution,
-            #     fixed_x_batch = interpolated_points,
-            #     fixed_external_inputs = interpolated_inputs_expanded[0],
-            #     **instantiate(cfg.separatrix_locator_fit_kwargs)
-            # )
+            setattr(cfg.separatrix_locator_fit_kwargs, 'num_epochs', 2000)
+            SL.fit(
+                dynamics_function,
+                distribution,
+                external_input_dist=input_distribution,
+                fixed_x_batch = interpolated_points,
+                fixed_external_inputs = interpolated_inputs_expanded[0],
+                **instantiate(cfg.separatrix_locator_fit_kwargs)
+            )
 
 
             #### Computing PDE error
@@ -705,14 +719,15 @@ def main_multimodel(cfg):
                 instantiate(cfg.dynamics.IC_distribution_full).sample(sample_shape=(interpolated_points.shape[0],)),
                 instantiate(cfg.dynamics.IC_distribution_task_relevant).sample(sample_shape=(interpolated_points.shape[0],)),
                 instantiate(cfg.dynamics.IC_distribution_task_relevant_PC1).sample(sample_shape=(interpolated_points.shape[0],)),
-                interpolated_points + torch.normal(mean=0.0, std=0.4, size=interpolated_points.shape),
+                instantiate(cfg.dynamics.IC_interpolation_line_1).sample(sample_shape=(interpolated_points.shape[0],)),
                 interpolated_points,
+                interpolated_points + torch.normal(mean=0.0, std=0.4, size=interpolated_points.shape),
             ]
 
             #dist_PC1 = instantiate(cfg.dynamics.IC_distribution_task_relevant_PC1)
 
-            colors = ['g', 'b', 'y',  'purple', 'r']  # Colors for each set
-            labels = ['Isotropic','Task data', 'Task data PC1', 'line+noise0.4', 'line']
+            colors = ['g', 'b', 'y',  'purple', 'r', 'orange']  # Colors for each set
+            labels = ['Isotropic','Task data', 'Task data PC1', 'interpolated_points', 'line', 'line+noise0.4',]
 
             from mpl_toolkits.mplot3d import Axes3D
 
@@ -742,6 +757,10 @@ def main_multimodel(cfg):
             plt.close()
             plt.figure()
             for i, (points, label) in enumerate(zip(point_sets,labels)):
+                if i<3:
+                    continue
+                if i>4:
+                    continue
                 points.requires_grad_(True)
                 inputs = torch.concat([points, interpolated_inputs_expanded[0]], axis=-1)
                 phi_x = SL.predict(inputs, no_grad=False)

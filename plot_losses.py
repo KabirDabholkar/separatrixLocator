@@ -104,7 +104,11 @@ def load_and_plot_losses(log_dirs, metrics=None, save_path=None, figsize=(12, 6)
                 # Use log scale if values span multiple orders of magnitude
                 if max_val / min_val > 100:
                     ax.set_yscale('log')
-                    
+                else:
+                    # ax.set_xlim(0,)
+                    # ax.set_ylim(0, )
+                    ax.set_yscale('log')
+
             except Exception as e:
                 print(f"Error plotting {metric} from {log_dir}: {e}")
     
@@ -137,10 +141,16 @@ if __name__ == "__main__":
             # 'results/hypercube_10D/experiment',
             # 'results/hypercube_10D/experiment_width400',
             # 'results/hypercube_10D/experiment_width1000'
-            'results/finkelstein_fontolan_RNN/experiment_DNN_layers6_Tanh_hidden1000_output7'
+            # 'results/finkelstein_fontolan_RNN/experiment_DNN_layers6_Tanh_hidden1000_output7'
+            'results/bistable100D/experiment_ResidualMLP_layers10_hidden100_output7',
+            'results/bistable100D/experiment_ResidualMLP_layers15_hidden100_output7',
+            'results/bistable100D/experiment_ResidualMLP_layers15_hidden100_output7_lr0.001',
+            'results/bistable100D/experiment_ResidualMLP_layers20_hidden100_output7',
+            # 'results/bistable100D/experiment_ResidualMLP_layers25_hidden100_output7'
         ],  # Replace with your list of log directories
         'metrics': ['Loss/Total'],  # List of metrics to plot, e.g. ['loss1', 'loss2'] or None for all
-        'save_path': 'test_plots/finkelstein_fontolan_RNN_losses.png',  # Path to save figure, e.g. 'losses.png' or None to display
+        # 'save_path': 'test_plots/finkelstein_fontolan_RNN_losses.png',  # Path to save figure, e.g. 'losses.png' or None to display
+        'save_path': 'test_plots/bistable100D_losses.png',
         'figsize': (6, 6),  # Figure size in inches (width, height)
         'smooth': 10,  # Default window size for smoothing (0 means no smoothing)
     }

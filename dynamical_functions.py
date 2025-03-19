@@ -1,6 +1,12 @@
 import torch
 import numpy as np
 
+def bistable_ND(z,dim=2,pos=1):
+    mask = torch.arange(dim,device=z.device) == pos
+    return (z-z**3) * mask.type(z.dtype) + (-z) * (~mask).type(z.dtype)
+
+
+
 def radial_monostable(z):
     x, y = z[...,0], z[...,1]
     r = torch.sqrt(x**2 + y**2)
@@ -106,10 +112,20 @@ def init_hopfield_ring(N,M,seed=0,binary=True,normalise=True,scaling=4):
 
 
 if __name__ == '__main__':
+    # from functools import partial
+    # A = init_hopfield(10,3,seed=0)
+    # print(
+    #     partial(hopfield,A=init_hopfield(10,3,seed=0))(torch.ones(10,1)).shape
+    # )
+    from torchdiffeq import odeint
     from functools import partial
-    A = init_hopfield(10,3,seed=0)
-    print(
-        partial(hopfield,A=init_hopfield(10,3,seed=0))(torch.ones(10,1)).shape
-    )
+    y0 = torch.randn((30,2))
+    times = torch.linspace(0,10,100)
+    sol = odeint(lambda t,x: bistable_ND(x,dim=2,pos=0),y0,times)
+    import matplotlib.pyplot as plt
+    plt.plot(sol[...,0],sol[...,1])
+    plt.scatter(sol[-1,..., 0], sol[-1,..., 1],c='red')
+    plt.show()
+    # bistable_ND(torch.tensor([0,1])[None,None],dim=2,pos=1)
 
 
