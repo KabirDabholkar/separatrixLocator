@@ -49,12 +49,44 @@ target:
       hidden_dim: ${....hidden_size}
     - _target_: architectures.ResidualBlock
       hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
+    - _target_: architectures.ResidualBlock
+      hidden_dim: ${....hidden_size}
     - _target_: torch.nn.Linear
       in_features: ${....hidden_size}
       out_features: ${....output_size}
 
 input_size: ${dynamics.dim}
-hidden_size: ${.input_size} #${dynamics.dim} #
+hidden_size: ${.input_size}
 output_size: 7
-num_layers: 25
+num_layers: 40
 name: ResidualMLP_layers${.num_layers}_hidden${.hidden_size}_output${.output_size}

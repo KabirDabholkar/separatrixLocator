@@ -1,3 +1,5 @@
+import os
+
 import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
@@ -21,7 +23,7 @@ def load_and_plot_losses(log_dirs, metrics=None, save_path=None, figsize=(12, 6)
     
     # Set up the plot grid
     n_metrics = len(metrics) if metrics else 1
-    fig, axes = plt.subplots(1, n_metrics, figsize=figsize)
+    fig, axes = plt.subplots(n_metrics,1, figsize=figsize, sharex=True)
     if n_metrics == 1:
         axes = [axes]
     
@@ -48,7 +50,7 @@ def load_and_plot_losses(log_dirs, metrics=None, save_path=None, figsize=(12, 6)
             metrics = [p.stem for p in (log_dir / "Loss").glob("*.csv")]
 
         # Plot each metric
-        for ax, metric in zip(axes, metrics):
+        for ax_id,(ax, metric) in enumerate(zip(axes, metrics)):
             try:
                 # Load the CSV file for this metric
                 metric_path = metric if "/" in metric else f"Loss/{metric}"
@@ -98,8 +100,9 @@ def load_and_plot_losses(log_dirs, metrics=None, save_path=None, figsize=(12, 6)
                     max_val = max(max_val, model_data['value'].max())
                 
                 # ax.set_title(metric.split('/')[-1])  # Remove 'Loss/' prefix from title
-                ax.set_xlabel('Step')
-                ax.set_ylabel('Value')
+                if ax_id == 0:
+                    ax.set_xlabel('Step')
+                ax.set_ylabel(metric)
                 
                 # Use log scale if values span multiple orders of magnitude
                 if max_val / min_val > 100:
@@ -135,22 +138,42 @@ if __name__ == "__main__":
     # Configuration variables - modify these directly in the script
     # =========================================================
     CONFIG = {
-        'log_dirs': [
+        'log_dirs':
+            [Path('results/bistable20D')/d for d in os.listdir('results/bistable20D') if ('experiment' in d) and ('_S4_' in d)] +
+            [
             # 'results/hypercube_2D/experiment',
             # 'results/hypercube_5D/experiment',
             # 'results/hypercube_10D/experiment',
             # 'results/hypercube_10D/experiment_width400',
             # 'results/hypercube_10D/experiment_width1000'
             # 'results/finkelstein_fontolan_RNN/experiment_DNN_layers6_Tanh_hidden1000_output7'
-            'results/bistable100D/experiment_ResidualMLP_layers10_hidden100_output7',
-            'results/bistable100D/experiment_ResidualMLP_layers15_hidden100_output7',
-            'results/bistable100D/experiment_ResidualMLP_layers15_hidden100_output7_lr0.001',
-            'results/bistable100D/experiment_ResidualMLP_layers20_hidden100_output7',
+            # 'results/finkelstein_fontolan_RNN/experiment_ResidualMLP_layers15_hidden671_output7_lr0.001_std',
+            # 'results/finkelstein_fontolan_RNN/experiment_ResidualMLP_layers25_hidden671_output7_lr0.001_std',
+
+            # 'results/bistable20D/experiment_Transformer_dmodel16_layers4_nhead4_out7_poolingattention_lr0.01_std',
+            # 'results/bistable20D/experiment_Transformer_dmodel32_layers2_nhead2_out7_poolingattention_lr0.01_std',
+            # 'results/bistable20D/experiment_Transformer_dmodel32_layers4_nhead4_out7_poolingattention_lr0.001_std'
+
+
+            # 'results/finkelstein_fontolan_RNN/experiment_ResidualMLP_layers40_hidden668_output7_lr0.001_std',
+            # 'results/finkelstein_fontolan_RNN/experiment_details',
+            # 'results/bistable100D/experiment_ResidualMLP_layers10_hidden100_output7',
+            # 'results/bistable100D/experiment_ResidualMLP_layers15_hidden100_output7',
+            # 'results/bistable100D/experiment_ResidualMLP_layers15_hidden100_output7_lr0.001',
+            # 'results/bistable100D/experiment_ResidualMLP_layers20_hidden100_output7',
             # 'results/bistable100D/experiment_ResidualMLP_layers25_hidden100_output7'
+            # 'results/bistable600D/experiment_ResidualMLP_layers15_hidden600_output7_lr0.001_std'
         ],  # Replace with your list of log directories
-        'metrics': ['Loss/Total'],  # List of metrics to plot, e.g. ['loss1', 'loss2'] or None for all
+        # 'metrics': ['Loss/Total'],  # List of metrics to plot, e.g. ['loss1', 'loss2'] or None for all
+        'metrics': [
+            'Loss/Total',
+            # 'Loss/NormalisedLoss_Dist_0',
+            # 'Loss/NormalisedLoss_Dist_1',
+            # 'Loss/NormalisedLoss_Dist_2'
+        ],
         # 'save_path': 'test_plots/finkelstein_fontolan_RNN_losses.png',  # Path to save figure, e.g. 'losses.png' or None to display
-        'save_path': 'test_plots/bistable100D_losses.png',
+        # 'save_path': 'test_plots/bistable600D_losses.png',
+        'save_path': 'test_plots/bistable20D_losses.png',
         'figsize': (6, 6),  # Figure size in inches (width, height)
         'smooth': 10,  # Default window size for smoothing (0 means no smoothing)
     }

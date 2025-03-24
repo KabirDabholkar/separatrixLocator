@@ -1,0 +1,1 @@
+PYTHONUNBUFFERED=1;HYDRA_FULL_ERROR=1;PROJECT_PATH=/home/kabird/separatrixLocator /home/kabird/separatrixLocator/separatrixLocator/bin/python3 /home/kabird/separatrixLocator/main.py

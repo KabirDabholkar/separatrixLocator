@@ -1,0 +1,28 @@
+_target_: utils.setattrs_kwargs
+target:
+  _target_: torch.nn.Sequential
+  _args_:
+    - _target_  : architectures.Unsqueeze
+      dim       : -1
+    - _target_  : s4torch.S4Model
+      d_input   : 1
+      d_model   : ${....hidden_size}
+      d_output  : ${....output_size}
+      n_blocks  : ${....n_blocks}
+      n         : 16
+      l_max     : ${....input_size}
+      collapse  : true  # average predictions over time prior to decoding
+      norm_type : null
+      p_dropout : 0.0
+
+#    - _target_    : architectures.S4FinalPredictor
+#      input_size  : 1
+#      output_size : ${....output_size}
+#      d_model     : ${....hidden_size}
+
+
+input_size: ${dynamics.dim}
+hidden_size: 50 #100
+n_blocks  : 2
+output_size: 1 #7
+name: S4_nblocks${.n_blocks}_hidden${.hidden_size}_output${.output_size}

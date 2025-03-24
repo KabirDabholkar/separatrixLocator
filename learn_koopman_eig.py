@@ -710,6 +710,10 @@ class ODEBlock(nn.Module):
     def nfe(self, value):
         self.odefunc.nfe = value
 
+class BistableKEF(nn.Module):
+    def forward(self,x):
+        return x / torch.sqrt(torch.abs((1-x**2)))
+
 class ScaledLinear(nn.Linear):
     def __init__(self, in_features, out_features, bias=True, scale=0.1):
         super().__init__(in_features, out_features, bias)
@@ -1097,9 +1101,9 @@ def eval_loss(model, F, dist, external_input_dist=None, dist_requires_dim=True, 
 
     # Compute phi'(x)
     phi_x_prime = torch.autograd.grad(
-        outputs=phi_x,
+        outputs=phi_x, #.mean(axis=-1, keepdim=True),
         inputs=x_batch,
-        grad_outputs=torch.ones_like(phi_x),
+        grad_outputs=torch.ones_like(phi_x), #[:,0:1]),
         create_graph=True
     )[0]
 
@@ -1110,6 +1114,8 @@ def eval_loss(model, F, dist, external_input_dist=None, dist_requires_dim=True, 
     # Main loss term: ||phi'(x) F(x) - phi(x)||^2
     dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True)
 
+    # plt.scatter(phi_x.detach().cpu().numpy()[:,0],dot_prod.detach().cpu().numpy())
+    # plt.show()
 
     if batch_size != ext_inp_batch_size:
         # Reshape dot_prod
@@ -1416,6 +1422,7 @@ def train_with_logger_ext_inp(
         dynamics_dim=1, decay_module=None, logger=None, lr_scheduler=None,
         eigenvalue=1, print_every_num_epochs=10, device='cpu', param_specific_hyperparams=[],
         normaliser=partial(shuffle_normaliser, axis=None, return_terms=True),
+        # normaliser=partial(variance_normaliser, axis=None, return_terms=True),
         # normaliser=partial(distance_weighted_normaliser, axis=None, return_terms=True),
         verbose=False,
         restrict_to_distribution_lambda=1e-3,

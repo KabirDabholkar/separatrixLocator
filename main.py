@@ -84,17 +84,37 @@ def main_multimodel(cfg):
     SL = instantiate(cfg.separatrix_locator)
     SL.models = [instantiate(cfg.model).to(SL.device) for _ in range(cfg.separatrix_locator.num_models)]
 
+    if cfg.load_KEF_model:
+        new_format_path = Path(cfg.savepath)/cfg.experiment_details
+        print(new_format_path)
+        if os.path.exists(new_format_path):
+            load_path = new_format_path
+        else:
+            load_path = Path(cfg.savepath)
+            print(new_format_path, 'does not exist, loading', load_path, 'instead.')
+        SL.load_models(load_path)
+
+    # with torch.no_grad():
+    #     SL.models[0][0].weight[:] = 1.0
+    # print('skipping fit')
     SL.fit(
         dynamics_function,
         distribution_fit,
         external_input_dist=input_distribution_fit,
-        **instantiate(cfg.separatrix_locator_fit_kwargs)
+        **instantiate(cfg.separatrix_locator_fit_kwargs),
+        # **{
+        #     **instantiate(cfg.separatrix_locator_fit_kwargs),
+        #     "learning_rate":1e-5,
+        # },
     )
+    # print('SL.models[0][0].weight',SL.models[0][0].weight)
+    # x = torch.arange(-2.0, 2.0, 0.01)
+    # plt.plot(x,dynamics_function(x))
+    # plt.plot(x, SL.models[0](x[:,None])[:,0].detach())
+    # plt.show()
 
     if cfg.save_KEF_model:
-        SL.save_models(cfg.savepath)
-    if cfg.load_KEF_model:
-        SL.load_models(cfg.savepath)
+        SL.save_models(Path(cfg.savepath)/cfg.experiment_details)
 
     scores = SL.score(
         dynamics_function,
@@ -571,7 +591,7 @@ def main_multimodel(cfg):
             # threshold = np.quantile(inputs[:,:,2].flatten(), 0.96)
             # top_indices = np.where(inputs[:,:,2] >= threshold)
             top_indices = np.where(
-                (0.7 <= inputs[:, :, 2]) & (inputs[:, :, 2] <= 0.71)
+                (0.9 <= inputs[:, :, 2]) & (inputs[:, :, 2] <= 0.92)
             )
 
             # Extract corresponding hidden states for those indices
@@ -700,15 +720,15 @@ def main_multimodel(cfg):
             # Reshape trajectories
             interpolated_trajectories_r = interpolated_trajectories.reshape(run_T, n_grid, -1)
 
-            setattr(cfg.separatrix_locator_fit_kwargs, 'num_epochs', 2000)
-            SL.fit(
-                dynamics_function,
-                distribution,
-                external_input_dist=input_distribution,
-                fixed_x_batch = interpolated_points,
-                fixed_external_inputs = interpolated_inputs_expanded[0],
-                **instantiate(cfg.separatrix_locator_fit_kwargs)
-            )
+            # setattr(cfg.separatrix_locator_fit_kwargs, 'num_epochs', 2000)
+            # SL.fit(
+            #     dynamics_function,
+            #     distribution,
+            #     external_input_dist=input_distribution,
+            #     fixed_x_batch = interpolated_points,
+            #     fixed_external_inputs = interpolated_inputs_expanded[0],
+            #     **instantiate(cfg.separatrix_locator_fit_kwargs)
+            # )
 
 
             #### Computing PDE error

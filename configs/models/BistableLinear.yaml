@@ -1,0 +1,27 @@
+_target_  : utils.setattrs_kwargs
+target  :
+  _target_  : torch.nn.Sequential
+  _args_  :
+    - _target_    : torch.nn.Linear
+      in_features : ${....input_size}
+      out_features: ${....output_size}
+      bias        : false
+    - _target_    : learn_koopman_eig.BistableKEF
+
+input_size : ${dynamics.dim}
+output_size: 1
+name  : LinearBistableKEF
+
+#_target_  : torch.nn.Sequential
+#_args_  :
+#- _target_    : torch.nn.Linear
+#  in_features : 2
+#  out_features: 10
+#- _target_    : torch.nn.Tanh
+#- _target_    : torch.nn.Linear
+#  in_features : 10
+#  out_features: 10
+#- _target_    : torch.nn.Tanh
+#- _target_    : torch.nn.Linear
+#  in_features : 10
+#  out_features: 10

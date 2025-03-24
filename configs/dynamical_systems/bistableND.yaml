@@ -34,8 +34,8 @@ hidden_axis:
   length    : ${..dim}
 
 name : bistable${.dim}D
-dim  : 100 #200 # 600
-bistable_axis : 15 #123
+dim  : 200 #20 #600 #200 # 600
+bistable_axis : 0 #15 #123
 equation_latex  : x-x^3
 analytical_eigenfunction:
   _target_: compose.compose

@@ -4,3 +4,9 @@
 [submodule "fixed-point-finder"]
 	path = fixed_point_finder
 	url = https://github.com/KabirDabholkar/fixed-point-finder.git
+[submodule "s4"]
+	path = s4
+	url = https://github.com/KabirDabholkar/s4.git
+[submodule "S4Torch"]
+	path = S4Torch
+	url = https://github.com/KabirDabholkar/S4Torch.git

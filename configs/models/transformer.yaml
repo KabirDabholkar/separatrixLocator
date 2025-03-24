@@ -1,0 +1,25 @@
+_target_: utils.setattrs_kwargs
+target:
+  _target_: transformer.Transformer
+  input_dim: ${..input_size}
+  output_dim: ${..output_size}
+  d_model: ${..d_model}
+  nhead: ${..nhead}
+  num_layers: ${..num_layers}
+  dim_feedforward: ${..dim_feedforward}
+  use_positional_encoding: ${..use_positional_encoding}
+  pooling: ${..pooling}
+
+# Global config values
+input_size: ${dynamics.dim}
+output_size: 7
+d_model: 32 #128
+nhead: 2 # 4 #8
+num_layers: 2 #4
+dim_feedforward: 64 #256
+use_positional_encoding: true
+#pooling: mean
+#pooling: max
+pooling: attention
+
+name: Transformer_dmodel${.d_model}_layers${.num_layers}_nhead${.nhead}_out${.output_size}_pooling${.pooling}
