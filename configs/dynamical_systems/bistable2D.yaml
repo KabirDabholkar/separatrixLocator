@@ -6,9 +6,14 @@ function :
       dim       : -1
     - ${eval:'lambda x:(x[...,0]-x[...,0]**3, -x[...,1])'}
 IC_distribution:
-  _target_  : torch.distributions.Normal
-  loc       : 0
-  scale     : 1
+  _target_  : custom_distributions.makeIIDMultiVariate
+  dist  :
+    _target_  : torch.distributions.Normal
+    loc       : 0
+    scale     : 2
+  dim : ${..dim}
+
+dist_requires_dim : false
 name            : bistable2D
 dim  : 2
 equation_latex  : x-x^3

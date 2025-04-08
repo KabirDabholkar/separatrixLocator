@@ -5,6 +5,7 @@ runs
 multirun
 test_plots
 test_outputs
+logs
 results
 results_old
 test_outputs

@@ -116,6 +116,7 @@ def main_multimodel(cfg):
     if cfg.save_KEF_model:
         SL.save_models(Path(cfg.savepath)/cfg.experiment_details)
 
+    SL.models = [model.to('cpu') for model in SL.models]
     scores = SL.score(
         dynamics_function,
         distribution,
@@ -132,8 +133,24 @@ def main_multimodel(cfg):
         )
         print('Scores over 2x scaled distribution:\n',scores2.detach().cpu().numpy())
 
-    SL.models = [model.to('cpu') for model in SL.models]
-    #SL.filter_models(0.1)
+
+    if hasattr(cfg.dynamics,'analytical_eigenfunction'):
+        num_samples = 5000
+        sampled_points = distribution.sample(sample_shape=(num_samples,))
+
+        analytical_eigenfunction = instantiate(cfg.dynamics.analytical_eigenfunction)
+        analytical_values = analytical_eigenfunction(sampled_points)
+
+        correlations = []
+        for model in SL.models:
+            model_values = model(sampled_points).detach()
+            x,y = model_values.flatten(), analytical_values.flatten()
+            x = torch.abs(x)
+            y = torch.abs(y)
+            correlation = torch.sum(x*y)/torch.sqrt(torch.sum(x**2)*torch.sum(y**2))
+            correlations.append(correlation)
+
+        print("Correlations between models and analytical eigenfunction:", correlations)
 
     all_below_threshold_points = None
     if cfg.runGD:
@@ -403,10 +420,40 @@ def main_multimodel(cfg):
                 ax.set_ylabel(f'Model {model_idx}')
 
             plt.tight_layout()
-            fig.savefig(Path(cfg.savepath) / "model_output_vs_x_positions.png", dpi=50)
+            fig.savefig(Path(cfg.savepath) / cfg.experiment_details / "model_output_vs_x_positions.png", dpi=120)
             # fig.savefig(Path(cfg.savepath) / "model_output_vs_x_positions.pdf")
             plt.close(fig)
 
+            batch_size = 1000
+            # Sample input_tensor from the distribution
+            input_tensor = distribution.sample(sample_shape=(batch_size,))
+            input_tensor.requires_grad_(True)
+
+            # Compute phi(x)
+            phi_x = model(input_tensor)
+
+            # Compute phi'(x) using autograd
+            phi_x_prime = torch.autograd.grad(
+                outputs=phi_x,
+                inputs=input_tensor,
+                grad_outputs=torch.ones_like(phi_x),
+                create_graph=True
+            )[0]
+
+            F_x = dynamics_function(input_tensor)
+
+            # Compute the dot product
+            dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True)
+
+            residual = torch.abs(phi_x - dot_prod)
+
+            fig,ax = plt.subplots()
+            ax.scatter(torch.abs(phi_x).detach().cpu().numpy(),residual.detach().cpu().numpy())
+            ax.set_xlabel(r'$\psi(x)$')
+            ax.set_ylabel(r'$|\nabla \psi(x) \cdot f(x) - \lambda\psi(x)|$')
+            fig.tight_layout()
+            fig.savefig(Path(cfg.savepath) / cfg.experiment_details / "KEFvals_vs_residuals.png", dpi=200)
+            plt.close(fig)
 
         elif cfg.dynamics.dim > 2:
             # pass

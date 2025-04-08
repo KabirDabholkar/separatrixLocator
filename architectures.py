@@ -19,6 +19,39 @@ class ResidualBlock(nn.Module):
         return x + self.block(x)  # Skip connection
 
 
+class DeepResNet(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, num_blocks):
+        super(DeepResNet, self).__init__()
+        # Add an input layer if input_dim < hidden_dim to map input to hidden_dim
+        if input_dim < hidden_dim:
+            self.input_layer = nn.Linear(input_dim, hidden_dim)
+        else:
+            self.input_layer = None
+
+        # Stack the ResidualBlocks in sequence (operating on hidden_dim)
+        self.residual_layers = nn.Sequential(
+            *[ResidualBlock(hidden_dim) for _ in range(num_blocks)]
+        )
+
+        # Add an output layer if output_dim is not equal to hidden_dim
+        if output_dim != hidden_dim:
+            self.output_layer = nn.Linear(hidden_dim, output_dim)
+        else:
+            self.output_layer = None
+
+    def forward(self, x):
+        # If an input layer is defined, use it to transform x
+        if self.input_layer:
+            x = self.input_layer(x)
+        # Pass the result through the stacked residual blocks
+        x = self.residual_layers(x)
+        # If an output layer is defined, map the hidden state to output_dim
+        if self.output_layer:
+            x = self.output_layer(x)
+        return x
+
+
+
 # Define a custom module to add a singleton dimension.
 class Unsqueeze(nn.Module):
     def __init__(self, dim=-1):

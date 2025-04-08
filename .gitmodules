@@ -10,3 +10,6 @@
 [submodule "S4Torch"]
 	path = S4Torch
 	url = https://github.com/KabirDabholkar/S4Torch.git
+[submodule "phase-limit-cycle-RNNs"]
+	path = phase-limit-cycle-RNNs
+	url = https://github.com/Matthijspals/phase-limit-cycle-RNNs.git

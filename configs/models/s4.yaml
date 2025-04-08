@@ -9,7 +9,7 @@ target:
       d_model   : ${....hidden_size}
       d_output  : ${....output_size}
       n_blocks  : ${....n_blocks}
-      n         : 16
+      n         : 32
       l_max     : ${....input_size}
       collapse  : true  # average predictions over time prior to decoding
       norm_type : null
@@ -23,6 +23,6 @@ target:
 
 input_size: ${dynamics.dim}
 hidden_size: 50 #100
-n_blocks  : 2
+n_blocks  : 3
 output_size: 1 #7
 name: S4_nblocks${.n_blocks}_hidden${.hidden_size}_output${.output_size}

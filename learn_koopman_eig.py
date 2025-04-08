@@ -14,6 +14,8 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from copy import deepcopy
 
+from sklearn.mixture import GaussianMixture
+
 import torch
 from functools import partial
 
@@ -1109,10 +1111,10 @@ def eval_loss(model, F, dist, external_input_dist=None, dist_requires_dim=True, 
 
     # Compute F(x_batch)
     F_inputs = [x_batch] + ([] if external_input_dist is None else [external_inputs])
-    F_x = F(*F_inputs)
+    F_x = F(*F_inputs).detach()
 
     # Main loss term: ||phi'(x) F(x) - phi(x)||^2
-    dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True)
+    dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True).detach()
 
     # plt.scatter(phi_x.detach().cpu().numpy()[:,0],dot_prod.detach().cpu().numpy())
     # plt.show()
@@ -1416,6 +1418,60 @@ def restrict_to_distribution_loss(x_batch,phi_x,dist,threshold = -4.0):
     reg_loss = torch.mean(weight * torch.abs(phi_x))
     return reg_loss
 
+import numpy as np
+from sklearn.mixture import GaussianMixture
+import torch
+
+def gmm_sample_from_residuals(
+    x_batch: torch.Tensor,
+    residuals: torch.Tensor,
+    batch_size: int,
+    n_components: int = 2,
+    oversample_factor: int = 1,
+    device: str = 'cpu'
+) -> torch.Tensor:
+    """
+    Sample a batch of points using a Gaussian Mixture Model (GMM) fitted on x_batch,
+    weighted by residuals.
+
+    Args:
+        x_batch (torch.Tensor): Original batch of input points (N, D).
+        residuals (torch.Tensor): Residuals at those points (N,) or (N, 1).
+        batch_size (int): Number of new samples to draw.
+        n_components (int): Number of GMM components.
+        oversample_factor (int): Number of samples to draw (with replacement) for fitting GMM.
+        device (str): Device to return the final tensor on.
+
+    Returns:
+        torch.Tensor: A (batch_size, D) tensor of new points sampled from GMM.
+    """
+    # Ensure residuals are 1D
+    if residuals.ndim > 1:
+        residuals = residuals.squeeze(-1)
+
+    # Convert to NumPy
+    residuals_np = residuals.detach().cpu().numpy()
+    x_np = x_batch.detach().cpu().numpy()
+
+    # Convert residuals to sampling probabilities
+    probs = residuals_np - residuals_np.min() + 1e-6
+    probs = probs / probs.sum()
+
+    # Resample x values based on residual probabilities
+    resample_indices = np.random.choice(len(x_np), size=oversample_factor * batch_size, p=probs)
+    resampled_x = x_np[resample_indices]
+
+    # Fit GMM
+    gmm = GaussianMixture(n_components=n_components, covariance_type='full')
+    gmm.fit(resampled_x)
+
+    # Sample from the GMM
+    x_batch_np_new, _ = gmm.sample(batch_size)
+    x_batch_new = torch.tensor(x_batch_np_new, dtype=torch.float32).to(device)
+    x_batch_new.requires_grad_(True)
+
+    return x_batch_new
+
 def train_with_logger_ext_inp(
         model, F, dist, external_input_dist=None, dist_requires_dim=True, num_epochs=1000, learning_rate=1e-3,
         batch_size=64,
@@ -1434,7 +1490,7 @@ def train_with_logger_ext_inp(
 ):
     """
     Train the model with optional decay, logging, learning rate scheduling, and external input regularisation.
-    
+
     Args:
         ... (existing args) ...
         metadata (dict, optional): Additional metadata to include in logged metrics.
@@ -1570,7 +1626,7 @@ def train_with_logger_ext_inp(
         }
         if external_input_dist is not None and ext_inp_reg_coeff > 0:
             metrics["Loss/ExtInpRegularisation"] = reg_loss.item()
-            
+
         # Add metadata to metrics if provided
         if metadata is not None:
             metrics.update(metadata)
@@ -1598,113 +1654,323 @@ def train_with_logger_ext_inp(
                 +("" if reg_term_value is None else f"External input regularisation term: {reg_term_value.item()},")
             )
 
+
+# def train_with_logger_multiple_dists(
+#         model, F, dists, external_input_dist=None, dist_requires_dim=True, num_epochs=1000, learning_rate=1e-3,
+#         batch_size=64,
+#         dynamics_dim=1, decay_module=None, logger=None, lr_scheduler=None,
+#         eigenvalue=1, print_every_num_epochs=10, device='cpu', param_specific_hyperparams=[],
+#         # normaliser=partial(distance_weighted_normaliser, axis=None, return_terms=True),
+#         normaliser=partial(variance_normaliser, axis=None, return_terms=True),
+#         verbose=False,
+#         restrict_to_distribution_lambda=0,
+#         ext_inp_batch_size=None,
+#         ext_inp_reg_coeff=0,
+#         metadata=None,  # New parameter for additional metadata
+#         fixed_x_batch=None,  # New parameter for fixed x_batch
+#         fixed_external_inputs=None  # New parameter for fixed external_inputs
+# ):
+#     """
+#     Train the model with optional decay, logging, learning rate scheduling, and external input regularisation.
+#
+#     Args:
+#         model (torch.nn.Module): The model being trained.
+#         F (callable): Dynamical system function.
+#         dists (list of torch.distributions.Distribution): List of distributions for sampling inputs.
+#         external_input_dist (list of torch.distributions.Distribution, optional): List of distributions for sampling external inputs.
+#         dist_requires_dim (bool): Whether the distributions require a specific dimension.
+#         num_epochs (int): Number of epochs for training.
+#         learning_rate (float): Learning rate for the optimizer.
+#         batch_size (int): Batch size for training.
+#         dynamics_dim (int): Dimensionality of the dynamical system.
+#         decay_module (DecayModule, optional): Module for handling decay. Defaults to None.
+#         logger (None, callable, list of callables): Logger(s) to log metrics.
+#         lr_scheduler (torch.optim.lr_scheduler._LRScheduler, optional): Learning rate scheduler.
+#         eigenvalue (float): Eigenvalue used in the PDE loss term.
+#         print_every_num_epochs (int): Print log every N epochs.
+#         device (str): Device to perform training on.
+#         param_specific_hyperparams (list): List specifying parameter-specific hyperparameters.
+#         normaliser (callable): Function to normalise the loss.
+#         verbose (bool): Whether to print verbose logs.
+#         restrict_to_distribution_lambda (float): Regularisation coefficient for restricting to distribution.
+#         ext_inp_batch_size (int, optional): Batch size for external inputs.
+#         ext_inp_reg_coeff (float): Coefficient for external input regularisation.
+#         metadata (dict, optional): Additional metadata to include in logged metrics.
+#         fixed_x_batch (torch.Tensor, optional): Fixed x_batch to use instead of sampling from the distribution.
+#         fixed_external_inputs (torch.Tensor, optional): Fixed external_inputs to use instead of sampling from the distribution.
+#     """
+#     # Evaluate parameter-specific hyperparameters if provided
+#     if len(param_specific_hyperparams) == 0:
+#         param_specific_hyperparams = model.parameters()
+#     else:
+#         param_specific_hyperparams = evaluate_param_specific_hyperparams(model, param_specific_hyperparams)
+#
+#     optimizer = torch.optim.Adam(
+#         param_specific_hyperparams,
+#         lr=learning_rate
+#     )
+#     if lr_scheduler is not None:
+#         lr_scheduler = lr_scheduler(optimizer)
+#
+#     # Determine the shape for sampling x
+#     if dist_requires_dim:
+#         sample_shape = (batch_size, dynamics_dim)
+#     else:
+#         sample_shape = (batch_size,)
+#
+#     for epoch in range(num_epochs):
+#         total_loss = 0
+#         normalised_losses = []  # List to store normalised losses for each distribution
+#         reg_term_values = []
+#         for i, dist in enumerate(dists):
+#             external_input_dist_single = None if external_input_dist is None else external_input_dist[i]
+#             # Generate a batch of samples for x or use fixed_x_batch if provided
+#             if fixed_x_batch is not None:
+#                 x_batch = fixed_x_batch.to(device)
+#                 batch_size = x_batch.shape[0]  # Set batch_size from the tensor
+#             else:
+#                 x_batch = dist.sample(sample_shape=sample_shape).to(device)
+#
+#             # Enable gradient computation for x_batch
+#             x_batch.requires_grad_(True)
+#
+#             input_to_model = x_batch
+#             if external_input_dist_single is not None:
+#                 if fixed_external_inputs is not None:
+#                     external_inputs = fixed_external_inputs.to(device)
+#                     ext_inp_batch_size = external_inputs.shape[0]  # Set ext_inp_batch_size from the tensor
+#                 else:
+#                     # Use provided ext_inp_batch_size if given; otherwise, fall back to batch_size
+#                     if ext_inp_batch_size is None:
+#                         ext_inp_batch_size = batch_size
+#                     else:
+#                         assert batch_size % ext_inp_batch_size == 0, "ext_inp_batch_size must divide batch_size evenly."
+#
+#                     ext_sample_shape = [ext_inp_batch_size]
+#                     if dist_requires_dim:
+#                         ext_sample_shape += [dynamics_dim]
+#                     external_inputs = external_input_dist_single.sample(sample_shape=ext_sample_shape).to(device)
+#
+#                 # Repeat each unique external input to match the batch size
+#                 repeats = batch_size // ext_inp_batch_size
+#                 remainder = batch_size % ext_inp_batch_size
+#                 external_inputs = external_inputs.repeat(repeats, *([1] * (external_inputs.dim() - 1)))
+#
+#                 input_to_model = torch.concat((input_to_model, external_inputs), dim=-1)
+#
+#             # Forward pass and compute phi(x)
+#             phi_x = model(input_to_model)
+#
+#             # Compute phi'(x)
+#             phi_x_prime = torch.autograd.grad(
+#                 outputs=phi_x,
+#                 inputs=x_batch,
+#                 grad_outputs=torch.ones_like(phi_x),
+#                 create_graph=True
+#             )[0]
+#
+#             # Compute F(x_batch)
+#             F_inputs = [x_batch] + ([] if external_input_dist_single is None else [external_inputs])
+#             F_x = F(*F_inputs)
+#
+#             # Main loss term: ||phi'(x) F(x) - phi(x)||^2
+#             dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True)
+#
+#             main_loss = torch.mean((dot_prod - eigenvalue * phi_x) ** 2)
+#
+#             # Normalised loss
+#             # normalised_loss, numerator, denominator = normaliser(dot_prod, phi_x, x_batch, axis=None, return_terms=True)
+#             normalised_loss, numerator, denominator = normaliser(dot_prod, phi_x, axis=None, return_terms=True)
+#             normalised_losses.append(normalised_loss.item())  # Store the normalised loss
+#
+#             # Total loss
+#             total_loss += normalised_loss
+#
+#             # Restrict to distribution loss
+#             if restrict_to_distribution_lambda > 0:
+#                 reg_loss = restrict_to_distribution_loss(x_batch, phi_x, dist, threshold=-4.0)
+#                 total_loss += restrict_to_distribution_lambda * reg_loss
+#
+#
+#             if external_input_dist_single is not None and ext_inp_reg_coeff > 0:
+#                 # Build list of group sizes (each unique external input's count)
+#                 group_counts = [repeats + (1 if i < remainder else 0) for i in range(ext_inp_batch_size)]
+#                 start_idx = 0
+#                 group_mean_squared_values = []
+#                 for count in group_counts:
+#                     group_phi = phi_x[start_idx:start_idx + count]
+#                     group_mean_sq = torch.mean(group_phi ** 2)
+#                     group_mean_squared_values.append(group_mean_sq)
+#                     start_idx += count
+#                 group_mean_squared_values = torch.stack(group_mean_squared_values)
+#                 # Compute the regularisation term value and corresponding loss
+#                 reg_term_value = (torch.std(group_mean_squared_values) / torch.mean(group_mean_squared_values)) ** 2
+#                 reg_loss = ext_inp_reg_coeff * reg_term_value
+#                 total_loss = total_loss + reg_loss
+#                 reg_term_values.append(reg_term_value.item())
+#
+#         # Log metrics
+#         metrics = {
+#             "Loss/Total": total_loss.item(),
+#             "Loss/Main": main_loss.item(),
+#             "Learning Rate": optimizer.param_groups[0]['lr'],
+#         }
+#
+#         # Add normalised losses for each distribution to metrics
+#         for i, (n_loss, reg_term_value) in enumerate(zip(normalised_losses, reg_term_values)):
+#             metrics[f"Loss/NormalisedLoss_Dist_{i}"] = n_loss
+#             metrics[f"Loss/RegTermValue_Dist_{i}"] = reg_term_value
+#
+#
+#         # Add metadata to metrics if provided
+#         if metadata is not None:
+#             metrics.update(metadata)
+#
+#         log_metrics(logger, metrics, epoch)
+#
+#         # Backpropagation and optimization step
+#         optimizer.zero_grad()
+#         total_loss.backward()
+#         param_norm = sum([torch.linalg.norm(p.grad) for p in model.parameters()]).item()
+#         # Replace any NaN gradients with 0 to maintain stability
+#         for param in model.parameters():
+#             if param.grad is not None:
+#                 param.grad.data[torch.isnan(param.grad.data)] = 0
+#         optimizer.step()
+#
+#         if lr_scheduler is not None:
+#             lr_scheduler.step()
+#
+#         if epoch % print_every_num_epochs == 0 and verbose:
+#             print(
+#                 f"Epoch {epoch}, Loss: {total_loss.item()}, Normalised losses: {[n_loss for n_loss in normalised_losses]}, "
+#                 f"Regularisation term values: {[reg_term_value for reg_term_value in reg_term_values]}, "
+#                 f"param norm: {param_norm}, Learning Rate: {optimizer.param_groups[0]['lr']}, "
+#                 f"len(model.parameters()): {len(list(model.parameters()))}, "
+#                 # +("" if reg_term_value is None else f"External input regularisation term: {reg_term_value.item()},")
+#             )
+#
+#
+#             oversample_factor = 1
+#             n_components = 2
+#
+#             residuals_np = torch.mean((dot_prod - eigenvalue * phi_x) ** 2, axis=-1).detach().cpu().numpy()
+#             x_np = x_batch.detach().cpu().numpy()
+#
+#             # Step 4: Convert residuals to probabilities
+#             probs = residuals_np - residuals_np.min() + 1e-6  # shift to make positive
+#             probs = probs / probs.sum()
+#
+#             # Step 5: Resample points with replacement based on residual probs
+#             resample_indices = np.random.choice(len(x_np), size=oversample_factor * batch_size, p=probs)
+#             resampled_x = x_np[resample_indices]
+#
+#
+#
+#
+#             gmm = GaussianMixture(n_components=n_components, covariance_type='full')
+#             gmm.fit(resampled_x)
+#             x_batch_np_new, _ = gmm.sample(batch_size)
+#
+#             fig,axs = plt.subplots(2,1,sharex=True)
+#             ax = axs[0]
+#             ax.axhline(0, ls='dashed', c='grey')
+#             ax.scatter(x_batch.detach().cpu().numpy(), phi_x.detach().cpu().numpy(), s=3)
+#             ax.scatter(x_batch.detach().cpu().numpy(), dot_prod.detach().cpu().numpy(), s=3)
+#
+#             ax = axs[1]
+#             ax.hist(x_batch_np_new,density=True,bins=50)
+#             plt.show()
+#             plt.savefig(f"test_outputs/{epoch}.png")
+
+
 def train_with_logger_multiple_dists(
         model, F, dists, external_input_dist=None, dist_requires_dim=True, num_epochs=1000, learning_rate=1e-3,
         batch_size=64,
         dynamics_dim=1, decay_module=None, logger=None, lr_scheduler=None,
         eigenvalue=1, print_every_num_epochs=10, device='cpu', param_specific_hyperparams=[],
-        # normaliser=partial(distance_weighted_normaliser, axis=None, return_terms=True),
         normaliser=partial(variance_normaliser, axis=None, return_terms=True),
         verbose=False,
         restrict_to_distribution_lambda=0,
         ext_inp_batch_size=None,
         ext_inp_reg_coeff=0,
-        metadata=None,  # New parameter for additional metadata
-        fixed_x_batch=None,  # New parameter for fixed x_batch
-        fixed_external_inputs=None  # New parameter for fixed external_inputs
+        metadata=None,
+        fixed_x_batch=None,
+        fixed_external_inputs=None,
+        gmm_mix_ratio=0.5,
+        gmm_n_components=2,
+        gmm_oversample_factor=1
 ):
-    """
-    Train the model with optional decay, logging, learning rate scheduling, and external input regularisation.
-    
-    Args:
-        model (torch.nn.Module): The model being trained.
-        F (callable): Dynamical system function.
-        dists (list of torch.distributions.Distribution): List of distributions for sampling inputs.
-        external_input_dist (list of torch.distributions.Distribution, optional): List of distributions for sampling external inputs.
-        dist_requires_dim (bool): Whether the distributions require a specific dimension.
-        num_epochs (int): Number of epochs for training.
-        learning_rate (float): Learning rate for the optimizer.
-        batch_size (int): Batch size for training.
-        dynamics_dim (int): Dimensionality of the dynamical system.
-        decay_module (DecayModule, optional): Module for handling decay. Defaults to None.
-        logger (None, callable, list of callables): Logger(s) to log metrics.
-        lr_scheduler (torch.optim.lr_scheduler._LRScheduler, optional): Learning rate scheduler.
-        eigenvalue (float): Eigenvalue used in the PDE loss term.
-        print_every_num_epochs (int): Print log every N epochs.
-        device (str): Device to perform training on.
-        param_specific_hyperparams (list): List specifying parameter-specific hyperparameters.
-        normaliser (callable): Function to normalise the loss.
-        verbose (bool): Whether to print verbose logs.
-        restrict_to_distribution_lambda (float): Regularisation coefficient for restricting to distribution.
-        ext_inp_batch_size (int, optional): Batch size for external inputs.
-        ext_inp_reg_coeff (float): Coefficient for external input regularisation.
-        metadata (dict, optional): Additional metadata to include in logged metrics.
-        fixed_x_batch (torch.Tensor, optional): Fixed x_batch to use instead of sampling from the distribution.
-        fixed_external_inputs (torch.Tensor, optional): Fixed external_inputs to use instead of sampling from the distribution.
-    """
-    # Evaluate parameter-specific hyperparameters if provided
+    def fit_gmm(x_batch, residuals, n_components):
+        residuals = residuals.squeeze(-1) if residuals.ndim > 1 else residuals
+        residuals_np = residuals.detach().cpu().numpy()
+        x_np = x_batch.detach().cpu().numpy()
+        probs = residuals_np - residuals_np.min() + 1e-6
+        probs = probs / probs.sum()
+        resample_indices = np.random.choice(len(x_np), size=gmm_oversample_factor * batch_size, p=probs)
+        resampled_x = x_np[resample_indices]
+        gmm = GaussianMixture(n_components=n_components, covariance_type='full')
+        gmm.fit(resampled_x)
+        return gmm
+
+    def sample_from_gmm(gmm, batch_size, device):
+        x_sampled_np, _ = gmm.sample(batch_size)
+        x_sampled = torch.tensor(x_sampled_np, dtype=torch.float32).to(device)
+        x_sampled.requires_grad_(True)
+        return x_sampled
+
     if len(param_specific_hyperparams) == 0:
         param_specific_hyperparams = model.parameters()
     else:
         param_specific_hyperparams = evaluate_param_specific_hyperparams(model, param_specific_hyperparams)
 
-    optimizer = torch.optim.Adam(
-        param_specific_hyperparams,
-        lr=learning_rate
-    )
+    optimizer = torch.optim.Adam(param_specific_hyperparams, lr=learning_rate)
     if lr_scheduler is not None:
         lr_scheduler = lr_scheduler(optimizer)
 
-    # Determine the shape for sampling x
-    if dist_requires_dim:
-        sample_shape = (batch_size, dynamics_dim)
-    else:
-        sample_shape = (batch_size,)
+    sample_shape = (batch_size, dynamics_dim) if dist_requires_dim else (batch_size,)
+
+    gmm_models = [None for _ in dists]
 
     for epoch in range(num_epochs):
         total_loss = 0
-        normalised_losses = []  # List to store normalised losses for each distribution
+        normalised_losses = []
         reg_term_values = []
+
         for i, dist in enumerate(dists):
             external_input_dist_single = None if external_input_dist is None else external_input_dist[i]
-            # Generate a batch of samples for x or use fixed_x_batch if provided
+
             if fixed_x_batch is not None:
                 x_batch = fixed_x_batch.to(device)
-                batch_size = x_batch.shape[0]  # Set batch_size from the tensor
-            else:
+                batch_size = x_batch.shape[0]
+            elif epoch == 0 or gmm_models[i] is None:
                 x_batch = dist.sample(sample_shape=sample_shape).to(device)
+            else:
+                gmm_batch_size = int(batch_size * gmm_mix_ratio)
+                dist_batch_size = batch_size - gmm_batch_size
+                x_dist = dist.sample(sample_shape=(dist_batch_size,)).to(device)
+                x_gmm = sample_from_gmm(gmm_models[i], gmm_batch_size, device)
+                x_batch = torch.cat([x_dist, x_gmm], dim=0)
 
-            # Enable gradient computation for x_batch
             x_batch.requires_grad_(True)
-
             input_to_model = x_batch
+
             if external_input_dist_single is not None:
                 if fixed_external_inputs is not None:
                     external_inputs = fixed_external_inputs.to(device)
-                    ext_inp_batch_size = external_inputs.shape[0]  # Set ext_inp_batch_size from the tensor
+                    ext_inp_batch_size = external_inputs.shape[0]
                 else:
-                    # Use provided ext_inp_batch_size if given; otherwise, fall back to batch_size
-                    if ext_inp_batch_size is None:
-                        ext_inp_batch_size = batch_size
-                    else:
-                        assert batch_size % ext_inp_batch_size == 0, "ext_inp_batch_size must divide batch_size evenly."
-
-                    ext_sample_shape = [ext_inp_batch_size]
-                    if dist_requires_dim:
-                        ext_sample_shape += [dynamics_dim]
+                    ext_inp_batch_size = ext_inp_batch_size or batch_size
+                    ext_sample_shape = [ext_inp_batch_size] + ([dynamics_dim] if dist_requires_dim else [])
                     external_inputs = external_input_dist_single.sample(sample_shape=ext_sample_shape).to(device)
 
-                # Repeat each unique external input to match the batch size
                 repeats = batch_size // ext_inp_batch_size
                 remainder = batch_size % ext_inp_batch_size
                 external_inputs = external_inputs.repeat(repeats, *([1] * (external_inputs.dim() - 1)))
 
-                input_to_model = torch.concat((input_to_model, external_inputs), dim=-1)
+                input_to_model = torch.cat((input_to_model, external_inputs), dim=-1)
 
-            # Forward pass and compute phi(x)
             phi_x = model(input_to_model)
-
-            # Compute phi'(x)
             phi_x_prime = torch.autograd.grad(
                 outputs=phi_x,
                 inputs=x_batch,
@@ -1712,32 +1978,23 @@ def train_with_logger_multiple_dists(
                 create_graph=True
             )[0]
 
-            # Compute F(x_batch)
             F_inputs = [x_batch] + ([] if external_input_dist_single is None else [external_inputs])
             F_x = F(*F_inputs)
 
-            # Main loss term: ||phi'(x) F(x) - phi(x)||^2
             dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True)
-
             main_loss = torch.mean((dot_prod - eigenvalue * phi_x) ** 2)
-            
-            # Normalised loss
-            # normalised_loss, numerator, denominator = normaliser(dot_prod, phi_x, x_batch, axis=None, return_terms=True)
-            normalised_loss, numerator, denominator = normaliser(dot_prod, phi_x, axis=None, return_terms=True)
-            normalised_losses.append(normalised_loss.item())  # Store the normalised loss
-            
-            # Total loss
-            total_loss += normalised_loss 
 
-            # Restrict to distribution loss
+            normalised_loss, _, _ = normaliser(dot_prod, phi_x, axis=None, return_terms=True)
+            normalised_losses.append(normalised_loss.item())
+            total_loss += normalised_loss
+
             if restrict_to_distribution_lambda > 0:
                 reg_loss = restrict_to_distribution_loss(x_batch, phi_x, dist, threshold=-4.0)
                 total_loss += restrict_to_distribution_lambda * reg_loss
 
-            
             if external_input_dist_single is not None and ext_inp_reg_coeff > 0:
-                # Build list of group sizes (each unique external input's count)
-                group_counts = [repeats + (1 if i < remainder else 0) for i in range(ext_inp_batch_size)]
+                group_counts = [batch_size // ext_inp_batch_size + (1 if i < (batch_size % ext_inp_batch_size) else 0)
+                                for i in range(ext_inp_batch_size)]
                 start_idx = 0
                 group_mean_squared_values = []
                 for count in group_counts:
@@ -1746,25 +2003,32 @@ def train_with_logger_multiple_dists(
                     group_mean_squared_values.append(group_mean_sq)
                     start_idx += count
                 group_mean_squared_values = torch.stack(group_mean_squared_values)
-                # Compute the regularisation term value and corresponding loss
                 reg_term_value = (torch.std(group_mean_squared_values) / torch.mean(group_mean_squared_values)) ** 2
                 reg_loss = ext_inp_reg_coeff * reg_term_value
-                total_loss = total_loss + reg_loss
+                total_loss += reg_loss
                 reg_term_values.append(reg_term_value.item())
 
+            with torch.no_grad():
+                residuals = torch.mean((dot_prod - eigenvalue * phi_x) ** 2, axis=-1)
+                if epoch > 0 and gmm_mix_ratio < 1.0:
+                    gmm_models[i] = fit_gmm(x_batch[:x_dist.shape[0]].detach(), residuals[:x_dist.shape[0]].detach(),
+                                        gmm_n_components)
+                else:
+                    gmm_models[i] = fit_gmm(x_batch, residuals,
+                                            gmm_n_components)
         # Log metrics
         metrics = {
             "Loss/Total": total_loss.item(),
             "Loss/Main": main_loss.item(),
             "Learning Rate": optimizer.param_groups[0]['lr'],
         }
-        
+
         # Add normalised losses for each distribution to metrics
         for i, (n_loss, reg_term_value) in enumerate(zip(normalised_losses, reg_term_values)):
             metrics[f"Loss/NormalisedLoss_Dist_{i}"] = n_loss
             metrics[f"Loss/RegTermValue_Dist_{i}"] = reg_term_value
-            
-            
+
+
         # Add metadata to metrics if provided
         if metadata is not None:
             metrics.update(metadata)
@@ -1792,6 +2056,19 @@ def train_with_logger_multiple_dists(
                 f"len(model.parameters()): {len(list(model.parameters()))}, "
                 # +("" if reg_term_value is None else f"External input regularisation term: {reg_term_value.item()},")
             )
+            # if x_batch.shape[-1] == 1:
+            #
+            #     fig, axs = plt.subplots(2, 1, sharex=True)
+            #     ax = axs[0]
+            #     ax.axhline(0, ls='dashed', c='grey')
+            #     ax.scatter(x_batch.detach().cpu().numpy(), phi_x.detach().cpu().numpy(), s=3)
+            #     ax.scatter(x_batch.detach().cpu().numpy(), dot_prod.detach().cpu().numpy(), s=3)
+            #
+            #     ax = axs[1]
+            #     ax.hist(x_batch.detach().cpu().numpy(), density=True, bins=50)
+            #     plt.savefig(f"test_outputs/{epoch}.png")
+            #     plt.close()
+
 
 def train_with_logger(
         model, F, dist, external_input_dist=None, dist_requires_dim=True, num_epochs=1000, learning_rate=1e-3, batch_size=64,

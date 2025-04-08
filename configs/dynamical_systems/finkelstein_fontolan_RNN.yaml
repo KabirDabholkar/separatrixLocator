@@ -16,8 +16,8 @@ run_traj : true
 
 IC_distribution_fit:
   - ${..IC_distribution_full}
-  - ${..IC_interpolation_line_1}
-  - ${..IC_interpolation_line_2}
+#  - ${..IC_interpolation_line_1}
+#  - ${..IC_interpolation_line_2}
 
 external_input_distribution_fit:
   - ${..external_input_distribution_full}

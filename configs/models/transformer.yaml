@@ -13,10 +13,10 @@ target:
 # Global config values
 input_size: ${dynamics.dim}
 output_size: 7
-d_model: 32 #128
+d_model: 64 #128
 nhead: 2 # 4 #8
 num_layers: 2 #4
-dim_feedforward: 64 #256
+dim_feedforward: 256
 use_positional_encoding: true
 #pooling: mean
 #pooling: max

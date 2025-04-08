@@ -1,11 +1,16 @@
 import torch
 import numpy as np
 
+
+
 def bistable_ND(z,dim=2,pos=1):
     mask = torch.arange(dim,device=z.device) == pos
     return (z-z**3) * mask.type(z.dtype) + (-z) * (~mask).type(z.dtype)
 
-
+def bistable_ND_koopman_eigenfunction(z,dim=2,pos=1):
+    mask = torch.arange(dim,device=z.device) == pos
+    z = (z * mask.type(z.dtype)).sum(axis=--1,keepdims=True)
+    return z / ((z**2-1)**2)**0.25
 
 def radial_monostable(z):
     x, y = z[...,0], z[...,1]

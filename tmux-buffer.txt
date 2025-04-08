@@ -1,0 +1,1960 @@
+        (1): Tanh()
+      )
+    )
+    (35): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (36): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (37): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (38): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (39): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (40): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (41): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (42): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (43): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (44): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (45): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (46): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (47): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (48): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (49): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+  )
+  (output_layer): Linear(in_features=700, out_features=1, bias=True)
+)]
+Epoch 0, Loss: 1.0371280908584595, Normalised losses: [1.0371280908584595], Regularisation term values: [], param norm: 32.85740661621094, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 10, Loss: 0.962385892868042, Normalised losses: [0.962385892868042], Regularisation term values: [], param norm: 7.968000888824463, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 20, Loss: 0.7097111344337463, Normalised losses: [0.7097111344337463], Regularisation term values: [], param norm: 41.544429779052734, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 30, Loss: 0.6527674198150635, Normalised losses: [0.6527674198150635], Regularisation term values: [], param norm: 23.2081241607666, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 40, Loss: 0.575688898563385, Normalised losses: [0.575688898563385], Regularisation term values: [], param norm: 60.748565673828125, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 50, Loss: 0.38335713744163513, Normalised losses: [0.38335713744163513], Regularisation term values: [], param norm: 26.652862548828125, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 60, Loss: 0.15513230860233307, Normalised losses: [0.15513230860233307], Regularisation term values: [], param norm: 12.128519058227539, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 70, Loss: 0.391030877828598, Normalised losses: [0.391030877828598], Regularisation term values: [], param norm: 53.26652908325195, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 80, Loss: 0.41023629903793335, Normalised losses: [0.41023629903793335], Regularisation term values: [], param norm: 38.00328826904297, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 90, Loss: 0.5721709132194519, Normalised losses: [0.5721709132194519], Regularisation term values: [], param norm: 125.6129150390625, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 100, Loss: 0.1269737333059311, Normalised losses: [0.1269737333059311], Regularisation term values: [], param norm: 8.18557357788086, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 110, Loss: 0.065503790974617, Normalised losses: [0.065503790974617], Regularisation term values: [], param norm: 8.291497230529785, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 120, Loss: 0.08100541681051254, Normalised losses: [0.08100541681051254], Regularisation term values: [], param norm: 7.339903831481934, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 130, Loss: 0.17389245331287384, Normalised losses: [0.17389245331287384], Regularisation term values: [], param norm: 23.367156982421875, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 140, Loss: 0.11714114993810654, Normalised losses: [0.11714114993810654], Regularisation term values: [], param norm: 7.219432353973389, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 150, Loss: 0.08773621171712875, Normalised losses: [0.08773621171712875], Regularisation term values: [], param norm: 5.561000823974609, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 160, Loss: 0.04731209576129913, Normalised losses: [0.04731209576129913], Regularisation term values: [], param norm: 5.933021545410156, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 170, Loss: 0.05605720728635788, Normalised losses: [0.05605720728635788], Regularisation term values: [], param norm: 5.12658166885376, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 180, Loss: 0.0675242617726326, Normalised losses: [0.0675242617726326], Regularisation term values: [], param norm: 4.93815803527832, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 190, Loss: 0.05445844680070877, Normalised losses: [0.05445844680070877], Regularisation term values: [], param norm: 3.513054847717285, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 200, Loss: 0.05205770954489708, Normalised losses: [0.05205770954489708], Regularisation term values: [], param norm: 4.835579872131348, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 210, Loss: 0.024019679054617882, Normalised losses: [0.024019679054617882], Regularisation term values: [], param norm: 3.764474868774414, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 220, Loss: 0.03698238357901573, Normalised losses: [0.03698238357901573], Regularisation term values: [], param norm: 16.164167404174805, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 230, Loss: 0.02735194005072117, Normalised losses: [0.02735194005072117], Regularisation term values: [], param norm: 5.161889553070068, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 240, Loss: 0.02109966054558754, Normalised losses: [0.02109966054558754], Regularisation term values: [], param norm: 6.041367053985596, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 250, Loss: 0.12907251715660095, Normalised losses: [0.12907251715660095], Regularisation term values: [], param norm: 12.148130416870117, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 260, Loss: 0.21196384727954865, Normalised losses: [0.21196384727954865], Regularisation term values: [], param norm: 16.09674835205078, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 270, Loss: 0.09887907654047012, Normalised losses: [0.09887907654047012], Regularisation term values: [], param norm: 7.536502361297607, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 280, Loss: 0.04143820330500603, Normalised losses: [0.04143820330500603], Regularisation term values: [], param norm: 4.892550468444824, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 290, Loss: 0.04520391672849655, Normalised losses: [0.04520391672849655], Regularisation term values: [], param norm: 9.245780944824219, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 300, Loss: 0.07241817563772202, Normalised losses: [0.07241817563772202], Regularisation term values: [], param norm: 10.06257152557373, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 310, Loss: 0.02660987712442875, Normalised losses: [0.02660987712442875], Regularisation term values: [], param norm: 3.112537145614624, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 320, Loss: 0.039058294147253036, Normalised losses: [0.039058294147253036], Regularisation term values: [], param norm: 4.584315299987793, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 330, Loss: 0.04004301875829697, Normalised losses: [0.04004301875829697], Regularisation term values: [], param norm: 10.690306663513184, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 340, Loss: 0.04323440417647362, Normalised losses: [0.04323440417647362], Regularisation term values: [], param norm: 14.597620010375977, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 350, Loss: 0.04827706515789032, Normalised losses: [0.04827706515789032], Regularisation term values: [], param norm: 5.289811611175537, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 360, Loss: 0.01929743029177189, Normalised losses: [0.01929743029177189], Regularisation term values: [], param norm: 3.16833758354187, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 370, Loss: 0.017008697614073753, Normalised losses: [0.017008697614073753], Regularisation term values: [], param norm: 3.734795331954956, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 380, Loss: 0.025804556906223297, Normalised losses: [0.025804556906223297], Regularisation term values: [], param norm: 6.580379486083984, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 390, Loss: 0.016883112490177155, Normalised losses: [0.016883112490177155], Regularisation term values: [], param norm: 1.306593656539917, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 400, Loss: 0.021358884871006012, Normalised losses: [0.021358884871006012], Regularisation term values: [], param norm: 2.39432954788208, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 410, Loss: 0.01163832563906908, Normalised losses: [0.01163832563906908], Regularisation term values: [], param norm: 1.9243303537368774, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 420, Loss: 0.009848660789430141, Normalised losses: [0.009848660789430141], Regularisation term values: [], param norm: 2.386691093444824, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 430, Loss: 0.013697076588869095, Normalised losses: [0.013697076588869095], Regularisation term values: [], param norm: 4.487961292266846, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 440, Loss: 0.017183693125844002, Normalised losses: [0.017183693125844002], Regularisation term values: [], param norm: 5.5064311027526855, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 450, Loss: 0.015426574274897575, Normalised losses: [0.015426574274897575], Regularisation term values: [], param norm: 7.876194477081299, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 460, Loss: 0.1246858686208725, Normalised losses: [0.1246858686208725], Regularisation term values: [], param norm: 43.238624572753906, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 470, Loss: 0.06049266457557678, Normalised losses: [0.06049266457557678], Regularisation term values: [], param norm: 4.105077266693115, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 480, Loss: 0.04275079071521759, Normalised losses: [0.04275079071521759], Regularisation term values: [], param norm: 9.02259635925293, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 490, Loss: 0.06179407611489296, Normalised losses: [0.06179407611489296], Regularisation term values: [], param norm: 13.589322090148926, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Scores:
+ [[0.01851004]]
+Correlations between models and analytical eigenfunction: [tensor(0.4585)]
+[2025-04-08 17:15:09,569][HYDRA]        #3 : separatrix_locator_fit_kwargs.gmm_mix_ratio=0.2
+[DeepResNet(
+  (input_layer): Linear(in_features=10, out_features=700, bias=True)
+  (residual_layers): Sequential(
+    (0): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (1): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (2): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (3): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (4): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (5): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (6): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (7): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (8): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (9): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (10): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (11): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (12): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (13): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (14): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (15): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (16): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (17): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (18): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (19): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (20): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (21): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (22): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (23): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (24): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (25): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (26): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (27): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (28): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (29): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (30): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (31): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (32): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (33): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (34): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (35): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (36): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (37): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (38): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (39): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (40): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (41): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (42): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (43): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (44): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (45): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (46): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (47): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (48): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (49): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+  )
+  (output_layer): Linear(in_features=700, out_features=1, bias=True)
+)]
+Epoch 0, Loss: 1.0404497385025024, Normalised losses: [1.0404497385025024], Regularisation term values: [], param norm: 33.13555908203125, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 10, Loss: 0.9627843499183655, Normalised losses: [0.9627843499183655], Regularisation term values: [], param norm: 5.442655563354492, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 20, Loss: 0.710334837436676, Normalised losses: [0.710334837436676], Regularisation term values: [], param norm: 26.449737548828125, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 30, Loss: 0.5347458720207214, Normalised losses: [0.5347458720207214], Regularisation term values: [], param norm: 45.337867736816406, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 40, Loss: 0.6975648403167725, Normalised losses: [0.6975648403167725], Regularisation term values: [], param norm: 33.998451232910156, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 50, Loss: 0.7842391729354858, Normalised losses: [0.7842391729354858], Regularisation term values: [], param norm: 37.60771560668945, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 60, Loss: 0.24090790748596191, Normalised losses: [0.24090790748596191], Regularisation term values: [], param norm: 14.472248077392578, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 70, Loss: 0.24930013716220856, Normalised losses: [0.24930013716220856], Regularisation term values: [], param norm: 42.336509704589844, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 80, Loss: 0.35671305656433105, Normalised losses: [0.35671305656433105], Regularisation term values: [], param norm: 23.03167724609375, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 90, Loss: 0.32656940817832947, Normalised losses: [0.32656940817832947], Regularisation term values: [], param norm: 32.252986907958984, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 100, Loss: 0.19256766140460968, Normalised losses: [0.19256766140460968], Regularisation term values: [], param norm: 20.04833984375, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 110, Loss: 0.11985356360673904, Normalised losses: [0.11985356360673904], Regularisation term values: [], param norm: 18.745800018310547, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 120, Loss: 0.38864412903785706, Normalised losses: [0.38864412903785706], Regularisation term values: [], param norm: 43.406681060791016, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 130, Loss: 0.2419402301311493, Normalised losses: [0.2419402301311493], Regularisation term values: [], param norm: 23.533811569213867, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 140, Loss: 0.2225569486618042, Normalised losses: [0.2225569486618042], Regularisation term values: [], param norm: 28.753986358642578, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 150, Loss: 0.12477178126573563, Normalised losses: [0.12477178126573563], Regularisation term values: [], param norm: 10.16537857055664, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 160, Loss: 0.4525998532772064, Normalised losses: [0.4525998532772064], Regularisation term values: [], param norm: 20.705238342285156, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 170, Loss: 0.16665497422218323, Normalised losses: [0.16665497422218323], Regularisation term values: [], param norm: 7.134581565856934, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 180, Loss: 0.1643899381160736, Normalised losses: [0.1643899381160736], Regularisation term values: [], param norm: 26.059391021728516, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 190, Loss: 0.11987291276454926, Normalised losses: [0.11987291276454926], Regularisation term values: [], param norm: 10.176129341125488, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 200, Loss: 0.14757999777793884, Normalised losses: [0.14757999777793884], Regularisation term values: [], param norm: 13.172150611877441, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 210, Loss: 0.0658501386642456, Normalised losses: [0.0658501386642456], Regularisation term values: [], param norm: 4.552877902984619, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 220, Loss: 0.08256776630878448, Normalised losses: [0.08256776630878448], Regularisation term values: [], param norm: 8.015851974487305, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 230, Loss: 0.037239328026771545, Normalised losses: [0.037239328026771545], Regularisation term values: [], param norm: 4.624469757080078, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 240, Loss: 0.059044841676950455, Normalised losses: [0.059044841676950455], Regularisation term values: [], param norm: 10.89753246307373, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 250, Loss: 0.03339694067835808, Normalised losses: [0.03339694067835808], Regularisation term values: [], param norm: 6.9309983253479, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 260, Loss: 0.2857118844985962, Normalised losses: [0.2857118844985962], Regularisation term values: [], param norm: 33.834957122802734, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 270, Loss: 0.10095247626304626, Normalised losses: [0.10095247626304626], Regularisation term values: [], param norm: 7.71271276473999, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 280, Loss: 0.07370539754629135, Normalised losses: [0.07370539754629135], Regularisation term values: [], param norm: 7.218656063079834, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 290, Loss: 0.26340121030807495, Normalised losses: [0.26340121030807495], Regularisation term values: [], param norm: 80.35662841796875, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 300, Loss: 0.07002590596675873, Normalised losses: [0.07002590596675873], Regularisation term values: [], param norm: 8.985163688659668, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 310, Loss: 0.06756681203842163, Normalised losses: [0.06756681203842163], Regularisation term values: [], param norm: 7.599608421325684, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 320, Loss: 0.09929351508617401, Normalised losses: [0.09929351508617401], Regularisation term values: [], param norm: 5.817692756652832, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 330, Loss: 0.0661679059267044, Normalised losses: [0.0661679059267044], Regularisation term values: [], param norm: 16.089008331298828, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 340, Loss: 0.03934204950928688, Normalised losses: [0.03934204950928688], Regularisation term values: [], param norm: 3.816601037979126, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 350, Loss: 0.03413661941885948, Normalised losses: [0.03413661941885948], Regularisation term values: [], param norm: 8.816877365112305, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 360, Loss: 0.03326375037431717, Normalised losses: [0.03326375037431717], Regularisation term values: [], param norm: 6.941145420074463, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 370, Loss: 0.10726965218782425, Normalised losses: [0.10726965218782425], Regularisation term values: [], param norm: 18.745285034179688, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 380, Loss: 0.12622252106666565, Normalised losses: [0.12622252106666565], Regularisation term values: [], param norm: 4.584843158721924, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 390, Loss: 0.0830693319439888, Normalised losses: [0.0830693319439888], Regularisation term values: [], param norm: 4.035518169403076, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 400, Loss: 0.029177334159612656, Normalised losses: [0.029177334159612656], Regularisation term values: [], param norm: 11.948909759521484, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 410, Loss: 0.014940809458494186, Normalised losses: [0.014940809458494186], Regularisation term values: [], param norm: 1.774766445159912, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 420, Loss: 0.20676812529563904, Normalised losses: [0.20676812529563904], Regularisation term values: [], param norm: 12.39086627960205, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 430, Loss: 0.019225534051656723, Normalised losses: [0.019225534051656723], Regularisation term values: [], param norm: 4.409235954284668, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 440, Loss: 0.01677822880446911, Normalised losses: [0.01677822880446911], Regularisation term values: [], param norm: 3.264268398284912, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 450, Loss: 0.025695739313960075, Normalised losses: [0.025695739313960075], Regularisation term values: [], param norm: 2.8694398403167725, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 460, Loss: 0.014545859768986702, Normalised losses: [0.014545859768986702], Regularisation term values: [], param norm: 2.7193663120269775, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 470, Loss: 0.01798996888101101, Normalised losses: [0.01798996888101101], Regularisation term values: [], param norm: 2.342298984527588, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 480, Loss: 0.014555354602634907, Normalised losses: [0.014555354602634907], Regularisation term values: [], param norm: 4.490394592285156, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 490, Loss: 0.03335126116871834, Normalised losses: [0.03335126116871834], Regularisation term values: [], param norm: 2.532965898513794, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Scores:
+ [[0.00958295]]
+Correlations between models and analytical eigenfunction: [tensor(0.5338)]
+[2025-04-08 17:19:22,173][HYDRA]        #4 : separatrix_locator_fit_kwargs.gmm_mix_ratio=0.3
+[DeepResNet(
+  (input_layer): Linear(in_features=10, out_features=700, bias=True)
+  (residual_layers): Sequential(
+    (0): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (1): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (2): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (3): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (4): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (5): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (6): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (7): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (8): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (9): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (10): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (11): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (12): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (13): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (14): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (15): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (16): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (17): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (18): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (19): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (20): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (21): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (22): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (23): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (24): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (25): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (26): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (27): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (28): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (29): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (30): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (31): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (32): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (33): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (34): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (35): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (36): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (37): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (38): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (39): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (40): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (41): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (42): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (43): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (44): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (45): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (46): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (47): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (48): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (49): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+  )
+  (output_layer): Linear(in_features=700, out_features=1, bias=True)
+)]
+Epoch 0, Loss: 0.9992457032203674, Normalised losses: [0.9992457032203674], Regularisation term values: [], param norm: 18.797212600708008, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 10, Loss: 0.9662454128265381, Normalised losses: [0.9662454128265381], Regularisation term values: [], param norm: 4.606482982635498, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 20, Loss: 0.7280807495117188, Normalised losses: [0.7280807495117188], Regularisation term values: [], param norm: 44.59025955200195, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 30, Loss: 0.47283709049224854, Normalised losses: [0.47283709049224854], Regularisation term values: [], param norm: 26.461830139160156, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 40, Loss: 0.6150767207145691, Normalised losses: [0.6150767207145691], Regularisation term values: [], param norm: 57.63911056518555, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 50, Loss: 0.46747323870658875, Normalised losses: [0.46747323870658875], Regularisation term values: [], param norm: 29.609683990478516, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 60, Loss: 0.8331353068351746, Normalised losses: [0.8331353068351746], Regularisation term values: [], param norm: 8.304977416992188, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 70, Loss: 0.47972196340560913, Normalised losses: [0.47972196340560913], Regularisation term values: [], param norm: 39.611915588378906, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 80, Loss: 0.4823484420776367, Normalised losses: [0.4823484420776367], Regularisation term values: [], param norm: 44.800804138183594, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 90, Loss: 0.24573613703250885, Normalised losses: [0.24573613703250885], Regularisation term values: [], param norm: 11.876758575439453, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 100, Loss: 0.1342771053314209, Normalised losses: [0.1342771053314209], Regularisation term values: [], param norm: 17.818748474121094, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 110, Loss: 0.21312519907951355, Normalised losses: [0.21312519907951355], Regularisation term values: [], param norm: 13.933911323547363, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 120, Loss: 0.22020059823989868, Normalised losses: [0.22020059823989868], Regularisation term values: [], param norm: 129.0570831298828, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 130, Loss: 0.08107458055019379, Normalised losses: [0.08107458055019379], Regularisation term values: [], param norm: 5.384784698486328, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 140, Loss: 0.053072620183229446, Normalised losses: [0.053072620183229446], Regularisation term values: [], param norm: 6.219698429107666, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 150, Loss: 0.2631382644176483, Normalised losses: [0.2631382644176483], Regularisation term values: [], param norm: 19.9365291595459, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 160, Loss: 0.11552730202674866, Normalised losses: [0.11552730202674866], Regularisation term values: [], param norm: 11.7207670211792, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 170, Loss: 0.06035507097840309, Normalised losses: [0.06035507097840309], Regularisation term values: [], param norm: 5.124052047729492, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 180, Loss: 0.044031284749507904, Normalised losses: [0.044031284749507904], Regularisation term values: [], param norm: 5.433718681335449, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 190, Loss: 0.0459979772567749, Normalised losses: [0.0459979772567749], Regularisation term values: [], param norm: 2.5580172538757324, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 200, Loss: 0.0462220273911953, Normalised losses: [0.0462220273911953], Regularisation term values: [], param norm: 15.394599914550781, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 210, Loss: 0.027399161830544472, Normalised losses: [0.027399161830544472], Regularisation term values: [], param norm: 5.471191883087158, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 220, Loss: 0.021373052150011063, Normalised losses: [0.021373052150011063], Regularisation term values: [], param norm: 10.375774383544922, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 230, Loss: 0.04280328378081322, Normalised losses: [0.04280328378081322], Regularisation term values: [], param norm: 4.686463356018066, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 240, Loss: 0.01813429780304432, Normalised losses: [0.01813429780304432], Regularisation term values: [], param norm: 6.785330772399902, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 250, Loss: 0.04815283417701721, Normalised losses: [0.04815283417701721], Regularisation term values: [], param norm: 13.972023010253906, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 260, Loss: 0.04840453341603279, Normalised losses: [0.04840453341603279], Regularisation term values: [], param norm: 8.836263656616211, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 270, Loss: 0.14654019474983215, Normalised losses: [0.14654019474983215], Regularisation term values: [], param norm: 131.1481475830078, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 280, Loss: 0.022718261927366257, Normalised losses: [0.022718261927366257], Regularisation term values: [], param norm: 4.56002950668335, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 290, Loss: 0.018900128081440926, Normalised losses: [0.018900128081440926], Regularisation term values: [], param norm: 3.8470165729522705, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 300, Loss: 0.016839558258652687, Normalised losses: [0.016839558258652687], Regularisation term values: [], param norm: 4.02693510055542, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 310, Loss: 0.019214283674955368, Normalised losses: [0.019214283674955368], Regularisation term values: [], param norm: 7.1850786209106445, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 320, Loss: 0.013737975619733334, Normalised losses: [0.013737975619733334], Regularisation term values: [], param norm: 1.8780200481414795, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 330, Loss: 0.029682593420147896, Normalised losses: [0.029682593420147896], Regularisation term values: [], param norm: 10.01130485534668, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 340, Loss: 0.02968468703329563, Normalised losses: [0.02968468703329563], Regularisation term values: [], param norm: 7.138556957244873, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 350, Loss: 0.03267529979348183, Normalised losses: [0.03267529979348183], Regularisation term values: [], param norm: 7.350998401641846, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 360, Loss: 0.019039297476410866, Normalised losses: [0.019039297476410866], Regularisation term values: [], param norm: 4.1120285987854, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 370, Loss: 0.012846402823925018, Normalised losses: [0.012846402823925018], Regularisation term values: [], param norm: 2.995244264602661, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 380, Loss: 0.0100306561216712, Normalised losses: [0.0100306561216712], Regularisation term values: [], param norm: 1.3745578527450562, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 390, Loss: 0.02075888216495514, Normalised losses: [0.02075888216495514], Regularisation term values: [], param norm: 2.487724542617798, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 400, Loss: 0.009573129937052727, Normalised losses: [0.009573129937052727], Regularisation term values: [], param norm: 0.9382996559143066, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 410, Loss: 0.007376223336905241, Normalised losses: [0.007376223336905241], Regularisation term values: [], param norm: 1.213873028755188, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 420, Loss: 0.01031781081110239, Normalised losses: [0.01031781081110239], Regularisation term values: [], param norm: 1.3938288688659668, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 430, Loss: 0.01472579874098301, Normalised losses: [0.01472579874098301], Regularisation term values: [], param norm: 2.507122039794922, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 440, Loss: 0.01031711045652628, Normalised losses: [0.01031711045652628], Regularisation term values: [], param norm: 1.3121345043182373, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 450, Loss: 0.015593165531754494, Normalised losses: [0.015593165531754494], Regularisation term values: [], param norm: 4.648639678955078, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 460, Loss: 0.012947449460625648, Normalised losses: [0.012947449460625648], Regularisation term values: [], param norm: 2.3126015663146973, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 470, Loss: 0.012668874114751816, Normalised losses: [0.012668874114751816], Regularisation term values: [], param norm: 1.7653535604476929, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 480, Loss: 0.013748633675277233, Normalised losses: [0.013748633675277233], Regularisation term values: [], param norm: 1.881719708442688, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 490, Loss: 0.00872455071657896, Normalised losses: [0.00872455071657896], Regularisation term values: [], param norm: 1.626652717590332, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Scores:
+ [[0.00651827]]
+Correlations between models and analytical eigenfunction: [tensor(0.6416)]
+[2025-04-08 17:23:41,445][HYDRA]        #5 : separatrix_locator_fit_kwargs.gmm_mix_ratio=0.4
+[DeepResNet(
+  (input_layer): Linear(in_features=10, out_features=700, bias=True)
+  (residual_layers): Sequential(
+    (0): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (1): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (2): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (3): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (4): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (5): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (6): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (7): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (8): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (9): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (10): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (11): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (12): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (13): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (14): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (15): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (16): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (17): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (18): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (19): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (20): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (21): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (22): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (23): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (24): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (25): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (26): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (27): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (28): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (29): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (30): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (31): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (32): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (33): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (34): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (35): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (36): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (37): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (38): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (39): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (40): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (41): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (42): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (43): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (44): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (45): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (46): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (47): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (48): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (49): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+  )
+  (output_layer): Linear(in_features=700, out_features=1, bias=True)
+)]
+Epoch 0, Loss: 1.002374529838562, Normalised losses: [1.002374529838562], Regularisation term values: [], param norm: 29.712968826293945, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 10, Loss: 0.9529470801353455, Normalised losses: [0.9529470801353455], Regularisation term values: [], param norm: 5.798482894897461, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 20, Loss: 0.9079397916793823, Normalised losses: [0.9079397916793823], Regularisation term values: [], param norm: 18.32019805908203, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 30, Loss: 0.4847097098827362, Normalised losses: [0.4847097098827362], Regularisation term values: [], param norm: 28.368022918701172, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 40, Loss: 0.5152004361152649, Normalised losses: [0.5152004361152649], Regularisation term values: [], param norm: 25.455135345458984, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 50, Loss: 0.6788506507873535, Normalised losses: [0.6788506507873535], Regularisation term values: [], param norm: 27.268117904663086, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 60, Loss: 0.35445070266723633, Normalised losses: [0.35445070266723633], Regularisation term values: [], param norm: 24.128583908081055, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 70, Loss: 0.7252218723297119, Normalised losses: [0.7252218723297119], Regularisation term values: [], param norm: 15.115055084228516, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 80, Loss: 0.28650009632110596, Normalised losses: [0.28650009632110596], Regularisation term values: [], param norm: 36.28868103027344, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 90, Loss: 0.114669069647789, Normalised losses: [0.114669069647789], Regularisation term values: [], param norm: 8.196977615356445, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 100, Loss: 0.04515364393591881, Normalised losses: [0.04515364393591881], Regularisation term values: [], param norm: 3.185291290283203, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 110, Loss: 0.049584995955228806, Normalised losses: [0.049584995955228806], Regularisation term values: [], param norm: 7.034256458282471, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 120, Loss: 0.3250006437301636, Normalised losses: [0.3250006437301636], Regularisation term values: [], param norm: 41.47477340698242, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 130, Loss: 0.1225617527961731, Normalised losses: [0.1225617527961731], Regularisation term values: [], param norm: 11.49579906463623, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 140, Loss: 0.09444140642881393, Normalised losses: [0.09444140642881393], Regularisation term values: [], param norm: 19.242671966552734, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 150, Loss: 0.04591333493590355, Normalised losses: [0.04591333493590355], Regularisation term values: [], param norm: 6.013260841369629, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 160, Loss: 0.03653787821531296, Normalised losses: [0.03653787821531296], Regularisation term values: [], param norm: 5.815821647644043, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 170, Loss: 0.11362159252166748, Normalised losses: [0.11362159252166748], Regularisation term values: [], param norm: 29.966976165771484, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 180, Loss: 0.04512206092476845, Normalised losses: [0.04512206092476845], Regularisation term values: [], param norm: 8.598608016967773, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 190, Loss: 0.028317762538790703, Normalised losses: [0.028317762538790703], Regularisation term values: [], param norm: 3.8789472579956055, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 200, Loss: 0.022554593160748482, Normalised losses: [0.022554593160748482], Regularisation term values: [], param norm: 4.0625996589660645, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 210, Loss: 0.013566700741648674, Normalised losses: [0.013566700741648674], Regularisation term values: [], param norm: 1.8864399194717407, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 220, Loss: 0.012497678399085999, Normalised losses: [0.012497678399085999], Regularisation term values: [], param norm: 1.289932131767273, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 230, Loss: 0.014247404411435127, Normalised losses: [0.014247404411435127], Regularisation term values: [], param norm: 1.322744369506836, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 240, Loss: 0.01692948117852211, Normalised losses: [0.01692948117852211], Regularisation term values: [], param norm: 4.095519065856934, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 250, Loss: 0.21097655594348907, Normalised losses: [0.21097655594348907], Regularisation term values: [], param norm: 121.84387969970703, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 260, Loss: 0.02888336591422558, Normalised losses: [0.02888336591422558], Regularisation term values: [], param norm: 5.9357686042785645, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 270, Loss: 0.023334059864282608, Normalised losses: [0.023334059864282608], Regularisation term values: [], param norm: 4.186703205108643, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 280, Loss: 0.025362500920891762, Normalised losses: [0.025362500920891762], Regularisation term values: [], param norm: 7.928199768066406, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 290, Loss: 0.014059185981750488, Normalised losses: [0.014059185981750488], Regularisation term values: [], param norm: 1.9917999505996704, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 300, Loss: 0.009850697591900826, Normalised losses: [0.009850697591900826], Regularisation term values: [], param norm: 1.4214868545532227, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 310, Loss: 0.012452341616153717, Normalised losses: [0.012452341616153717], Regularisation term values: [], param norm: 4.1927385330200195, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 320, Loss: 0.024544518440961838, Normalised losses: [0.024544518440961838], Regularisation term values: [], param norm: 4.822390556335449, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 330, Loss: 0.014934342354536057, Normalised losses: [0.014934342354536057], Regularisation term values: [], param norm: 3.2294938564300537, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 340, Loss: 0.00784932728856802, Normalised losses: [0.00784932728856802], Regularisation term values: [], param norm: 1.5241795778274536, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 350, Loss: 0.013153836131095886, Normalised losses: [0.013153836131095886], Regularisation term values: [], param norm: 1.8799084424972534, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 360, Loss: 0.012730333022773266, Normalised losses: [0.012730333022773266], Regularisation term values: [], param norm: 2.738638162612915, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 370, Loss: 0.008231554180383682, Normalised losses: [0.008231554180383682], Regularisation term values: [], param norm: 1.3582028150558472, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 380, Loss: 0.018232010304927826, Normalised losses: [0.018232010304927826], Regularisation term values: [], param norm: 1.4853030443191528, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 390, Loss: 0.00947166234254837, Normalised losses: [0.00947166234254837], Regularisation term values: [], param norm: 1.357431173324585, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 400, Loss: 0.014398159459233284, Normalised losses: [0.014398159459233284], Regularisation term values: [], param norm: 1.559735655784607, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 410, Loss: 0.0068771508522331715, Normalised losses: [0.0068771508522331715], Regularisation term values: [], param norm: 0.5966809391975403, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 420, Loss: 0.02355024591088295, Normalised losses: [0.02355024591088295], Regularisation term values: [], param norm: 20.691123962402344, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 430, Loss: 0.026661567389965057, Normalised losses: [0.026661567389965057], Regularisation term values: [], param norm: 7.520217418670654, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 440, Loss: 0.03237291797995567, Normalised losses: [0.03237291797995567], Regularisation term values: [], param norm: 8.11870002746582, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 450, Loss: 0.023219022899866104, Normalised losses: [0.023219022899866104], Regularisation term values: [], param norm: 7.879977226257324, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 460, Loss: 0.01821998506784439, Normalised losses: [0.01821998506784439], Regularisation term values: [], param norm: 5.38142204284668, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 470, Loss: 0.01311011053621769, Normalised losses: [0.01311011053621769], Regularisation term values: [], param norm: 5.019430637359619, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 480, Loss: 0.021110888570547104, Normalised losses: [0.021110888570547104], Regularisation term values: [], param norm: 4.112545967102051, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 490, Loss: 0.019017396494746208, Normalised losses: [0.019017396494746208], Regularisation term values: [], param norm: 3.100879669189453, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Scores:
+ [[0.00562472]]
+Correlations between models and analytical eigenfunction: [tensor(0.8074)]
+[2025-04-08 17:28:07,602][HYDRA]        #6 : separatrix_locator_fit_kwargs.gmm_mix_ratio=0.5
+[DeepResNet(
+  (input_layer): Linear(in_features=10, out_features=700, bias=True)
+  (residual_layers): Sequential(
+    (0): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (1): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (2): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (3): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (4): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (5): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (6): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (7): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (8): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (9): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (10): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (11): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (12): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (13): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (14): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (15): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (16): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (17): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (18): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (19): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (20): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (21): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (22): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (23): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (24): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (25): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (26): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (27): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (28): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (29): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (30): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (31): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (32): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (33): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (34): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (35): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (36): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (37): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (38): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (39): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (40): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (41): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (42): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (43): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (44): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (45): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (46): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (47): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (48): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (49): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+  )
+  (output_layer): Linear(in_features=700, out_features=1, bias=True)
+)]
+Epoch 0, Loss: 1.0195103883743286, Normalised losses: [1.0195103883743286], Regularisation term values: [], param norm: 24.216842651367188, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 10, Loss: 0.9700397849082947, Normalised losses: [0.9700397849082947], Regularisation term values: [], param norm: 2.8861823081970215, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 20, Loss: 0.9790003299713135, Normalised losses: [0.9790003299713135], Regularisation term values: [], param norm: 5.185153484344482, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 30, Loss: 0.9334794282913208, Normalised losses: [0.9334794282913208], Regularisation term values: [], param norm: 11.328547477722168, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 40, Loss: 0.6840490698814392, Normalised losses: [0.6840490698814392], Regularisation term values: [], param norm: 17.180213928222656, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 50, Loss: 0.43931344151496887, Normalised losses: [0.43931344151496887], Regularisation term values: [], param norm: 26.345760345458984, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 60, Loss: 0.390743225812912, Normalised losses: [0.390743225812912], Regularisation term values: [], param norm: 23.66766357421875, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 70, Loss: 0.3542848229408264, Normalised losses: [0.3542848229408264], Regularisation term values: [], param norm: 23.30429458618164, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 80, Loss: 0.18286080658435822, Normalised losses: [0.18286080658435822], Regularisation term values: [], param norm: 11.408285140991211, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 90, Loss: 0.12023288756608963, Normalised losses: [0.12023288756608963], Regularisation term values: [], param norm: 9.515460014343262, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 100, Loss: 0.10833386331796646, Normalised losses: [0.10833386331796646], Regularisation term values: [], param norm: 6.662746429443359, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 110, Loss: 0.06644101440906525, Normalised losses: [0.06644101440906525], Regularisation term values: [], param norm: 6.583698749542236, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 120, Loss: 0.056295592337846756, Normalised losses: [0.056295592337846756], Regularisation term values: [], param norm: 8.608985900878906, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 130, Loss: 0.0283599104732275, Normalised losses: [0.0283599104732275], Regularisation term values: [], param norm: 5.834774017333984, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 140, Loss: 0.2582668364048004, Normalised losses: [0.2582668364048004], Regularisation term values: [], param norm: 22.771278381347656, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 150, Loss: 0.08084143698215485, Normalised losses: [0.08084143698215485], Regularisation term values: [], param norm: 9.294225692749023, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 160, Loss: 0.21115027368068695, Normalised losses: [0.21115027368068695], Regularisation term values: [], param norm: 22.623809814453125, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 170, Loss: 0.10994282364845276, Normalised losses: [0.10994282364845276], Regularisation term values: [], param norm: 14.066991806030273, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 180, Loss: 0.05471782758831978, Normalised losses: [0.05471782758831978], Regularisation term values: [], param norm: 4.398205757141113, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 190, Loss: 0.2500678598880768, Normalised losses: [0.2500678598880768], Regularisation term values: [], param norm: 105.33438110351562, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 200, Loss: 0.03184543550014496, Normalised losses: [0.03184543550014496], Regularisation term values: [], param norm: 6.768582820892334, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 210, Loss: 0.019817069172859192, Normalised losses: [0.019817069172859192], Regularisation term values: [], param norm: 3.311058282852173, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 220, Loss: 0.01931142620742321, Normalised losses: [0.01931142620742321], Regularisation term values: [], param norm: 1.6077711582183838, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 230, Loss: 0.02250654436647892, Normalised losses: [0.02250654436647892], Regularisation term values: [], param norm: 4.073325157165527, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 240, Loss: 0.015592274256050587, Normalised losses: [0.015592274256050587], Regularisation term values: [], param norm: 2.470263719558716, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 250, Loss: 0.018730096518993378, Normalised losses: [0.018730096518993378], Regularisation term values: [], param norm: 1.7914717197418213, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 260, Loss: 0.017596041783690453, Normalised losses: [0.017596041783690453], Regularisation term values: [], param norm: 1.397658109664917, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 270, Loss: 0.008384536020457745, Normalised losses: [0.008384536020457745], Regularisation term values: [], param norm: 1.4796693325042725, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 280, Loss: 0.08260945975780487, Normalised losses: [0.08260945975780487], Regularisation term values: [], param norm: 14.44200325012207, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 290, Loss: 0.03267798572778702, Normalised losses: [0.03267798572778702], Regularisation term values: [], param norm: 4.854643821716309, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 300, Loss: 0.01886582374572754, Normalised losses: [0.01886582374572754], Regularisation term values: [], param norm: 2.346818208694458, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 310, Loss: 0.023264892399311066, Normalised losses: [0.023264892399311066], Regularisation term values: [], param norm: 6.110400199890137, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 320, Loss: 0.024332858622074127, Normalised losses: [0.024332858622074127], Regularisation term values: [], param norm: 5.195981025695801, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 330, Loss: 0.01607680507004261, Normalised losses: [0.01607680507004261], Regularisation term values: [], param norm: 3.7104079723358154, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 340, Loss: 0.01819024235010147, Normalised losses: [0.01819024235010147], Regularisation term values: [], param norm: 2.837953805923462, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 350, Loss: 0.011551199480891228, Normalised losses: [0.011551199480891228], Regularisation term values: [], param norm: 3.224712610244751, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 360, Loss: 0.011591175571084023, Normalised losses: [0.011591175571084023], Regularisation term values: [], param norm: 2.282406806945801, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 370, Loss: 0.01583431102335453, Normalised losses: [0.01583431102335453], Regularisation term values: [], param norm: 2.7198216915130615, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 380, Loss: 0.015405614860355854, Normalised losses: [0.015405614860355854], Regularisation term values: [], param norm: 2.0967538356781006, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 390, Loss: 0.01049597654491663, Normalised losses: [0.01049597654491663], Regularisation term values: [], param norm: 1.4168084859848022, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 400, Loss: 0.009346471168100834, Normalised losses: [0.009346471168100834], Regularisation term values: [], param norm: 1.1822662353515625, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 410, Loss: 0.015882596373558044, Normalised losses: [0.015882596373558044], Regularisation term values: [], param norm: 1.9242209196090698, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 420, Loss: 0.04378363862633705, Normalised losses: [0.04378363862633705], Regularisation term values: [], param norm: 10.331585884094238, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 430, Loss: 0.04048630967736244, Normalised losses: [0.04048630967736244], Regularisation term values: [], param norm: 8.487381935119629, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 440, Loss: 0.02341112121939659, Normalised losses: [0.02341112121939659], Regularisation term values: [], param norm: 3.0893218517303467, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 450, Loss: 0.01827642135322094, Normalised losses: [0.01827642135322094], Regularisation term values: [], param norm: 2.4350483417510986, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 460, Loss: 0.013019620440900326, Normalised losses: [0.013019620440900326], Regularisation term values: [], param norm: 1.9357601404190063, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 470, Loss: 0.00893806479871273, Normalised losses: [0.00893806479871273], Regularisation term values: [], param norm: 1.278249979019165, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 480, Loss: 0.0068724448792636395, Normalised losses: [0.0068724448792636395], Regularisation term values: [], param norm: 0.8320764303207397, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 490, Loss: 0.015297705307602882, Normalised losses: [0.015297705307602882], Regularisation term values: [], param norm: 7.228119850158691, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Scores:
+ [[0.00739439]]
+Correlations between models and analytical eigenfunction: [tensor(0.6876)]
+[2025-04-08 17:32:24,333][HYDRA]        #7 : separatrix_locator_fit_kwargs.gmm_mix_ratio=0.6
+[DeepResNet(
+  (input_layer): Linear(in_features=10, out_features=700, bias=True)
+  (residual_layers): Sequential(
+    (0): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (1): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (2): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (3): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (4): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (5): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (6): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (7): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (8): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (9): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (10): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (11): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (12): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (13): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (14): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (15): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (16): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (17): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (18): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (19): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (20): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (21): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (22): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (23): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (24): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (25): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (26): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (27): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (28): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (29): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (30): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (31): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (32): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (33): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (34): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (35): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (36): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (37): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (38): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (39): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (40): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (41): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (42): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (43): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (44): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (45): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (46): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (47): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (48): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+    (49): ResidualBlock(
+      (block): Sequential(
+        (0): Linear(in_features=700, out_features=700, bias=True)
+        (1): Tanh()
+      )
+    )
+  )
+  (output_layer): Linear(in_features=700, out_features=1, bias=True)
+)]
+Epoch 0, Loss: 1.0142459869384766, Normalised losses: [1.0142459869384766], Regularisation term values: [], param norm: 29.498048782348633, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 10, Loss: 0.9451466202735901, Normalised losses: [0.9451466202735901], Regularisation term values: [], param norm: 6.708761692047119, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 20, Loss: 0.9816074967384338, Normalised losses: [0.9816074967384338], Regularisation term values: [], param norm: 10.546890258789062, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 30, Loss: 0.8049392700195312, Normalised losses: [0.8049392700195312], Regularisation term values: [], param norm: 19.474220275878906, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 40, Loss: 0.4747943580150604, Normalised losses: [0.4747943580150604], Regularisation term values: [], param norm: 15.758918762207031, Learning Rate: 0.0001, len(model.parameters()): 104,
+Epoch 50, Loss: 0.3422694802284241, Normalised losses: [0.3422694802284241], Regularisation term values: [], param norm: 51.597408294677734, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 60, Loss: 0.43701639771461487, Normalised losses: [0.43701639771461487], Regularisation term values: [], param norm: 45.57517623901367, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 70, Loss: 0.6614047884941101, Normalised losses: [0.6614047884941101], Regularisation term values: [], param norm: 77.5555419921875, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 80, Loss: 0.7121134400367737, Normalised losses: [0.7121134400367737], Regularisation term values: [], param norm: 29.417781829833984, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 90, Loss: 0.4211421608924866, Normalised losses: [0.4211421608924866], Regularisation term values: [], param norm: 44.40102767944336, Learning Rate: 9e-05, len(model.parameters()): 104,
+Epoch 100, Loss: 0.10221749544143677, Normalised losses: [0.10221749544143677], Regularisation term values: [], param norm: 10.831226348876953, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 110, Loss: 0.3030456006526947, Normalised losses: [0.3030456006526947], Regularisation term values: [], param norm: 26.157392501831055, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 120, Loss: 0.2106267809867859, Normalised losses: [0.2106267809867859], Regularisation term values: [], param norm: 14.07185173034668, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 130, Loss: 0.1302766352891922, Normalised losses: [0.1302766352891922], Regularisation term values: [], param norm: 8.693305015563965, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 140, Loss: 0.14317014813423157, Normalised losses: [0.14317014813423157], Regularisation term values: [], param norm: 18.566200256347656, Learning Rate: 8.1e-05, len(model.parameters()): 104,
+Epoch 150, Loss: 0.07327479124069214, Normalised losses: [0.07327479124069214], Regularisation term values: [], param norm: 3.315673351287842, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 160, Loss: 0.30499958992004395, Normalised losses: [0.30499958992004395], Regularisation term values: [], param norm: 60.941680908203125, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 170, Loss: 0.07157166302204132, Normalised losses: [0.07157166302204132], Regularisation term values: [], param norm: 7.260333061218262, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 180, Loss: 0.04793425276875496, Normalised losses: [0.04793425276875496], Regularisation term values: [], param norm: 7.122766017913818, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 190, Loss: 0.03436940163373947, Normalised losses: [0.03436940163373947], Regularisation term values: [], param norm: 4.490379333496094, Learning Rate: 7.290000000000001e-05, len(model.parameters()): 104,
+Epoch 200, Loss: 0.0329059362411499, Normalised losses: [0.0329059362411499], Regularisation term values: [], param norm: 8.296465873718262, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 210, Loss: 0.0295985396951437, Normalised losses: [0.0295985396951437], Regularisation term values: [], param norm: 4.172553062438965, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 220, Loss: 0.12467089295387268, Normalised losses: [0.12467089295387268], Regularisation term values: [], param norm: 35.77823257446289, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 230, Loss: 0.02523118071258068, Normalised losses: [0.02523118071258068], Regularisation term values: [], param norm: 2.1193044185638428, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 240, Loss: 0.01815442368388176, Normalised losses: [0.01815442368388176], Regularisation term values: [], param norm: 2.961322069168091, Learning Rate: 6.561000000000002e-05, len(model.parameters()): 104,
+Epoch 250, Loss: 0.7059513926506042, Normalised losses: [0.7059513926506042], Regularisation term values: [], param norm: 408.7378234863281, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 260, Loss: 0.06172732263803482, Normalised losses: [0.06172732263803482], Regularisation term values: [], param norm: 11.34263801574707, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 270, Loss: 0.03587837144732475, Normalised losses: [0.03587837144732475], Regularisation term values: [], param norm: 3.73407244682312, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 280, Loss: 0.029354898259043694, Normalised losses: [0.029354898259043694], Regularisation term values: [], param norm: 4.592500686645508, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 290, Loss: 0.028631240129470825, Normalised losses: [0.028631240129470825], Regularisation term values: [], param norm: 8.27905559539795, Learning Rate: 5.904900000000002e-05, len(model.parameters()): 104,
+Epoch 300, Loss: 0.015105259604752064, Normalised losses: [0.015105259604752064], Regularisation term values: [], param norm: 2.2264225482940674, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 310, Loss: 0.013287457637488842, Normalised losses: [0.013287457637488842], Regularisation term values: [], param norm: 1.5894132852554321, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 320, Loss: 0.010838928632438183, Normalised losses: [0.010838928632438183], Regularisation term values: [], param norm: 1.431033968925476, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 330, Loss: 0.011315780691802502, Normalised losses: [0.011315780691802502], Regularisation term values: [], param norm: 1.2694774866104126, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 340, Loss: 0.17998772859573364, Normalised losses: [0.17998772859573364], Regularisation term values: [], param norm: 68.41763305664062, Learning Rate: 5.314410000000002e-05, len(model.parameters()): 104,
+Epoch 350, Loss: 0.05791056528687477, Normalised losses: [0.05791056528687477], Regularisation term values: [], param norm: 7.371981143951416, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 360, Loss: 0.03146405145525932, Normalised losses: [0.03146405145525932], Regularisation term values: [], param norm: 6.693321704864502, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 370, Loss: 0.025325849652290344, Normalised losses: [0.025325849652290344], Regularisation term values: [], param norm: 4.530266761779785, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 380, Loss: 0.021683603525161743, Normalised losses: [0.021683603525161743], Regularisation term values: [], param norm: 1.6013277769088745, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 390, Loss: 0.053146298974752426, Normalised losses: [0.053146298974752426], Regularisation term values: [], param norm: 4.061605930328369, Learning Rate: 4.782969000000002e-05, len(model.parameters()): 104,
+Epoch 400, Loss: 0.010290710255503654, Normalised losses: [0.010290710255503654], Regularisation term values: [], param norm: 1.0770891904830933, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 410, Loss: 0.012312343344092369, Normalised losses: [0.012312343344092369], Regularisation term values: [], param norm: 1.4668024778366089, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 420, Loss: 0.016075294464826584, Normalised losses: [0.016075294464826584], Regularisation term values: [], param norm: 1.998820185661316, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 430, Loss: 0.0259003397077322, Normalised losses: [0.0259003397077322], Regularisation term values: [], param norm: 12.616233825683594, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 440, Loss: 0.01226613949984312, Normalised losses: [0.01226613949984312], Regularisation term values: [], param norm: 1.2774721384048462, Learning Rate: 4.304672100000002e-05, len(model.parameters()): 104,
+Epoch 450, Loss: 0.008713779971003532, Normalised losses: [0.008713779971003532], Regularisation term values: [], param norm: 0.65687495470047, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 460, Loss: 0.007301200181245804, Normalised losses: [0.007301200181245804], Regularisation term values: [], param norm: 1.61703360080719, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 470, Loss: 0.06976211071014404, Normalised losses: [0.06976211071014404], Regularisation term values: [], param norm: 12.10476303100586, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 480, Loss: 0.00818868912756443, Normalised losses: [0.00818868912756443], Regularisation term values: [], param norm: 1.6508013010025024, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Epoch 490, Loss: 0.012314418330788612, Normalised losses: [0.012314418330788612], Regularisation term values: [], param norm: 3.410011053085327, Learning Rate: 3.874204890000002e-05, len(model.parameters()): 104,
+Scores:
+ [[0.00807422]]
+Correlations between models and analytical eigenfunction: [tensor(0.4727)]
+(base) kabird@BionetBrenner:~/separatrixLocator$ tmux capture-pane -pS - > ~/tmux-buffer.txt
+(base) kabird@BionetBrenner:~/separatrixLocator$ ls
+PytorchRBFLayer  analyse_results.py    configs                  finkelstein_fontolan_RNN.py   learn_koopman_eig.py    omegaconf_utils.py         plotting.py       rnn_decision_making.py  separatrixLocator     test_outputs
+README.md        architectures.py      csv_logger.py            finkelstein_fontolan_task.py  load_RNN_ALM_gating.py  outputs                    requirements.txt  run_main.sh             separatrixLocator.py  test_plots
+RNN_ALM_gating   bistable30D           custom_distributions.py  fixed-point-finder            main.py                 pals_phase_limit_cycle.py  results           runs                    separatrixLocator39   transformer.py
+__pycache__      collated_results.csv  dynamical_functions.py   fixed_point_finder            multirun                plot_losses.py             rnn.py            s4                      task_utils.py         utils.py
+(base) kabird@BionetBrenner:~/separatrixLocator$ tmux capture-pane -pS - > tmux-buffer.txt
+(base) kabird@BionetBrenner:~/separatrixLocator$ cat tmux-buffer.txt
+(base) kabird@BionetBrenner:~/separatrixLocator$ tmux capture-pane -pS - > tmux-buffer.txt
+
+(base) kabird@BionetBrenner:~/separatrixLocator$

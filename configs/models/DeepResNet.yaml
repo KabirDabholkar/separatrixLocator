@@ -1,0 +1,13 @@
+_target_: utils.setattrs_kwargs
+target:
+  _target_    : architectures.DeepResNet
+  input_dim   : ${..input_size}
+  hidden_dim  : ${..hidden_size}
+  output_dim  : ${..output_size}
+  num_blocks  : ${..num_layers}
+
+input_size: ${dynamics.dim}
+hidden_size: 700 #00 #0 #${.input_size}
+output_size: 1
+num_layers: 50 #20 #70
+name: ResidualMLP_layers${.num_layers}_hidden${.hidden_size}_output${.output_size}

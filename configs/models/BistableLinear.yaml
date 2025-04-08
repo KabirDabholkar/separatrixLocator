@@ -6,10 +6,15 @@ target  :
       in_features : ${....input_size}
       out_features: ${....output_size}
       bias        : false
+#    - _target_    : torch.nn.Linear
+#      in_features : ${....hidden_size}
+#      out_features: ${....output_size}
+#      bias        : true
     - _target_    : learn_koopman_eig.BistableKEF
 
 input_size : ${dynamics.dim}
 output_size: 1
+hidden_size: 200
 name  : LinearBistableKEF
 
 #_target_  : torch.nn.Sequential

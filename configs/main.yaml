@@ -63,12 +63,14 @@ defaults:
   - models@transformer : transformer
   - models@s4 : s4
   - models@BistableLinear : BistableLinear
+#  - models@model : ResNet_layers25_bottleneck
+  - models@model : DeepResNet
   - _self_
 
-#  - hydra: multirun
+  - hydra: multirun
+
 
 ##### End defaults ######
-
 
 
 save_KEF_model    : true
@@ -83,7 +85,7 @@ run_fixed_point_finder  : false
 #model_choice  : s4
 #model_choice  : DNN_layers6
 #model_choice  : transformer
-model_choice  : ResNet_layers6
+model_choice  : ResNet_layers40
 #model_choice  : BistableLinear
 #model_choice  : RBFResNet_layers15
 #model_choice  : RBF_DNN_layers6
@@ -127,12 +129,12 @@ separatrix_locator :
   model_class: null
   device  : cuda
 
-experiment_details : experiment_${model.name}_lr${separatrix_locator_fit_kwargs.learning_rate}_${separatrix_locator_fit_kwargs.normaliser._target_}
+experiment_details : experiment_${model.name}_lr${separatrix_locator_fit_kwargs.learning_rate}_${separatrix_locator_fit_kwargs.normaliser._target_}_gmmratio${separatrix_locator_fit_kwargs.gmm_mix_ratio}
 
 separatrix_locator_fit_kwargs:
-  num_epochs: 1000 #5000 #5000 #3000 #5000 #10000 #5000 #20000 #2000 #500 #2000 #2000 #2000 #1000 #2000 #500 #500 #500 #1000 #1500 #400 #200 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
-  learning_rate: 1e-3 #3e-3 #3e-3 #1e-3 #45e-3 #5e-3 1e-2
-  batch_size: 5000 #5000 #5000 #1000
+  num_epochs: 500 #500 #1000 #400 #1000 #5000 #5000 #3000 #5000 #10000 #5000 #20000 #2000 #500 #2000 #2000 #2000 #1000 #2000 #500 #500 #500 #1000 #1500 #400 #200 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
+  learning_rate: 0.1e-3 #0.5e-3 #3e-3 #3e-3 #1e-3 #45e-3 #5e-3 1e-2
+  batch_size: 7000 #5000 #5000 #1000
   ext_inp_batch_size  : 500
   ext_inp_reg_coeff   : 0.1
 #  logger:
@@ -158,9 +160,11 @@ separatrix_locator_fit_kwargs:
     _target_  : learn_koopman_eig.shuffle_normaliser
     _partial_  : true
     axis      : null
+  gmm_mix_ratio : 0.02 #3
+#  gmm_mix_ratio : 0.05
 
 separatrix_locator_score_kwargs:
-  batch_size: 10000
+  batch_size: 20000
   ext_inp_batch_size  : 50
   eigenvalue : 1
   drop_values_outside_range: null
@@ -275,7 +279,7 @@ dynamics_options:
 
 ### Analytical solution
 #model: ${dynamics.analytical_eigenfunction}
-model :  ${model_options.${model_choice}}
+#model :  ${model_options.${model_choice}}
 dynamics  : ${dynamics_options.${dynamics_choice}}
 
 
@@ -465,7 +469,6 @@ train_func :
 
 
 savepath  : results/${dynamics.name}
-
 
 
 #######

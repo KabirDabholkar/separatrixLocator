@@ -3,9 +3,13 @@ function :
   _args_    :
     - ${eval:'lambda x:x-x**3'}
 IC_distribution:
-  _target_  : torch.distributions.Normal
-  loc       : 0
-  scale     : 2
+  _target_  : custom_distributions.makeIIDMultiVariate
+  dist  :
+    _target_  : torch.distributions.Normal
+    loc       : 0
+    scale     : 2
+  dim : ${..dim}
+
 #  _target_  : custom_distributions.MultiGapNormal
 #  gap_points  : [-1.0,1.0]
 #  epsilon :  1e-3
@@ -15,7 +19,7 @@ IC_distribution:
 #  low       : -1
 #  high      : 1
 
-dist_requires_dim : true
+dist_requires_dim : false
 name : bistable1D
 dim  : 1
 equation_latex  : x-x^3

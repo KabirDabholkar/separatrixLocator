@@ -54,7 +54,7 @@ target:
       out_features: ${....output_size}
 
 input_size: ${dynamics.dim}
-hidden_size: ${.input_size} #${dynamics.dim} #
-output_size: 7
+hidden_size: 1000 #${.input_size} #${dynamics.dim} #
+output_size: 1
 num_layers: 25
 name: ResidualMLP_layers${.num_layers}_hidden${.hidden_size}_output${.output_size}
