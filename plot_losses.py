@@ -139,7 +139,7 @@ if __name__ == "__main__":
     # =========================================================
     CONFIG = {
         'log_dirs':
-            [Path('results/bistable20D')/d for d in os.listdir('results/bistable20D') if ('experiment' in d) and ('_S4_' in d)] +
+            [Path('results/bistable200D')/d for d in os.listdir('results/bistable200D') if ('experiment' in d) and (d.endswith('_gmmratio0.0'))] +
             [
             # 'results/hypercube_2D/experiment',
             # 'results/hypercube_5D/experiment',
@@ -173,7 +173,7 @@ if __name__ == "__main__":
         ],
         # 'save_path': 'test_plots/finkelstein_fontolan_RNN_losses.png',  # Path to save figure, e.g. 'losses.png' or None to display
         # 'save_path': 'test_plots/bistable600D_losses.png',
-        'save_path': 'test_plots/bistable20D_losses.png',
+        'save_path': 'test_plots/bistable200D_losses.png',
         'figsize': (6, 6),  # Figure size in inches (width, height)
         'smooth': 10,  # Default window size for smoothing (0 means no smoothing)
     }

@@ -8,9 +8,13 @@ function :
 #    - ${eval:'lambda x:(x[...,1],x[...,0]-x[...,0]**3)'}
 
 IC_distribution:
-  _target_  : torch.distributions.Normal
-  loc       : 0
-  scale     : 2
+  _target_  : custom_distributions.makeIIDMultiVariate
+  dist  :
+    _target_  : torch.distributions.Normal
+    loc       : 0
+    scale     : 2
+  dim : ${..dim}
+dist_requires_dim : false
 
 lims:
   x: [-3,3]

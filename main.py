@@ -75,14 +75,77 @@ def main_multimodel(cfg):
     else:
         input_distribution_fit = input_distribution
 
-    
-
     if input_distribution is not None:
         cfg.model.input_size = cfg.dynamics.dim + cfg.dynamics.external_input_dim
         OmegaConf.resolve(cfg.model)
 
+    if hasattr(cfg, 'dmd'):
+        num_trajectories = 100
+        time_horizon = 10
+        num_time_steps = 20
+        # Sample initial conditions from the distribution
+        initial_conditions = distribution.sample(sample_shape=(num_trajectories,))
+
+        # Define time points for the trajectory
+        time_points = torch.linspace(0, time_horizon, num_time_steps)
+
+        # Function to run trajectories using the dynamics function
+        trajectories = odeint(lambda t,x: dynamics_function(x), initial_conditions, time_points).detach().cpu()
+
+        from pydmd import DMD, EDMD
+        from pydmd.plotter import plot_eigs, plot_summary
+        from pydmd.preprocessing import hankel_preprocessing
+
+        X = trajectories[:,0] #.numpy()
+        d = 3
+        dmd = DMD(svd_rank=4)
+        delay_dmd = hankel_preprocessing(dmd, d=d)
+        delay_dmd.fit(X.T)
+        plot_summary(delay_dmd, x=X[:,0], t=time_points, d=d)
+
+        X = trajectories.permute(1, 0, 2).reshape(-1, trajectories.shape[-1])  # Reshape to (batch*time_steps, dimensions)
+        dmd = EDMD(svd_rank=4)
+        dmd.fit(X.T)
+        x_grid = torch.linspace(-3, 3, 10).detach().cpu().numpy()  # Generate a grid of points
+        eigenfunctions_values = dmd.eigenfunctions(x_grid)
+        plt.plot(x_grid.numpy(), eigenfunctions_values)
+        plt.show()
+        # plot_summary(dmd, x=X[:, 0], t=time_points, d=d)
+
+
     SL = instantiate(cfg.separatrix_locator)
     SL.models = [instantiate(cfg.model).to(SL.device) for _ in range(cfg.separatrix_locator.num_models)]
+
+    if hasattr(cfg, 'classifier_based_separatrix_locator'):
+        CSL = instantiate(cfg.classifier_based_separatrix_locator)
+        print("Models:",CSL.models)
+        CSL.fit(
+            dynamics_function,
+            distribution,
+            **instantiate(cfg.classifier_based_separatrix_locator_fit_kwargs)
+        )
+        scores = CSL.score(
+            dynamics_function,
+            distribution
+        )
+        print('Separatrix classifer scores',scores)
+
+
+        if cfg.dynamics.dim == 2:
+            num_samples = 5000
+            samples = distribution.sample(
+                sample_shape=(num_samples,))
+            labels = CSL.models[0].predict(samples.cpu().numpy())
+
+            # Plot the generated samples colored by their kmeans label
+            plt.figure(figsize=(5,5))
+            for i in range(num_samples):
+                plt.scatter(samples[i, 0].cpu().numpy(), samples[i, 1].cpu().numpy(), color='C' + str(labels[i]),
+                            alpha=0.5,s=3)  # Color by label
+            plt.title('Generated Samples Colored by SVM Label')
+            plt.xlabel('X-axis')
+            plt.ylabel('Y-axis')
+            plt.savefig(Path(cfg.savepath) / "classifier_predicted_labels.png", dpi=200)
 
     if cfg.load_KEF_model:
         new_format_path = Path(cfg.savepath)/cfg.experiment_details
@@ -366,6 +429,48 @@ def main_multimodel(cfg):
             n_trials = 20
             num_random_vectors = 10
 
+            import torch.nn as nn
+
+            # Define the neural network model
+            class SimpleNN(nn.Module):
+                def __init__(self, input_dim, output_dim):
+                    super(SimpleNN, self).__init__()
+                    self.linear = nn.Linear(input_dim, output_dim)
+                    self.bias = nn.Parameter(torch.zeros(1))  # Trainable bias term
+
+                def forward(self, x):
+                    sigmoid = lambda x: (2 / (1 + torch.exp(-(x - self.bias)))) - 1  # Apply bias before sigmoid
+                    return self.linear(sigmoid(x))
+
+            # Get input and output dimensions from the existing model
+            input_dim = cfg.model.input_size  # Assuming input dimension matches dynamics dimension
+            output_dim = cfg.model.output_size   # Assuming model has an attribute for output dimension
+
+            # Instantiate the neural network
+            neural_network = SimpleNN(input_dim, output_dim)
+
+            # Example of how to fit the neural network (you may need to adjust this part)
+            num_epochs = 0 #1000 #500 #100
+            batch_size = 1000
+            optimizer = torch.optim.Adam(neural_network.parameters(), lr=0.2)
+            criterion = nn.MSELoss()
+            for epoch in range(num_epochs):
+                optimizer.zero_grad()
+                # Sample input_tensor from the distribution
+                input_tensor = distribution.sample(sample_shape=(batch_size,)).float()
+                
+                # Get model output as target_tensor
+                with torch.no_grad():
+                    target_tensor = model(input_tensor)
+
+                outputs = neural_network(input_tensor)
+                loss = criterion(outputs, target_tensor)  # Define target_tensor based on your needs
+                loss.backward()
+                optimizer.step()
+                print(f'Epoch: {epoch}, Loss:',loss.item())
+            # print(outputs.shape,target_tensor.shape)
+            neural_network.eval()
+
             # Create subplots with 10 rows and 10 columns
             fig, axs = plt.subplots(num_models, num_positions, figsize=(num_positions, num_models+1), sharex=True, sharey=True)
 
@@ -376,8 +481,8 @@ def main_multimodel(cfg):
                     ax = axs[model_idx, pos] if SL.num_models>1 else axs[pos]
                     # Generate multiple random vectors for n_1 to n_10
                     for trial in range(n_trials):
-                        n_values = np.random.uniform(-1, 1, cfg.dynamics.dim)
-                        x_values = np.linspace(-2, 2, 100)
+                        n_values = np.random.uniform(-5, 5, cfg.dynamics.dim)
+                        x_values = np.linspace(-5, 5, 100)
 
                         # Create an array to store the results for this trial
                         trial_results = []
@@ -392,12 +497,14 @@ def main_multimodel(cfg):
                         # Run the model on the input tensor
                         with torch.no_grad():
                             output = model(input_tensor)
-
+                            output1 = neural_network(input_tensor)
                         # Store the results
                         trial_results = output[:, 0].tolist()  # Assuming single output
+                        trial_results1 = output1[:,0].tolist()
 
                         # Plot the results for this trial
                         ax.plot(x_values, trial_results, lw=1, alpha=0.5)
+                        # ax.plot(x_values, trial_results1, lw=1, ls='dashed', alpha=0.5, c='red')
 
                     # Evaluate when all n_values are zero
                     zero_values = np.zeros(cfg.dynamics.dim)
@@ -409,7 +516,7 @@ def main_multimodel(cfg):
                     with torch.no_grad():
                         zero_output = model(zero_input_tensor)
 
-                    ax.plot(x_values, zero_output[:, 0].tolist(), lw=1, alpha=1, color='black', ls='dashed')
+                    ax.plot(x_values, zero_output[:, 0].tolist(), lw=1, alpha=1, color='black')
             # Set labels for the first column and first row
             # Set titles for the top row and labels for the first column
             for pos in range(num_positions):
@@ -420,13 +527,14 @@ def main_multimodel(cfg):
                 ax.set_ylabel(f'Model {model_idx}')
 
             plt.tight_layout()
-            fig.savefig(Path(cfg.savepath) / cfg.experiment_details / "model_output_vs_x_positions.png", dpi=120)
+            fig.savefig(Path(cfg.savepath) / cfg.experiment_details / "model_output_vs_x_positions.png", dpi=80)
             # fig.savefig(Path(cfg.savepath) / "model_output_vs_x_positions.pdf")
             plt.close(fig)
 
             batch_size = 1000
             # Sample input_tensor from the distribution
             input_tensor = distribution.sample(sample_shape=(batch_size,))
+            # input_tensor = (input_tensor*0.5) #+ input_tensor.mean(axis=0,keepdims=True)
             input_tensor.requires_grad_(True)
 
             # Compute phi(x)
@@ -453,6 +561,32 @@ def main_multimodel(cfg):
             ax.set_ylabel(r'$|\nabla \psi(x) \cdot f(x) - \lambda\psi(x)|$')
             fig.tight_layout()
             fig.savefig(Path(cfg.savepath) / cfg.experiment_details / "KEFvals_vs_residuals.png", dpi=200)
+            plt.close(fig)
+
+            # Compute the dot product
+            std_i = torch.std(input_tensor.detach(),axis=-1,keepdims=True)
+
+
+            fig, ax = plt.subplots()
+            ax.scatter(std_i.cpu().numpy(), residual.detach().cpu().numpy(),s=5)
+            ax.set_xlabel(r'$std(x_i)$')
+            ax.set_ylabel(r'$|\nabla \psi(x) \cdot f(x) - \lambda\psi(x)|$')
+            fig.tight_layout()
+            fig.savefig(Path(cfg.savepath) / cfg.experiment_details / "Stdi_vs_residuals.png", dpi=200)
+            plt.close(fig)
+
+            fig, ax = plt.subplots()
+            ax.scatter(phi_x.detach().cpu().numpy(), dot_prod.detach().cpu().numpy())
+            ax.set_xlabel(r'$\lambda\psi(x)$')
+            ax.set_ylabel(r'$\nabla \psi(x) \cdot f(x)$')
+            
+            # Add a dashed line for x=y
+            xlim = ax.get_xlim()
+            ylim = ax.get_ylim()
+            ax.plot([xlim[0], xlim[1]], [xlim[0], xlim[1]], color='black', linestyle='dashed', linewidth=1)
+
+            fig.tight_layout()
+            fig.savefig(Path(cfg.savepath) / cfg.experiment_details / "KEF_LHS_RHS.png", dpi=200)
             plt.close(fig)
 
         elif cfg.dynamics.dim > 2:

@@ -20,7 +20,7 @@ class ClassifierBasedSeparatrixLocator(BaseEstimator):
     def __init__(self, 
                  num_models=1, 
                  dynamics_dim=1, 
-                 model_class = partial(make_pipeline, StandardScaler(), SVC(gamma='auto')),
+                 model_class = partial(make_pipeline, StandardScaler(), SVC(gamma='auto', kernel='linear')),
                  num_clusters = None,
                  lr=1e-3, 
                  epochs=100, 
@@ -39,23 +39,45 @@ class ClassifierBasedSeparatrixLocator(BaseEstimator):
         self.device = device
         self.use_multiprocessing = use_multiprocessing
         self.init_models()
+        self.model_specs = {
+            'num_models': num_models,
+            'dynamics_dim': dynamics_dim,
+            'num_clusters': num_clusters,
+            'learning_rate': lr,
+            'epochs': epochs,
+            'model_class': model_class
+        }
+        self.results = {
+            'accuracies': [],
+            'optimal_clusters': None,
+            'silhouette_score': None,
+            'num_clusters_provided': num_clusters is not None
+        }
+
+    def sample(self, distribution, batch_size):
+        if hasattr(distribution, '__iter__'):
+            samples = [dist.sample(sample_shape=(batch_size,)) for dist in distribution]
+        else:
+            samples = distribution.sample(sample_shape=(batch_size,))
+        return samples
 
     def init_models(self):
         self.models = [self.model_class() for _ in range(self.num_models)]  # Initialize models
 
     def fit(self, func, distribution, log_dir=None, batch_size=100, **kwargs):
-        samples = distribution.sample(sample_shape=(batch_size,))  # Sample from the provided distribution
-        trajectories = run_initial_conditions(func, samples)  # Get trajectories using the sampled initial conditions
+        # samples = distribution.sample(sample_shape=(batch_size,))  # Sample from the provided distribution
+        samples = self.sample(distribution, batch_size)  # Sample from the provided distribution
+        trajectories = run_initial_conditions(func, samples).detach().cpu()  # Get trajectories using the sampled initial conditions
 
         # Extract the last time points of trajectories
-        last_time_points = trajectories[-1]  # Get the last time point for each trajectory
+        last_time_points = trajectories[-1].numpy()  # Get the last time point for each trajectory
 
         # Perform KMeans clustering with cross-validation to find the optimal K if num_clusters is None
         if self.num_clusters is None:
-            self.find_optimal_num_clusters(last_time_points.cpu().numpy())
+            self.find_optimal_num_clusters(last_time_points)
         
         self.kmeans = KMeans(n_clusters=self.num_clusters)
-        self.kmeans.fit(last_time_points.cpu().numpy())
+        self.kmeans.fit(last_time_points)
         labels = self.kmeans.labels_
         
         # Fit the SVM model to the samples and labels
@@ -84,36 +106,33 @@ class ClassifierBasedSeparatrixLocator(BaseEstimator):
                 best_k = k
 
         self.num_clusters = best_k  # Update num_models to the best K found
+        self.results['optimal_clusters'] = best_k
+        self.results['silhouette_score'] = best_score
         if self.verbose:
             print(f"Optimal number of clusters (K) found: {best_k} with silhouette score: {best_score}")
-        
-
-
+    
     def predict(self, inputs, no_grad=True):
         pass
 
     def score(self, func, distribution, batch_size=100, **kwargs):
-        samples = distribution.sample(sample_shape=(batch_size,))  # Sample from the provided distribution
+        # samples = distribution.sample(sample_shape=(batch_size,))  # Sample from the provided distribution
+        samples = self.sample(distribution, batch_size)  # Sample from the provided distribution
         trajectories = run_initial_conditions(func, samples)  # Get trajectories using the sampled initial conditions
 
         # Extract the last time points of trajectories
         last_time_points = trajectories[-1]  # Get the last time point for each trajectory
-
-        # Perform KMeans clustering to get labels
-        # kmeans = KMeans(n_clusters=self.num_clusters)
-        # kmeans.fit(last_time_points.cpu().numpy())
         labels = self.kmeans.predict(last_time_points.cpu().numpy())
 
         accuracies = []  # List to collect accuracies from all models
         # Test the classifier on the samples
         for model in self.models:
             predictions = model.predict(samples.cpu().numpy())
-            accuracy = np.mean(predictions == labels)
-            accuracies.append(accuracy)  # Collect accuracy for each model
+            accuracy = float(np.mean(predictions == labels))
+            self.results['accuracies'].append(accuracy)  # Collect accuracy for each model
             if self.verbose:
                 print(f"Model accuracy: {accuracy}")
 
-        return accuracies  # Return the list of accuracies
+        return self.results['accuracies']  # Return the list of accuracies
 
     def save_models(self, savedir):
         pass
@@ -133,7 +152,8 @@ if __name__ == "__main__":
     from dynamical_functions import bistable_ND
     from torch.distributions import MultivariateNormal
 
-    dim = 20
+    dim = 2
+    training_samples = 100
 
     test_func = lambda z: bistable_ND(z, dim=dim, pos=0)
 
@@ -152,8 +172,8 @@ if __name__ == "__main__":
     SL = ClassifierBasedSeparatrixLocator(num_models=10,num_clusters=2, verbose=True)
 
     # classifier_instance.models[0]
-    SL.fit(test_func, mvn)
-    classification_acccuracy = SL.score(test_func, mvn)
+    SL.fit(test_func, mvn, batch_size=training_samples)
+    classification_acccuracy = SL.score(test_func, mvn, batch_size=1000)
     print(classification_acccuracy)
 
     import matplotlib.pyplot as plt
@@ -180,3 +200,18 @@ if __name__ == "__main__":
     plt.xlabel('X-axis')
     plt.ylabel('Y-axis')
     plt.show()
+
+
+    if dim==2:
+        num_samples = 5000
+        samples = mvn.sample(sample_shape=(num_samples,))  # Generate 1000 samples from the multivariate normal distribution
+        labels = SL.models[0].predict(samples.cpu().numpy())  # Predict labels using the classifier
+
+        # Plot the generated samples colored by their kmeans label
+        plt.figure(figsize=(10, 6))
+        for i in range(num_samples):
+            plt.scatter(samples[i, 0].cpu().numpy(), samples[i, 1].cpu().numpy(), color='C' + str(labels[i]), alpha=0.5)  # Color by label
+        plt.title('Generated Samples Colored by SVM Label')
+        plt.xlabel('X-axis')
+        plt.ylabel('Y-axis')
+        plt.show()

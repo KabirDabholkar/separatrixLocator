@@ -1,0 +1,44 @@
+_target_: utils.setattrs_kwargs
+target:
+  _target_: architectures.AdditiveModel
+  _args_  : 
+    - _target_: architectures.DeepResNet
+      input_dim: ${....input_size}
+      hidden_dim: ${....hidden_size}
+      output_dim: ${....output_size}
+      num_blocks: ${....num_layers}
+#      nonlin  :
+#        _target_ : torch.nn.ReLU
+
+#    - _target_: torch.nn.Sequential
+#      _args_:
+#        - _target_: architectures.DeepResNet
+#          input_dim : ${......input_size}
+#          hidden_dim: 200
+#          output_dim: 1
+#          num_blocks: 1
+#        - _target_: architectures.DeepResNet
+#          input_dim : 1
+#          hidden_dim: ${......hidden_size}
+#          output_dim: ${......output_size}
+#          num_blocks: ${......num_layers}
+
+    - _target_: learn_koopman_eig.partialised_RBF_maker
+      in_features_dim: ${....input_size}
+      num_kernels: ${....num_kernels}
+      out_features_dim: ${....output_size}
+      normalization: false
+      #  normalization : true
+      reset_params:
+        upper_bound_kernels: 2
+        std_shapes: 3
+
+input_size  : ${dynamics.dim}
+#hidden_size : 3000 #2
+#num_layers  : 5
+
+hidden_size : 500 #2000 #2
+num_layers  : 25
+output_size : 1
+num_kernels : 10
+name: AdditiveRBFResNet_hidden${.hidden_size}_output${.output_size}_numKernels${.num_kernels}_numlayers${.num_layers}

@@ -14,7 +14,8 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from copy import deepcopy
 
-from sklearn.mixture import GaussianMixture
+# from sklearn.mixture import GaussianMixture
+from gmm_torch.gmm import GaussianMixture
 
 import torch
 from functools import partial
@@ -1143,6 +1144,9 @@ def l_norm(x, p=2):
 def rbf_gaussian(x):
     return (-x.pow(2)).exp()
 
+def rbf_inv(x):
+    return (1/x).exp()
+
 def rbf_laplacian(x):
     return (-x.pow(2).sqrt()).exp()
 
@@ -1418,9 +1422,6 @@ def restrict_to_distribution_loss(x_batch,phi_x,dist,threshold = -4.0):
     reg_loss = torch.mean(weight * torch.abs(phi_x))
     return reg_loss
 
-import numpy as np
-from sklearn.mixture import GaussianMixture
-import torch
 
 def gmm_sample_from_residuals(
     x_batch: torch.Tensor,
@@ -1561,7 +1562,8 @@ def train_with_logger_ext_inp(
             outputs=phi_x.sum(axis=-1),
             inputs=x_batch,
             grad_outputs=torch.ones_like(phi_x.sum(axis=-1)),
-            create_graph=True
+            create_graph=True,
+            # retain_graph=True
         )[0]
 
         # Compute F(x_batch)
@@ -1903,19 +1905,18 @@ def train_with_logger_multiple_dists(
 ):
     def fit_gmm(x_batch, residuals, n_components):
         residuals = residuals.squeeze(-1) if residuals.ndim > 1 else residuals
-        residuals_np = residuals.detach().cpu().numpy()
-        x_np = x_batch.detach().cpu().numpy()
-        probs = residuals_np - residuals_np.min() + 1e-6
+        probs = residuals - residuals.min() + 1e-6
         probs = probs / probs.sum()
-        resample_indices = np.random.choice(len(x_np), size=gmm_oversample_factor * batch_size, p=probs)
-        resampled_x = x_np[resample_indices]
-        gmm = GaussianMixture(n_components=n_components, covariance_type='full')
+        resample_indices = torch.multinomial(probs, gmm_oversample_factor * batch_size, replacement=True)
+        resampled_x = x_batch[resample_indices]
+        gmm = GaussianMixture(n_components, x_batch.shape[-1], covariance_type='full')
+        gmm.to(residuals.device)
         gmm.fit(resampled_x)
         return gmm
 
     def sample_from_gmm(gmm, batch_size, device):
-        x_sampled_np, _ = gmm.sample(batch_size)
-        x_sampled = torch.tensor(x_sampled_np, dtype=torch.float32).to(device)
+        x_sampled = gmm.sample(batch_size)
+        x_sampled = x_sampled.to(device)
         x_sampled.requires_grad_(True)
         return x_sampled
 
@@ -1971,11 +1972,13 @@ def train_with_logger_multiple_dists(
                 input_to_model = torch.cat((input_to_model, external_inputs), dim=-1)
 
             phi_x = model(input_to_model)
+            # print('phi_x shape:',phi_x.shape)
             phi_x_prime = torch.autograd.grad(
                 outputs=phi_x,
                 inputs=x_batch,
                 grad_outputs=torch.ones_like(phi_x),
-                create_graph=True
+                create_graph=True,
+                # retain_graph=True
             )[0]
 
             F_inputs = [x_batch] + ([] if external_input_dist_single is None else [external_inputs])
@@ -2009,13 +2012,14 @@ def train_with_logger_multiple_dists(
                 reg_term_values.append(reg_term_value.item())
 
             with torch.no_grad():
-                residuals = torch.mean((dot_prod - eigenvalue * phi_x) ** 2, axis=-1)
-                if epoch > 0 and gmm_mix_ratio < 1.0:
-                    gmm_models[i] = fit_gmm(x_batch[:x_dist.shape[0]].detach(), residuals[:x_dist.shape[0]].detach(),
-                                        gmm_n_components)
-                else:
-                    gmm_models[i] = fit_gmm(x_batch, residuals,
-                                            gmm_n_components)
+                if gmm_mix_ratio > 0:  # Only proceed if gmm_mix_ratio is greater than 0
+                    residuals = torch.mean((dot_prod - eigenvalue * phi_x) ** 2, axis=-1)
+                    if epoch > 0 and gmm_mix_ratio < 1.0:
+                        gmm_models[i] = fit_gmm(x_batch[:x_dist.shape[0]].detach(), residuals[:x_dist.shape[0]].detach(),
+                                                gmm_n_components)
+                    else:
+                        gmm_models[i] = fit_gmm(x_batch.detach(), residuals.detach(),
+                                                gmm_n_components)
         # Log metrics
         metrics = {
             "Loss/Total": total_loss.item(),
@@ -2368,8 +2372,9 @@ def train(model, F, dist, num_epochs=1000, learning_rate=1e-3, batch_size=64, dy
 
 def partialised_RBF_maker(reset_params,**kwargs):
     model = RBFLayer(
-        radial_function=rbf_gaussian,
-        # radial_function=rbf_laplacian,
+        # radial_function=rbf_inv,
+        # radial_function=rbf_gaussian,
+        radial_function=rbf_laplacian,
         norm_function=partial(l_norm,p=2),
         **kwargs)
     model.reset(**reset_params)
@@ -2381,6 +2386,7 @@ def partialised_AnisotropicRBF_maker(reset_params,**kwargs):
         **kwargs)
     # model.reset(**reset_params)
     return model
+
 
 def main():
     # Define function F(x) = x - x^3

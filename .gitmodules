@@ -13,3 +13,6 @@
 [submodule "phase-limit-cycle-RNNs"]
 	path = phase-limit-cycle-RNNs
 	url = https://github.com/Matthijspals/phase-limit-cycle-RNNs.git
+[submodule "gmm_torch"]
+	path = gmm_torch
+	url = https://github.com/ldeecke/gmm-torch.git

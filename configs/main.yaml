@@ -64,10 +64,13 @@ defaults:
   - models@s4 : s4
   - models@BistableLinear : BistableLinear
 #  - models@model : ResNet_layers25_bottleneck
-  - models@model : DeepResNet
+#  - models@model : DeepResNet
+#  - models@model : DNN_layers2
+  - models@model : ResRBF
+
   - _self_
 
-  - hydra: multirun
+#  - hydra: multirun
 
 
 ##### End defaults ######
@@ -109,6 +112,7 @@ model_choice  : ResNet_layers40
 #dynamics_choice : finkelstein_fontolan_RNN
 #dynamics_choice : hypercube
 dynamics_choice : bistableND
+#dynamics_choice : radial2D_bistable
 
 ### main train func
 #train_func_teacher :
@@ -120,6 +124,40 @@ dynamics_choice : bistableND
 #  dynamics_dim  : ${dynamics.dim}
 #  print_every_num_epochs  : 10
 
+####### EDMD ###########
+
+#dmd:
+#  _target_ : pydmd.EDMD
+
+
+###### Classifier based Separatrix Locator ########
+#classifier_based_separatrix_locator :
+#  _target_      : validation_methods.ClassifierBasedSeparatrixLocator
+#  num_models    : 1
+#  dynamics_dim  : ${dynamics.dim}
+#  model_class   :
+#    _target_  : sklearn.pipeline.make_pipeline
+#    _partial_ : true
+#    _args_    :
+#    - _target_  : sklearn.preprocessing.StandardScaler
+##    - _target_  : sklearn.svm.SVC
+##      gamma     : auto
+##      kernel    : linear
+#    - _target_  : sklearn.neural_network.MLPClassifier
+#      hidden_layer_sizes :
+#        - 1000
+#        - 40
+#      activation  : relu
+#      solver    : adam
+#      max_iter  : 1000
+#  num_clusters : null #2
+#  verbose : true
+
+classifier_based_separatrix_locator_fit_kwargs  :
+  batch_size  : 700
+
+###### Koopman based Separatrix Locator ########
+
 separatrix_locator :
   _target_    : separatrixLocator.SeparatrixLocator
   num_models  : 1 #10 #10 #4 #5 #0 #0
@@ -127,14 +165,14 @@ separatrix_locator :
   use_multiprocessing : false
   verbose : true
   model_class: null
-  device  : cuda
+  device  : cuda:1
 
-experiment_details : experiment_${model.name}_lr${separatrix_locator_fit_kwargs.learning_rate}_${separatrix_locator_fit_kwargs.normaliser._target_}_gmmratio${separatrix_locator_fit_kwargs.gmm_mix_ratio}
+experiment_details : experiment_${model.name}_lr${separatrix_locator_fit_kwargs.learning_rate}_batch${separatrix_locator_fit_kwargs.batch_size}_${separatrix_locator_fit_kwargs.normaliser._target_}_gmmratio${separatrix_locator_fit_kwargs.gmm_mix_ratio}
 
 separatrix_locator_fit_kwargs:
-  num_epochs: 500 #500 #1000 #400 #1000 #5000 #5000 #3000 #5000 #10000 #5000 #20000 #2000 #500 #2000 #2000 #2000 #1000 #2000 #500 #500 #500 #1000 #1500 #400 #200 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
+  num_epochs: 500 # 1000 #1000 #2000 #500 #500 #1000 #400 #1000 #5000 #5000 #3000 #5000 #10000 #5000 #20000 #2000 #500 #2000 #2000 #2000 #1000 #2000 #500 #500 #500 #1000 #1500 #400 #200 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
   learning_rate: 0.1e-3 #0.5e-3 #3e-3 #3e-3 #1e-3 #45e-3 #5e-3 1e-2
-  batch_size: 7000 #5000 #5000 #1000
+  batch_size: 5000 #20000 #7000 #5000 #5000 #1000
   ext_inp_batch_size  : 500
   ext_inp_reg_coeff   : 0.1
 #  logger:
@@ -160,8 +198,10 @@ separatrix_locator_fit_kwargs:
     _target_  : learn_koopman_eig.shuffle_normaliser
     _partial_  : true
     axis      : null
-  gmm_mix_ratio : 0.02 #3
+#  gmm_mix_ratio : 0.02 #3
 #  gmm_mix_ratio : 0.05
+#  gmm_mix_ratio : 0.3
+  gmm_mix_ratio : 0.0
 
 separatrix_locator_score_kwargs:
   batch_size: 20000

@@ -6,7 +6,7 @@ function :
 #######
 IC_distribution_fit :
   - ${..IC_distribution}
-  - ${..IC_interpolation_line}
+#  - ${..IC_interpolation_line}
 
 #######
 
@@ -29,13 +29,14 @@ IC_interpolation_line:
 
 hidden_axis:
   _target_  : custom_distributions.get_stacked_one_hot
-  pos       : 5
+  pos       : 0
   length    : ${..dim}
 
 name : hypercube_${.dim}D
-dim  : 10
+dim  : 2
 equation_latex  : x-x^3
-analytical_eigenfunction:
-  _target_: compose.compose
-  _args_:
-    - ${eval:'lambda x,y:x/((x**2-1)**2)**0.25'}
+
+#analytical_eigenfunction:
+#  _target_: compose.compose
+#  _args_:
+#    - ${eval:'lambda x,y:x/((x**2-1)**2)**0.25'}

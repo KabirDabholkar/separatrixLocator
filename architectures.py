@@ -4,14 +4,21 @@ import torch.nn.functional as F
 # from s4.models.s4.s4 import S4Block
 from s4torch import S4Model
 
+class AdditiveModel(nn.Module):
+    def __init__(self, *models):
+        super().__init__()
+        self.models = nn.ModuleList(models)  # Use ModuleList to register models
+
+    def forward(self, x):
+        return sum(model(x) for model in self.models)
 
 
 class ResidualBlock(nn.Module):
-    def __init__(self, hidden_dim):
+    def __init__(self, hidden_dim, nonlin=nn.Tanh()):
         super(ResidualBlock, self).__init__()
         self.block = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
-            nn.Tanh()
+            nonlin
             # nn.ReLU()
         )
 
@@ -20,7 +27,7 @@ class ResidualBlock(nn.Module):
 
 
 class DeepResNet(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, num_blocks):
+    def __init__(self, input_dim, hidden_dim, output_dim, num_blocks, nonlin = nn.Tanh()):
         super(DeepResNet, self).__init__()
         # Add an input layer if input_dim < hidden_dim to map input to hidden_dim
         if input_dim < hidden_dim:
@@ -30,7 +37,7 @@ class DeepResNet(nn.Module):
 
         # Stack the ResidualBlocks in sequence (operating on hidden_dim)
         self.residual_layers = nn.Sequential(
-            *[ResidualBlock(hidden_dim) for _ in range(num_blocks)]
+            *[ResidualBlock(hidden_dim, nonlin=nonlin) for _ in range(num_blocks)]
         )
 
         # Add an output layer if output_dim is not equal to hidden_dim
@@ -137,30 +144,56 @@ if __name__ == "__main__":
     #     outputs.shape
     # )
 
-    N = 32
-    d_input = 1
-    d_model = 128
-    n_classes = 10
-    n_blocks = 3
-    seq_len = 784
+    # N = 32
+    # d_input = 1
+    # d_model = 128
+    # n_classes = 10
+    # n_blocks = 3
+    # seq_len = 784
 
-    u = torch.randn(3, seq_len, d_input)
+    # u = torch.randn(3, seq_len, d_input)
 
-    s4model = S4Model(
-        d_input,
-        d_model=d_model,
-        d_output=n_classes,
-        n_blocks=n_blocks,
-        n=N,
-        l_max=seq_len,
-        collapse=True,  # average predictions over time prior to decoding
-    )
-    print(
-        s4model(u).shape,
-        u.shape
-    )
-    model = nn.Sequential(
-        Unsqueeze(dim=-1),
-        s4model,
-    )
-    model(u[...,0]).shape
+    # s4model = S4Model(
+    #     d_input,
+    #     d_model=d_model,
+    #     d_output=n_classes,
+    #     n_blocks=n_blocks,
+    #     n=N,
+    #     l_max=seq_len,
+    #     collapse=True,  # average predictions over time prior to decoding
+    # )
+    # print(
+    #     s4model(u).shape,
+    #     u.shape
+    # )
+    # model = nn.Sequential(
+    #     Unsqueeze(dim=-1),
+    #     s4model,
+    # )
+    # model(u[...,0]).shape
+
+    model = AdditiveModel(nn.Linear(10,2),nn.Linear(10,2))
+
+    # import torch
+    # import torch.nn as nn
+    # import torch.optim as optim
+    #
+    # # Sample data
+    # x_train = torch.randn(100, 10)  # 100 samples, 10 features
+    # y_train = torch.randint(0, 2, (100, 2)).float()  # 100 samples, 2 output classes
+    #
+    # # Define loss function and optimizer
+    # criterion = nn.MSELoss()
+    # optimizer = optim.Adam(model.parameters(), lr=0.001)
+    #
+    # # Training loop
+    # num_epochs = 10
+    # for epoch in range(num_epochs):
+    #     model.train()
+    #     optimizer.zero_grad()  # Clear gradients
+    #     outputs = model(x_train)  # Forward pass
+    #     loss = criterion(outputs, y_train)  # Compute loss
+    #     loss.backward()  # Backward pass
+    #     optimizer.step()  # Update weights
+    #
+    #     print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
