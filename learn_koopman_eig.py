@@ -2369,16 +2369,27 @@ def train(model, F, dist, num_epochs=1000, learning_rate=1e-3, batch_size=64, dy
 #             print(f"Epoch {epoch}, Regularized Loss: {loss.item()}")
 
 
+class MultiBatchRBFLayer(RBFLayer):
+    def __init__(self, reset_params, **kwargs):
+        super().__init__(
+            radial_function=rbf_laplacian,
+            norm_function=partial(l_norm, p=2),
+            **kwargs
+        )
+        self.reset(**reset_params)
+        
+    def forward(self, x):
+        # Save original shape
+        original_shape = x.shape
+        # Reshape to combine all batch dimensions
+        x = x.reshape(-1, original_shape[-1])
+        # Process through RBF layer
+        out = super().forward(x)
+        # Reshape back to original batch dimensions
+        return out.reshape(*original_shape[:-1], -1)
 
-def partialised_RBF_maker(reset_params,**kwargs):
-    model = RBFLayer(
-        # radial_function=rbf_inv,
-        # radial_function=rbf_gaussian,
-        radial_function=rbf_laplacian,
-        norm_function=partial(l_norm,p=2),
-        **kwargs)
-    model.reset(**reset_params)
-    return model
+def partialised_RBF_maker(reset_params, **kwargs):
+    return MultiBatchRBFLayer(reset_params, **kwargs)
 
 def partialised_AnisotropicRBF_maker(reset_params,**kwargs):
     model = AnisotropicRBFLayer(

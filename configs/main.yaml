@@ -31,6 +31,7 @@ defaults:
   - dynamical_systems@1bitflipflop_Vanilla64D_long_isotropic  : 1bitflipflop_Vanilla64D_long_isotropic
   - dynamical_systems@1bitflipflop_2D_long  : 1bitflipflop_2D_long
   - dynamical_systems@finkelstein_fontolan_RNN  : finkelstein_fontolan_RNN
+  - dynamical_systems@finkelstein_fontolan_RNN_multiscale  : finkelstein_fontolan_RNN_multiscale
   - dynamical_systems@radial2D_bistable  : radial2D_bistable
   - dynamical_systems@multistable1D : multistable1D
   - dynamical_systems@radial2D_bistable_limit_cycle : radial2D_bistable_limit_cycle
@@ -76,11 +77,11 @@ defaults:
 ##### End defaults ######
 
 
-save_KEF_model    : true
+save_KEF_model    : false
 load_KEF_model    : false
 plot_KEF_of_traj  : false
 save_results      : false
-run_analysis      : true
+run_analysis      : false
 runGD_analytical  : false
 runGD             : false
 run_fixed_point_finder  : false
@@ -110,15 +111,18 @@ model_choice  : ResNet_layers40
 #dynamics_choice : 1bitflipflop_Vanilla64D_long_isotropic
 #dynamics_choice : 1bitflipflop_2D_long
 #dynamics_choice : finkelstein_fontolan_RNN
+dynamics_choice : finkelstein_fontolan_RNN_multiscale
 #dynamics_choice : hypercube
-dynamics_choice : bistableND
+#dynamics_choice : bistableND
 #dynamics_choice : radial2D_bistable
+
 
 ### main train func
 #train_func_teacher :
 #  _target_  : learn_koopman_eig.train_on_teacher
 #  _partial_ : true
 #  num_epochs    : 1000 #00 #0 #3000
+#  learning_rate : 1e-2
 #  learning_rate : 1e-2
 #  batch_size    : 50 #1000
 #  dynamics_dim  : ${dynamics.dim}
@@ -165,14 +169,14 @@ separatrix_locator :
   use_multiprocessing : false
   verbose : true
   model_class: null
-  device  : cuda:1
+  device  : cpu
 
 experiment_details : experiment_${model.name}_lr${separatrix_locator_fit_kwargs.learning_rate}_batch${separatrix_locator_fit_kwargs.batch_size}_${separatrix_locator_fit_kwargs.normaliser._target_}_gmmratio${separatrix_locator_fit_kwargs.gmm_mix_ratio}
 
 separatrix_locator_fit_kwargs:
-  num_epochs: 500 # 1000 #1000 #2000 #500 #500 #1000 #400 #1000 #5000 #5000 #3000 #5000 #10000 #5000 #20000 #2000 #500 #2000 #2000 #2000 #1000 #2000 #500 #500 #500 #1000 #1500 #400 #200 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
+  num_epochs: 1000 #500 # 1000 #1000 #2000 #500 #500 #1000 #400 #1000 #5000 #5000 #3000 #5000 #10000 #5000 #20000 #2000 #500 #2000 #2000 #2000 #1000 #2000 #500 #500 #500 #1000 #1500 #400 #200 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
   learning_rate: 0.1e-3 #0.5e-3 #3e-3 #3e-3 #1e-3 #45e-3 #5e-3 1e-2
-  batch_size: 5000 #20000 #7000 #5000 #5000 #1000
+  batch_size: 2000 #20000 #7000 #5000 #5000 #1000
   ext_inp_batch_size  : 500
   ext_inp_reg_coeff   : 0.1
 #  logger:
@@ -315,6 +319,7 @@ dynamics_options:
   1bitflipflop_32D_long_isotropic : ${1bitflipflop_32D_long_isotropic}
   1bitflipflop_Vanilla64D_long_isotropic  : ${1bitflipflop_Vanilla64D_long_isotropic}
   finkelstein_fontolan_RNN  : ${finkelstein_fontolan_RNN}
+  finkelstein_fontolan_RNN_multiscale : ${finkelstein_fontolan_RNN_multiscale}
   hypercube  : ${hypercube}
 
 ### Analytical solution

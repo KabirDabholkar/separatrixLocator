@@ -105,6 +105,11 @@ class SeparatrixLocator(BaseEstimator):
             kef_outputs.append(kef_output.cpu())
         return torch.concat(kef_outputs, axis=-1)
 
+    def to(self,device):
+        self.device = device
+        for model in self.models:
+            model.to(device)
+
     def score(self, func, distribution, **kwargs):
         scores = []
         for model in self.models:

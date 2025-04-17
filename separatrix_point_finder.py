@@ -1,0 +1,103 @@
+import torch
+from torchdiffeq import odeint
+from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
+
+def find_separatrix_point_along_line(dynamics_function, external_input, attractors, num_points=5, num_iterations=5, time_points=None, return_all_points=False):
+    """
+    Find a point on the separatrix along the line between two attractors by iteratively refining the search space.
+    
+    Args:
+        dynamics_function: Function that defines the system dynamics
+        external_input: External input tensor
+        attractors: Tuple of two attractor points
+        num_points: Number of points to sample along the line between attractors
+        num_iterations: Number of refinement iterations
+        time_points: Time points for trajectory integration. If None, defaults to [0, 5000]
+        return_all_points: If True, returns all points along the line. If False (default), returns only the mean point.
+        
+    Returns:
+        If return_all_points is False (default):
+            mean_point: The mean of the final refined points along the line
+            trajectories: Trajectories from the final points
+            labels: Cluster labels for the final points
+        If return_all_points is True:
+            current_points: All final refined points along the line
+            trajectories: Trajectories from the final points
+            labels: Cluster labels for the final points
+    """
+    if time_points is None:
+        time_points = torch.linspace(0, 5000, 2)
+        
+    attractor1, attractor2 = attractors
+    current_points = attractor1 + torch.linspace(0, 1, num_points).unsqueeze(-1) * (attractor2 - attractor1)
+    current_t_values = torch.linspace(0, 1, num_points)
+    
+    for iteration in range(num_iterations):
+        # Run trajectories for all current points
+        trajectories = []
+        for point in current_points:
+            trajectory = odeint(lambda t, x: dynamics_function(x, external_input), point, time_points).detach().cpu()
+            trajectories.append(trajectory)
+        
+        # Get final points and perform k-means clustering
+        final_points = torch.stack([traj[-1] for traj in trajectories])
+        kmeans = KMeans(n_clusters=2, random_state=0).fit(final_points)
+        labels = kmeans.labels_
+        
+        # Find the index where the trajectory switches from one cluster to another
+        switch_idx = None
+        for i in range(len(current_points)-1):
+            if labels[i] != labels[i+1]:
+                switch_idx = i
+                break
+        
+        if switch_idx is None:
+            print(f"Could not find switch point in iteration {iteration}")
+            break
+            
+        # Create new grid between the switching points
+        new_t_values = torch.linspace(current_t_values[switch_idx], 
+                                    current_t_values[switch_idx+1], 
+                                    num_points)
+        current_points = attractor1 + new_t_values.unsqueeze(-1) * (attractor2 - attractor1)
+        current_t_values = new_t_values
+        
+        print(f"Iteration {iteration}: Found switch between points {switch_idx} and {switch_idx+1}")
+    
+    if return_all_points:
+        return current_points, trajectories, labels
+    else:
+        return torch.mean(current_points, dim=0)
+
+def plot_separatrix_trajectories(trajectories, labels, points, attractors, num_points):
+    """
+    Plot the trajectories and points along the line between attractors.
+    
+    Args:
+        trajectories: List of trajectories
+        labels: Cluster labels for the points
+        points: Points along the line between attractors
+        attractors: Tuple of two attractor points
+        num_points: Number of points used
+    """
+    plt.figure(figsize=(5,5))
+    colors = plt.cm.viridis(torch.linspace(0, 1, num_points))  # Color gradient for trajectories
+    
+    # Plot trajectories from find_separatrix_point_along_line
+    for i, (traj, label) in enumerate(zip(trajectories, labels)):
+        plt.plot(traj[:, 0], traj[:, 1], '--', color='gray', alpha=0.3)
+        plt.scatter(traj[0, 0], traj[0, 1], c='C' + str(label), marker='o', s=50)
+    
+    # Plot points along the line
+    for i, point in enumerate(points):
+        plt.scatter(point[0], point[1], c=colors[i], marker='o', s=50)
+    
+    attractor1, attractor2 = attractors
+    plt.scatter(attractor1[0], attractor1[1], c='r', label='Attractor 1', s=100)
+    plt.scatter(attractor2[0], attractor2[1], c='g', label='Attractor 2', s=100)
+    plt.xlabel('X-axis')
+    plt.ylabel('Y-axis')
+    plt.title('Trajectories from Points along Line between Attractors')
+    plt.legend()
+    plt.show() 

@@ -8,6 +8,8 @@ function :
 
 IC_distribution_fit :
 #  - ${..IC_distribution}
+  - ${..IC_distribution_twentieth}
+  - ${..IC_distribution_tenth}
   - ${..IC_distribution_fourth}
   - ${..IC_distribution_half}
   - ${..IC_distribution1}
@@ -29,6 +31,22 @@ IC_distribution:
     _target_  : torch.distributions.Uniform
     low       : -10
     high      : 10
+  dim : ${..dim}
+
+IC_distribution_twentieth:
+  _target_  : custom_distributions.makeIIDMultiVariate
+  dist  :
+    _target_  : torch.distributions.Normal
+    loc       : 0
+    scale     : 0.05
+  dim : ${..dim}
+
+IC_distribution_tenth:
+  _target_  : custom_distributions.makeIIDMultiVariate
+  dist  :
+    _target_  : torch.distributions.Normal
+    loc       : 0
+    scale     : 0.1
   dim : ${..dim}
 
 IC_distribution_fourth:
@@ -110,8 +128,8 @@ hidden_axis:
   pos       : ${..bistable_axis}
   length    : ${..dim}
 
-name : bistable${.dim}D_multiscale0.1 #${.IC_distribution.dist.scale}
-dim  : 200 #20 #100 #600 #200 #200 #20 #600 #200 # 600
+name : bistable${.dim}D_multiscale #0.1 #${.IC_distribution.dist.scale}
+dim  : 600 #20 #100 #600 #200 #200 #20 #600 #200 # 600
 bistable_axis : 0 #15 #123
 equation_latex  : x-x^3
 analytical_eigenfunction:

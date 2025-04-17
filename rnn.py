@@ -30,6 +30,7 @@ def get_autonomous_dynamics_from_model(model,device='cpu',rnn_submodule_name='rn
             submodule = getattr(model,rnn_submodule_name)
         hx = hx[None]
         inp = torch.zeros_like(hx)[..., :submodule.input_size] if inp is None else inp[None]
+        submodule.to(hx.device)
         output = submodule(inp,hx,**kwargs)[output_id][0]
         return output
     return dynamics
@@ -53,12 +54,12 @@ def hidden_distribution(hidden, alpha=1e-4):
     cov += torch.eye(cov.shape[0]) * alpha
     return torch.distributions.MultivariateNormal(mean, cov)
 
-def hidden_distribution_with_spectral_norm(hidden, alpha=1e-4):
+def hidden_distribution_with_spectral_norm(hidden, scale=1):
     hidden = reshape_hidden(hidden)
     mean = hidden.mean(0)
     cov = torch.cov((hidden - mean[None]).T)
     spectral_norm = torch.linalg.norm(cov, ord=2)
-    cov = torch.eye(cov.shape[0]) * spectral_norm
+    cov = torch.eye(cov.shape[0]) * spectral_norm * scale
     return torch.distributions.MultivariateNormal(mean, cov)
 
 class GRU_RNN(nn.Module):

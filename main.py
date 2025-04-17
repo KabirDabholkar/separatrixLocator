@@ -113,6 +113,94 @@ def main_multimodel(cfg):
         # plot_summary(dmd, x=X[:, 0], t=time_points, d=d)
 
 
+    print(dynamics_function)
+    point_on_separatrix = instantiate(cfg.dynamics.point_on_separatrix)
+    attractors = instantiate(cfg.dynamics.attractors1)
+    attractor1, attractor2 = attractors
+    
+    # Generate points along the line between attractors
+    num_points = 5  # Number of points to sample along the line
+    t_values = torch.linspace(0, 1, num_points)
+    points = attractor1 + t_values.unsqueeze(-1) * (attractor2 - attractor1)
+    
+    # Run dynamics from each point with fixed external input
+    time_points = torch.linspace(0, 5000, 100)  # 10 seconds, 100 time steps
+    external_input = torch.tensor([0.0, 0.0, 0.91])[None]
+    def find_separatrix_points(dynamics_function, external_input, attractors, num_points=5, num_iterations=5, time_points=None):
+        if time_points is None:
+            time_points = torch.linspace(0, 5000, 2)
+            
+        attractor1, attractor2 = attractors
+        current_points = attractor1 + torch.linspace(0, 1, num_points).unsqueeze(-1) * (attractor2 - attractor1)
+        current_t_values = torch.linspace(0, 1, num_points)
+        
+        for iteration in range(num_iterations):
+            # Run trajectories for all current points
+            trajectories = []
+            for point in current_points:
+                trajectory = odeint(lambda t, x: dynamics_function(x, external_input), point, time_points).detach().cpu()
+                trajectories.append(trajectory)
+            
+            # Get final points and perform k-means clustering
+            final_points = torch.stack([traj[-1] for traj in trajectories])
+            from sklearn.cluster import KMeans
+            kmeans = KMeans(n_clusters=2, random_state=0).fit(final_points)
+            labels = kmeans.labels_
+            
+            # Find the index where the trajectory switches from one cluster to another
+            switch_idx = None
+            for i in range(len(current_points)-1):
+                if labels[i] != labels[i+1]:
+                    switch_idx = i
+                    break
+            
+            if switch_idx is None:
+                print(f"Could not find switch point in iteration {iteration}")
+                break
+                
+            # Create new grid between the switching points
+            new_t_values = torch.linspace(current_t_values[switch_idx], 
+                                        current_t_values[switch_idx+1], 
+                                        num_points)
+            current_points = attractor1 + new_t_values.unsqueeze(-1) * (attractor2 - attractor1)
+            current_t_values = new_t_values
+            
+            print(f"Iteration {iteration}: Found switch between points {switch_idx} and {switch_idx+1}")
+            
+        return current_points, trajectories, labels
+
+    # Call the function
+    current_points, trajectories, labels = find_separatrix_points(
+        dynamics_function, 
+        external_input, 
+        attractors
+    )
+    # Plot trajectories
+    plt.figure(figsize=(5,5))
+    colors = plt.cm.viridis(t_values)  # Color gradient for trajectories
+    
+    # Plot trajectories from find_separatrix_points
+    for i, (traj, label) in enumerate(zip(trajectories, labels)):
+        plt.plot(traj[:, 0], traj[:, 1], '--', color='gray', alpha=0.3)
+        plt.scatter(traj[0, 0], traj[0, 1], c='C' + str(label), marker='o', s=50)
+    
+    # Plot original trajectories
+    for i, point in enumerate(points):
+        trajectory = odeint(lambda t, x: dynamics_function(x, external_input), point, time_points).detach().cpu()
+        plt.plot(trajectory[:, 0], trajectory[:, 1], '-', color=colors[i], 
+                label=f'Trajectory {i+1}' if i in [0, num_points-1] else None)
+        plt.scatter(point[0], point[1], c=colors[i], marker='o', s=50)
+    
+    plt.scatter(attractor1[0], attractor1[1], c='r', label='Attractor 1', s=100)
+    plt.scatter(attractor2[0], attractor2[1], c='g', label='Attractor 2', s=100)
+    plt.xlabel('X-axis')
+    plt.ylabel('Y-axis')
+    plt.title('Trajectories from Points between Attractors')
+    plt.legend()
+    plt.show()
+    # plt.savefig(Path(cfg.savepath) / "midpoint_trajectory.png", dpi=200)
+    # plt.close()
+
     SL = instantiate(cfg.separatrix_locator)
     SL.models = [instantiate(cfg.model).to(SL.device) for _ in range(cfg.separatrix_locator.num_models)]
 
@@ -179,7 +267,8 @@ def main_multimodel(cfg):
     if cfg.save_KEF_model:
         SL.save_models(Path(cfg.savepath)/cfg.experiment_details)
 
-    SL.models = [model.to('cpu') for model in SL.models]
+    SL.to('cpu')
+
     scores = SL.score(
         dynamics_function,
         distribution,
@@ -426,50 +515,9 @@ def main_multimodel(cfg):
             # Number of models and number of random vectors
             num_models = SL.num_models
             num_positions = cfg.dynamics.dim
+            num_positions = np.minimum(num_positions, 10)
             n_trials = 20
             num_random_vectors = 10
-
-            import torch.nn as nn
-
-            # Define the neural network model
-            class SimpleNN(nn.Module):
-                def __init__(self, input_dim, output_dim):
-                    super(SimpleNN, self).__init__()
-                    self.linear = nn.Linear(input_dim, output_dim)
-                    self.bias = nn.Parameter(torch.zeros(1))  # Trainable bias term
-
-                def forward(self, x):
-                    sigmoid = lambda x: (2 / (1 + torch.exp(-(x - self.bias)))) - 1  # Apply bias before sigmoid
-                    return self.linear(sigmoid(x))
-
-            # Get input and output dimensions from the existing model
-            input_dim = cfg.model.input_size  # Assuming input dimension matches dynamics dimension
-            output_dim = cfg.model.output_size   # Assuming model has an attribute for output dimension
-
-            # Instantiate the neural network
-            neural_network = SimpleNN(input_dim, output_dim)
-
-            # Example of how to fit the neural network (you may need to adjust this part)
-            num_epochs = 0 #1000 #500 #100
-            batch_size = 1000
-            optimizer = torch.optim.Adam(neural_network.parameters(), lr=0.2)
-            criterion = nn.MSELoss()
-            for epoch in range(num_epochs):
-                optimizer.zero_grad()
-                # Sample input_tensor from the distribution
-                input_tensor = distribution.sample(sample_shape=(batch_size,)).float()
-                
-                # Get model output as target_tensor
-                with torch.no_grad():
-                    target_tensor = model(input_tensor)
-
-                outputs = neural_network(input_tensor)
-                loss = criterion(outputs, target_tensor)  # Define target_tensor based on your needs
-                loss.backward()
-                optimizer.step()
-                print(f'Epoch: {epoch}, Loss:',loss.item())
-            # print(outputs.shape,target_tensor.shape)
-            neural_network.eval()
 
             # Create subplots with 10 rows and 10 columns
             fig, axs = plt.subplots(num_models, num_positions, figsize=(num_positions, num_models+1), sharex=True, sharey=True)
@@ -497,14 +545,11 @@ def main_multimodel(cfg):
                         # Run the model on the input tensor
                         with torch.no_grad():
                             output = model(input_tensor)
-                            output1 = neural_network(input_tensor)
                         # Store the results
                         trial_results = output[:, 0].tolist()  # Assuming single output
-                        trial_results1 = output1[:,0].tolist()
 
                         # Plot the results for this trial
                         ax.plot(x_values, trial_results, lw=1, alpha=0.5)
-                        # ax.plot(x_values, trial_results1, lw=1, ls='dashed', alpha=0.5, c='red')
 
                     # Evaluate when all n_values are zero
                     zero_values = np.zeros(cfg.dynamics.dim)
@@ -732,7 +777,7 @@ def main_multimodel(cfg):
                     torch.log,
                     lambda x: x + 1,
                     torch.exp,
-                    partial(torch.sum, dim=-1, keepdims=True),
+                    # partial(torch.sum, dim=-1, keepdims=True),
                     torch.log,
                     torch.abs,
                     SL.models[i] #.to('cpu')
@@ -751,11 +796,13 @@ def main_multimodel(cfg):
                 norm_val = float(
                     torch.mean(torch.sum(mod_model(samples) ** 2, axis=-1)).sqrt().detach().numpy())
 
-                mod_model = compose(
-                    lambda x: x / norm_val,
-                    mod_model
-                )
-                KEFval = mod_model(torch.concat([hidden,inputs],dim=-1)).detach()
+                # mod_model = compose(
+                #     lambda x: x / norm_val,
+                #     mod_model
+                # )
+                concat_input = torch.concat([hidden,inputs],dim=-1)
+                # print('concat_input.shape',concat_input.shape,'samples.shape',samples.shape)
+                KEFval = mod_model(concat_input.reshape(-1,concat_input.shape[-1])).detach().reshape(*concat_input.shape[:2],-1)
                 KEFvals.append(KEFval)
 
             KEFvals = torch.concat(KEFvals,dim=-1).detach().cpu()
