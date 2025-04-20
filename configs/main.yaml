@@ -37,6 +37,8 @@ defaults:
   - dynamical_systems@radial2D_bistable_limit_cycle : radial2D_bistable_limit_cycle
   - dynamical_systems@hypercube : hypercube
   - dynamical_systems@bistableND : bistableND
+  - dynamical_systems@bistable4D_nonnormal : bistable4D_nonnormal
+  - dynamical_systems@finkelstein_fontolan_RNN_multiscale_on_separatrix : finkelstein_fontolan_RNN_multiscale_on_separatrix
 
 ####### Models #########
 #  - models@DNN_model  : DNN_layers6
@@ -78,10 +80,10 @@ defaults:
 
 
 save_KEF_model    : false
-load_KEF_model    : false
+load_KEF_model    : true
 plot_KEF_of_traj  : false
 save_results      : false
-run_analysis      : false
+run_analysis      : true
 runGD_analytical  : false
 runGD             : false
 run_fixed_point_finder  : false
@@ -111,9 +113,11 @@ model_choice  : ResNet_layers40
 #dynamics_choice : 1bitflipflop_Vanilla64D_long_isotropic
 #dynamics_choice : 1bitflipflop_2D_long
 #dynamics_choice : finkelstein_fontolan_RNN
-dynamics_choice : finkelstein_fontolan_RNN_multiscale
+#dynamics_choice : finkelstein_fontolan_RNN_multiscale
+dynamics_choice : finkelstein_fontolan_RNN_multiscale_on_separatrix
 #dynamics_choice : hypercube
 #dynamics_choice : bistableND
+#dynamics_choice : bistable4D_nonnormal
 #dynamics_choice : radial2D_bistable
 
 
@@ -171,14 +175,18 @@ separatrix_locator :
   model_class: null
   device  : cpu
 
-experiment_details : experiment_${model.name}_lr${separatrix_locator_fit_kwargs.learning_rate}_batch${separatrix_locator_fit_kwargs.batch_size}_${separatrix_locator_fit_kwargs.normaliser._target_}_gmmratio${separatrix_locator_fit_kwargs.gmm_mix_ratio}
+experiment_details : experiment_${model.name}_lr${separatrix_locator_fit_kwargs.optimizer.lr}_batch${separatrix_locator_fit_kwargs.batch_size}_${separatrix_locator_fit_kwargs.normaliser._target_}_gmmratio${separatrix_locator_fit_kwargs.gmm_mix_ratio}
 
 separatrix_locator_fit_kwargs:
-  num_epochs: 1000 #500 # 1000 #1000 #2000 #500 #500 #1000 #400 #1000 #5000 #5000 #3000 #5000 #10000 #5000 #20000 #2000 #500 #2000 #2000 #2000 #1000 #2000 #500 #500 #500 #1000 #1500 #400 #200 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
-  learning_rate: 0.1e-3 #0.5e-3 #3e-3 #3e-3 #1e-3 #45e-3 #5e-3 1e-2
+  num_epochs: 0 #1000 #500 #100 #500 #500 #500 # 1000 #1000 #2000 #500 #500 #1000 #400 #1000 #5000 #5000 #3000 #5000 #10000 #5000 #20000 #2000 #500 #2000 #2000 #2000 #1000 #2000 #500 #500 #500 #1000 #1500 #400 #200 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
+  optimizer :
+    _target_  : torch.optim.Adam
+    _partial_ : true
+    lr: 0.1e-3  #0.5e-3 #3e-3 #3e-3 #1e-3 #45e-3 #5e-3 1e-2
+    weight_decay  : 5e-4  #5e-3
   batch_size: 2000 #20000 #7000 #5000 #5000 #1000
   ext_inp_batch_size  : 500
-  ext_inp_reg_coeff   : 0.1
+  ext_inp_reg_coeff   : 0.0 #0.1
 #  logger:
 #    _target_: torch.utils.tensorboard.SummaryWriter
 #    log_dir: ${...savepath}/experiment
@@ -303,6 +311,7 @@ model_options:
 dynamics_options:
   bistable1D : ${bistable1D}
   bistableND : ${bistableND}
+  bistable4D_nonnormal  : ${bistable4D_nonnormal}
   bifurcating_bistable1D  : ${bifurcating_bistable1D}
   multistable1D : ${multistable1D}
   bistable2D : ${bistable2D}
@@ -320,9 +329,10 @@ dynamics_options:
   1bitflipflop_Vanilla64D_long_isotropic  : ${1bitflipflop_Vanilla64D_long_isotropic}
   finkelstein_fontolan_RNN  : ${finkelstein_fontolan_RNN}
   finkelstein_fontolan_RNN_multiscale : ${finkelstein_fontolan_RNN_multiscale}
+  finkelstein_fontolan_RNN_multiscale_on_separatrix : ${finkelstein_fontolan_RNN_multiscale_on_separatrix}
   hypercube  : ${hypercube}
 
-### Analytical solution
+
 #model: ${dynamics.analytical_eigenfunction}
 #model :  ${model_options.${model_choice}}
 dynamics  : ${dynamics_options.${dynamics_choice}}

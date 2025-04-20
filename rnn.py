@@ -22,6 +22,7 @@ def multidimbatch(func):
 def set_model_with_checkpoint(model,checkpoint):
     model.load_state_dict(checkpoint) #['model_state_dict'])
     return model
+
 def get_autonomous_dynamics_from_model(model,device='cpu',rnn_submodule_name='rnn',kwargs={},output_id=0):
     @multidimbatch
     def dynamics(hx,inp=None):
@@ -55,12 +56,31 @@ def hidden_distribution(hidden, alpha=1e-4):
     return torch.distributions.MultivariateNormal(mean, cov)
 
 def hidden_distribution_with_spectral_norm(hidden, scale=1):
-    hidden = reshape_hidden(hidden)
+    if len(hidden.shape)>2:
+        hidden = reshape_hidden(hidden)
     mean = hidden.mean(0)
     cov = torch.cov((hidden - mean[None]).T)
     spectral_norm = torch.linalg.norm(cov, ord=2)
     cov = torch.eye(cov.shape[0]) * spectral_norm * scale
     return torch.distributions.MultivariateNormal(mean, cov)
+
+def get_spectral_norm(hidden):
+    """
+    Calculate the spectral norm of the covariance matrix of hidden states.
+    
+    Args:
+        hidden: Tensor of shape (batch_size, seq_len, hidden_dim) or (batch_size, hidden_dim)
+    
+    Returns:
+        spectral_norm: Scalar value representing the spectral norm of the covariance matrix
+    """
+    if len(hidden.shape)>2:
+        hidden = reshape_hidden(hidden)
+    mean = hidden.mean(0)
+    cov = torch.cov((hidden - mean[None]).T)
+    spectral_norm = torch.linalg.norm(cov, ord=2)
+    return float(spectral_norm)
+
 
 class GRU_RNN(nn.Module):
     def __init__(self, num_h, ob_size, act_size):

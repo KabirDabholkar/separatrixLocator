@@ -1887,7 +1887,7 @@ def train_with_logger_ext_inp(
 
 
 def train_with_logger_multiple_dists(
-        model, F, dists, external_input_dist=None, dist_requires_dim=True, num_epochs=1000, learning_rate=1e-3,
+        model, F, dists, external_input_dist=None, dist_requires_dim=True, num_epochs=1000,
         batch_size=64,
         dynamics_dim=1, decay_module=None, logger=None, lr_scheduler=None,
         eigenvalue=1, print_every_num_epochs=10, device='cpu', param_specific_hyperparams=[],
@@ -1897,6 +1897,7 @@ def train_with_logger_multiple_dists(
         ext_inp_batch_size=None,
         ext_inp_reg_coeff=0,
         metadata=None,
+        optimizer = partial(torch.optim.Adam,lr=1e-4),
         fixed_x_batch=None,
         fixed_external_inputs=None,
         gmm_mix_ratio=0.5,
@@ -1925,7 +1926,7 @@ def train_with_logger_multiple_dists(
     else:
         param_specific_hyperparams = evaluate_param_specific_hyperparams(model, param_specific_hyperparams)
 
-    optimizer = torch.optim.Adam(param_specific_hyperparams, lr=learning_rate)
+    optimizer = optimizer(param_specific_hyperparams)
     if lr_scheduler is not None:
         lr_scheduler = lr_scheduler(optimizer)
 

@@ -49,7 +49,154 @@ project_path = os.getenv("PROJECT_PATH")
 @hydra.main(version_base='1.3', config_path=CONFIG_PATH, config_name=CONFIG_NAME)
 def decorated_main(cfg):
     # return main(cfg)
-    return main_multimodel(cfg)
+    # return main_multimodel(cfg)
+    return finkelstein_fontolan(cfg)
+
+def finkelstein_fontolan(cfg):
+    omegaconf_resolvers()
+
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+    dynamics_function = instantiate(cfg.dynamics.function)
+
+    attractors = instantiate(cfg.dynamics.attractors2)
+
+    def cubic_hermite(x, y, m_x, m_y, num_points=100):
+        """
+        Generate points on a cubic Hermite curve joining points x and y with tangents m_x and m_y.
+
+        Arguments:
+        - x: Starting point of the curve.
+        - y: Ending point of the curve.
+        - m_x: Tangent vector at the starting point.
+        - m_y: Tangent vector at the ending point.
+        - num_points: Number of points to generate on the curve.
+
+        Returns:
+        - points: Array of points on the cubic Hermite curve.
+        """
+        alpha = np.linspace(0, 1, num_points)
+
+        # Cubic Hermite interpolation formula
+        points = (2 * alpha ** 3 - 3 * alpha ** 2 + 1)[:, np.newaxis] * x + \
+                 (-2 * alpha ** 3 + 3 * alpha ** 2)[:, np.newaxis] * y + \
+                 (alpha ** 3 - 2 * alpha ** 2 + alpha)[:, np.newaxis] * m_x + \
+                 (alpha ** 3 - alpha ** 2)[:, np.newaxis] * m_y
+
+        return points
+
+    num_points = 40
+    rand_scale = 4.1 #10.0
+    # Example usage
+    x,y = attractors.detach().cpu().numpy()#
+    # x = np.array([0, 0])  # Start point
+    # y = np.array([1, 1])  # End point
+    m_x = -x + y  # Tangent at x
+    m_y = -x + y  # Tangent at y
+
+    num_curves = 20 #20  # Number of random curves to generate
+    plt.figure(figsize=(10, 10))
+    
+    # Accumulate all points
+    all_points = []
+    for _ in range(num_curves):
+        # Generate random perturbations for tangents
+        m_x_perturbed = m_x * 1.4 + np.random.randn(m_x.shape[0]) * rand_scale
+        m_y_perturbed = m_y * 1.4 + np.random.randn(m_x.shape[0]) * rand_scale
+        
+        # Generate points on the cubic Hermite curve
+        points = cubic_hermite(x, y, m_x_perturbed, m_y_perturbed, num_points)
+        all_points.append(points)
+    
+    # Stack all points into a single array
+    all_points = np.vstack(all_points)
+    
+    # Perform PCA
+    from sklearn.decomposition import PCA
+    pca = PCA(n_components=2)
+    pca_points = pca.fit_transform(all_points)
+    
+    # Plot PCA results
+    plt.figure(figsize=(10, 10))
+    plt.plot(pca_points[:, 0], pca_points[:, 1], alpha=0.3)
+    
+    # Plot endpoints in PCA space
+    endpoints = np.array([x, y])
+    pca_endpoints = pca.transform(endpoints)
+    plt.scatter(pca_endpoints[:, 0], pca_endpoints[:, 1], color='red', label="Endpoints")
+    
+    plt.legend()
+    plt.xlabel('Principal Component 1')
+    plt.ylabel('Principal Component 2')
+    plt.title('PCA of Cubic Hermite Interpolations')
+    plt.grid(True)
+    plt.show()
+
+
+    # Convert points to torch tensor and run ODE integration
+    points_tensor = torch.tensor(all_points, dtype=torch.float32)
+    time_points = torch.linspace(0, 1000, 20)  # Adjust time range and steps as needed
+
+    ext_input = torch.tensor([0.0,0.0,0.91]).type_as(points_tensor)
+    ext_input = ext_input[None]
+    ext_input = ext_input.repeat(all_points.shape[0],1)
+
+    # Run ODE integration for all points
+    with torch.no_grad():
+        trajectories = odeint(lambda t, x: dynamics_function(x,ext_input), points_tensor, time_points)
+    # Convert trajectories to numpy and reshape for PCA
+    trajectories_np = trajectories.detach().cpu().numpy()
+    trajectories_reshaped = trajectories_np.reshape(-1, trajectories_np.shape[-1])
+    
+
+    from sklearn.cluster import KMeans
+    kmeans = KMeans(n_clusters=2, random_state=42)
+    cluster_labels = kmeans.fit_predict(trajectories_np[-1])
+
+    # Plot PCA results
+    plt.figure(figsize=(10, 10))
+    plt.scatter(pca_points[:, 0], pca_points[:, 1], c=['C0' if label == 0 else 'C1' for label in cluster_labels], alpha=1.0)
+
+    # Plot endpoints in PCA space
+    endpoints = np.array([x, y])
+    pca_endpoints = pca.transform(endpoints)
+    plt.scatter(pca_endpoints[:, 0], pca_endpoints[:, 1], color='red', label="Endpoints")
+
+    plt.legend()
+    plt.xlabel('Principal Component 1')
+    plt.ylabel('Principal Component 2')
+    plt.title('PCA of Cubic Hermite Interpolations')
+    plt.grid(True)
+    plt.savefig("test_plots/hermite_cubic_interpolations_plus_clustering.png")
+    plt.show()
+
+    # # Perform PCA on trajectories using the same PCA object as before
+    # pca_trajectories = pca.transform(trajectories_reshaped)
+    # pca_trajectories = pca_trajectories.reshape(trajectories_np.shape[0], trajectories_np.shape[1], -1)
+    
+    # # Plot trajectories in PCA space
+    # plt.figure(figsize=(10, 10))
+    # for i in range(len(all_points)):
+    #     plt.plot(pca_trajectories[:, i, 0],
+    #             pca_trajectories[:, i, 1],
+    #             alpha=0.3,
+    #              c=f'C{cluster_labels[i]}')
+    #     plt.scatter(pca_trajectories[-1, i, 0],
+    #              pca_trajectories[-1, i, 1],
+    #              alpha=0.3,marker='x')
+    # plt.scatter(pca_endpoints[:, 0], pca_endpoints[:, 1], color='red', label="Endpoints")
+    # plt.legend()
+    # plt.xlabel('Principal Component 1')
+    # plt.ylabel('Principal Component 2')
+    # plt.title('Trajectories from Cubic Hermite Interpolations')
+    # plt.grid(True)
+    # plt.show()
+
+
+
+
+
+
+
 
 def main_multimodel(cfg):
     """
@@ -112,94 +259,6 @@ def main_multimodel(cfg):
         plt.show()
         # plot_summary(dmd, x=X[:, 0], t=time_points, d=d)
 
-
-    print(dynamics_function)
-    point_on_separatrix = instantiate(cfg.dynamics.point_on_separatrix)
-    attractors = instantiate(cfg.dynamics.attractors1)
-    attractor1, attractor2 = attractors
-    
-    # Generate points along the line between attractors
-    num_points = 5  # Number of points to sample along the line
-    t_values = torch.linspace(0, 1, num_points)
-    points = attractor1 + t_values.unsqueeze(-1) * (attractor2 - attractor1)
-    
-    # Run dynamics from each point with fixed external input
-    time_points = torch.linspace(0, 5000, 100)  # 10 seconds, 100 time steps
-    external_input = torch.tensor([0.0, 0.0, 0.91])[None]
-    def find_separatrix_points(dynamics_function, external_input, attractors, num_points=5, num_iterations=5, time_points=None):
-        if time_points is None:
-            time_points = torch.linspace(0, 5000, 2)
-            
-        attractor1, attractor2 = attractors
-        current_points = attractor1 + torch.linspace(0, 1, num_points).unsqueeze(-1) * (attractor2 - attractor1)
-        current_t_values = torch.linspace(0, 1, num_points)
-        
-        for iteration in range(num_iterations):
-            # Run trajectories for all current points
-            trajectories = []
-            for point in current_points:
-                trajectory = odeint(lambda t, x: dynamics_function(x, external_input), point, time_points).detach().cpu()
-                trajectories.append(trajectory)
-            
-            # Get final points and perform k-means clustering
-            final_points = torch.stack([traj[-1] for traj in trajectories])
-            from sklearn.cluster import KMeans
-            kmeans = KMeans(n_clusters=2, random_state=0).fit(final_points)
-            labels = kmeans.labels_
-            
-            # Find the index where the trajectory switches from one cluster to another
-            switch_idx = None
-            for i in range(len(current_points)-1):
-                if labels[i] != labels[i+1]:
-                    switch_idx = i
-                    break
-            
-            if switch_idx is None:
-                print(f"Could not find switch point in iteration {iteration}")
-                break
-                
-            # Create new grid between the switching points
-            new_t_values = torch.linspace(current_t_values[switch_idx], 
-                                        current_t_values[switch_idx+1], 
-                                        num_points)
-            current_points = attractor1 + new_t_values.unsqueeze(-1) * (attractor2 - attractor1)
-            current_t_values = new_t_values
-            
-            print(f"Iteration {iteration}: Found switch between points {switch_idx} and {switch_idx+1}")
-            
-        return current_points, trajectories, labels
-
-    # Call the function
-    current_points, trajectories, labels = find_separatrix_points(
-        dynamics_function, 
-        external_input, 
-        attractors
-    )
-    # Plot trajectories
-    plt.figure(figsize=(5,5))
-    colors = plt.cm.viridis(t_values)  # Color gradient for trajectories
-    
-    # Plot trajectories from find_separatrix_points
-    for i, (traj, label) in enumerate(zip(trajectories, labels)):
-        plt.plot(traj[:, 0], traj[:, 1], '--', color='gray', alpha=0.3)
-        plt.scatter(traj[0, 0], traj[0, 1], c='C' + str(label), marker='o', s=50)
-    
-    # Plot original trajectories
-    for i, point in enumerate(points):
-        trajectory = odeint(lambda t, x: dynamics_function(x, external_input), point, time_points).detach().cpu()
-        plt.plot(trajectory[:, 0], trajectory[:, 1], '-', color=colors[i], 
-                label=f'Trajectory {i+1}' if i in [0, num_points-1] else None)
-        plt.scatter(point[0], point[1], c=colors[i], marker='o', s=50)
-    
-    plt.scatter(attractor1[0], attractor1[1], c='r', label='Attractor 1', s=100)
-    plt.scatter(attractor2[0], attractor2[1], c='g', label='Attractor 2', s=100)
-    plt.xlabel('X-axis')
-    plt.ylabel('Y-axis')
-    plt.title('Trajectories from Points between Attractors')
-    plt.legend()
-    plt.show()
-    # plt.savefig(Path(cfg.savepath) / "midpoint_trajectory.png", dpi=200)
-    # plt.close()
 
     SL = instantiate(cfg.separatrix_locator)
     SL.models = [instantiate(cfg.model).to(SL.device) for _ in range(cfg.separatrix_locator.num_models)]
@@ -271,11 +330,13 @@ def main_multimodel(cfg):
 
     scores = SL.score(
         dynamics_function,
-        distribution,
+        distribution_fit,
         external_input_dist=input_distribution,
         **instantiate(cfg.separatrix_locator_score_kwargs)
     )
+    # scales = [d.covariance_matrix[0,0] for d in distribution_fit]
     print('Scores:\n', scores.detach().cpu().numpy())
+    # print(scales)
     if hasattr(cfg,'separatrix_locator_score_kwargs_2'):
         scores2 = SL.score(
             dynamics_function,
@@ -529,8 +590,8 @@ def main_multimodel(cfg):
                     ax = axs[model_idx, pos] if SL.num_models>1 else axs[pos]
                     # Generate multiple random vectors for n_1 to n_10
                     for trial in range(n_trials):
-                        n_values = np.random.uniform(-5, 5, cfg.dynamics.dim)
-                        x_values = np.linspace(-5, 5, 100)
+                        n_values = np.random.uniform(-1, 1, cfg.dynamics.dim)
+                        x_values = np.linspace(-1.5, 1.5, 100)
 
                         # Create an array to store the results for this trial
                         trial_results = []
@@ -576,63 +637,75 @@ def main_multimodel(cfg):
             # fig.savefig(Path(cfg.savepath) / "model_output_vs_x_positions.pdf")
             plt.close(fig)
 
+            # Define distributions to test
+            distributions = distribution_fit
+            dist_names = range(len(distribution_fit))#[f"N(0,{d.dist.scale})" for d in cfg.dynamics.IC_distribution_fit]
+            # colors = ['g', 'b', 'y', 'purple']
+
             batch_size = 1000
-            # Sample input_tensor from the distribution
-            input_tensor = distribution.sample(sample_shape=(batch_size,))
-            # input_tensor = (input_tensor*0.5) #+ input_tensor.mean(axis=0,keepdims=True)
-            input_tensor.requires_grad_(True)
+            for dist, name in zip(distributions, dist_names):
+                # Sample input_tensor from the distribution
+                input_tensor = dist.sample(sample_shape=(batch_size,))
+                # input_tensor = input_tensor - 0.5
+                input_tensor.requires_grad_(True)
 
-            # Compute phi(x)
-            phi_x = model(input_tensor)
+                # Compute phi(x)
+                phi_x = model(input_tensor)
 
-            # Compute phi'(x) using autograd
-            phi_x_prime = torch.autograd.grad(
-                outputs=phi_x,
-                inputs=input_tensor,
-                grad_outputs=torch.ones_like(phi_x),
-                create_graph=True
-            )[0]
+                # Compute phi'(x) using autograd
+                phi_x_prime = torch.autograd.grad(
+                    outputs=phi_x,
+                    inputs=input_tensor,
+                    grad_outputs=torch.ones_like(phi_x),
+                    create_graph=True
+                )[0]
 
-            F_x = dynamics_function(input_tensor)
+                F_x = dynamics_function(input_tensor)
 
-            # Compute the dot product
-            dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True)
+                # Compute the dot product
+                dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True)
 
-            residual = torch.abs(phi_x - dot_prod)
+                residual = torch.abs(phi_x - dot_prod)
 
-            fig,ax = plt.subplots()
-            ax.scatter(torch.abs(phi_x).detach().cpu().numpy(),residual.detach().cpu().numpy())
-            ax.set_xlabel(r'$\psi(x)$')
-            ax.set_ylabel(r'$|\nabla \psi(x) \cdot f(x) - \lambda\psi(x)|$')
-            fig.tight_layout()
-            fig.savefig(Path(cfg.savepath) / cfg.experiment_details / "KEFvals_vs_residuals.png", dpi=200)
-            plt.close(fig)
+                # Plot KEF values vs residuals
+                fig, ax = plt.subplots()
+                ax.scatter(torch.abs(phi_x).detach().cpu().numpy(), residual.detach().cpu().numpy(), 
+                           label=name, alpha=0.5)
+                ax.set_xlabel(r'$\psi(x)$')
+                ax.set_ylabel(r'$|\nabla \psi(x) \cdot f(x) - \lambda\psi(x)|$')
+                ax.legend()
+                fig.tight_layout()
+                fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"KEFvals_vs_residuals_{name}.png", dpi=200)
+                plt.close(fig)
 
-            # Compute the dot product
-            std_i = torch.std(input_tensor.detach(),axis=-1,keepdims=True)
+                # Plot standard deviation vs residuals
+                std_i = torch.std(input_tensor.detach(), axis=-1, keepdims=True)
+                fig, ax = plt.subplots()
+                ax.scatter(std_i.cpu().numpy(), residual.detach().cpu().numpy(), 
+                          label=name, s=5, alpha=0.5)
+                ax.set_xlabel(r'$std(x_i)$')
+                ax.set_ylabel(r'$|\nabla \psi(x) \cdot f(x) - \lambda\psi(x)|$')
+                ax.legend()
+                fig.tight_layout()
+                fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"Stdi_vs_residuals_{name}.png", dpi=200)
+                plt.close(fig)
 
+                # Plot LHS vs RHS
+                fig, ax = plt.subplots()
+                ax.scatter(phi_x.detach().cpu().numpy(), dot_prod.detach().cpu().numpy(),
+                             label=name, alpha=0.5)
+                ax.set_xlabel(r'$\lambda\psi(x)$')
+                ax.set_ylabel(r'$\nabla \psi(x) \cdot f(x)$')
+                ax.legend()
+                
+                # Add a dashed line for x=y
+                xlim = ax.get_xlim()
+                ylim = ax.get_ylim()
+                ax.plot([xlim[0], xlim[1]], [xlim[0], xlim[1]], color='black', linestyle='dashed', linewidth=1)
 
-            fig, ax = plt.subplots()
-            ax.scatter(std_i.cpu().numpy(), residual.detach().cpu().numpy(),s=5)
-            ax.set_xlabel(r'$std(x_i)$')
-            ax.set_ylabel(r'$|\nabla \psi(x) \cdot f(x) - \lambda\psi(x)|$')
-            fig.tight_layout()
-            fig.savefig(Path(cfg.savepath) / cfg.experiment_details / "Stdi_vs_residuals.png", dpi=200)
-            plt.close(fig)
-
-            fig, ax = plt.subplots()
-            ax.scatter(phi_x.detach().cpu().numpy(), dot_prod.detach().cpu().numpy())
-            ax.set_xlabel(r'$\lambda\psi(x)$')
-            ax.set_ylabel(r'$\nabla \psi(x) \cdot f(x)$')
-            
-            # Add a dashed line for x=y
-            xlim = ax.get_xlim()
-            ylim = ax.get_ylim()
-            ax.plot([xlim[0], xlim[1]], [xlim[0], xlim[1]], color='black', linestyle='dashed', linewidth=1)
-
-            fig.tight_layout()
-            fig.savefig(Path(cfg.savepath) / cfg.experiment_details / "KEF_LHS_RHS.png", dpi=200)
-            plt.close(fig)
+                fig.tight_layout()
+                fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"KEF_LHS_RHS_{name}.png", dpi=200)
+                plt.close(fig)
 
         elif cfg.dynamics.dim > 2:
             # pass
@@ -913,7 +986,7 @@ def main_multimodel(cfg):
 
 
             # Run from interpolated line
-            n_grid = 100
+            n_grid = 500
             alpha = torch.linspace(-0.4, 1.4, n_grid)
             interpolated_points = alpha[:, None] * point1[None, :] + (1 - alpha)[:, None] * point2[None, :]
             interpolated_inputs = (inputs[top_indices[0][max_dist_idx[0]], top_indices[1][max_dist_idx[0]]] +
@@ -921,9 +994,10 @@ def main_multimodel(cfg):
 
             # Set simulation length for interpolated points
             run_T = 1000
+            samples_T = 20
 
             # Expand interpolated inputs over time dimension
-            interpolated_inputs_expanded = interpolated_inputs.repeat(n_grid, 1).unsqueeze(0).expand(run_T, -1, -1)
+            interpolated_inputs_expanded = interpolated_inputs.repeat(n_grid, 1).unsqueeze(0).expand(samples_T, -1, -1)
 
             use_odeint = True
 
@@ -933,8 +1007,9 @@ def main_multimodel(cfg):
                 def ode_dynamics(t, x):
                     return dynamics_function(x, interpolated_inputs_expanded[0, :, :])
 
-                times = torch.linspace(0, run_T, run_T)
+                times = torch.linspace(0, run_T, samples_T)
                 interpolated_trajectories = odeint(ode_dynamics, interpolated_points, times)
+                # interpolated_trajectories_lowtol = odeint(ode_dynamics, interpolated_points, times)
             else:
                 # Run RNN from interpolated initial conditions
                 interpolated_trajectories = rnn(
@@ -946,7 +1021,8 @@ def main_multimodel(cfg):
 
 
             # Reshape trajectories
-            interpolated_trajectories_r = interpolated_trajectories.reshape(run_T, n_grid, -1)
+            interpolated_trajectories_r = interpolated_trajectories.reshape(samples_T, n_grid, -1)
+            # interpolated_trajectories_lowtol_r = interpolated_trajectories_lowtol.reshape(run_T, n_grid, -1)
 
             # setattr(cfg.separatrix_locator_fit_kwargs, 'num_epochs', 2000)
             # SL.fit(
@@ -962,102 +1038,104 @@ def main_multimodel(cfg):
             #### Computing PDE error
             from learn_koopman_eig import shuffle_normaliser
 
-            # Define three sets of points
-            point_sets = [
-                instantiate(cfg.dynamics.IC_distribution_full).sample(sample_shape=(interpolated_points.shape[0],)),
-                instantiate(cfg.dynamics.IC_distribution_task_relevant).sample(sample_shape=(interpolated_points.shape[0],)),
-                instantiate(cfg.dynamics.IC_distribution_task_relevant_PC1).sample(sample_shape=(interpolated_points.shape[0],)),
-                instantiate(cfg.dynamics.IC_interpolation_line_1).sample(sample_shape=(interpolated_points.shape[0],)),
-                interpolated_points,
-                interpolated_points + torch.normal(mean=0.0, std=0.4, size=interpolated_points.shape),
-            ]
+            # # Define three sets of points
+            # point_sets = [
+            #     instantiate(cfg.dynamics.IC_distribution_full).sample(sample_shape=(interpolated_points.shape[0],)),
+            #     instantiate(cfg.dynamics.IC_distribution_task_relevant).sample(sample_shape=(interpolated_points.shape[0],)),
+            #     instantiate(cfg.dynamics.IC_distribution_task_relevant_PC1).sample(sample_shape=(interpolated_points.shape[0],)),
+            #     instantiate(cfg.dynamics.IC_interpolation_line_1).sample(sample_shape=(interpolated_points.shape[0],)),
+            #     interpolated_points,
+            #     interpolated_points + torch.normal(mean=0.0, std=0.4, size=interpolated_points.shape),
+            # ]
+            #
+            # #dist_PC1 = instantiate(cfg.dynamics.IC_distribution_task_relevant_PC1)
+            #
+            # colors = ['g', 'b', 'y',  'purple', 'r', 'orange']  # Colors for each set
+            # labels = ['Isotropic','Task data', 'Task data PC1', 'interpolated_points', 'line', 'line+noise0.4',]
+            #
+            # from mpl_toolkits.mplot3d import Axes3D
+            #
+            # plt.close()
+            # fig = plt.figure()
+            # ax = fig.add_subplot(111, projection='3d')
+            # for i, (points, label) in enumerate(zip(point_sets, labels)):
+            #     if i<2:
+            #         continue
+            #     # Transform points using PCA
+            #     transformed_points = P.transform(points.detach().cpu().numpy())
+            #     # Plot PC1, PC2, and PC3
+            #     ax.scatter(transformed_points[:, 0], transformed_points[:, 1], transformed_points[:, 2], label=label, alpha=0.4, c=colors[i])
+            # ax.set_xlabel('PC1')
+            # ax.set_ylabel('PC2')
+            # ax.set_zlabel('PC3')
+            # ax.legend()
+            # plt.show()
+            #
+            # vector_1 = point_sets[2][1] - point_sets[2][0]
+            # vector_2 = point_sets[4][1] - point_sets[4][0]  # Adjusted index to match the provided point_sets
+            # from scipy.stats import pearsonr
+            # pearson_corr, _ = pearsonr(vector_1.detach().cpu(), vector_2.detach().cpu())
+            # print(f"Pearson's correlation of the two vectors: {pearson_corr}")
+            #
+            #
+            # plt.close()
+            # plt.figure()
+            # for i, (points, label) in enumerate(zip(point_sets,labels)):
+            #     if i<3:
+            #         continue
+            #     if i>4:
+            #         continue
+            #     points.requires_grad_(True)
+            #     inputs = torch.concat([points, interpolated_inputs_expanded[0]], axis=-1)
+            #     phi_x = SL.predict(inputs, no_grad=False)
+            #
+            #     phi_x_prime = torch.autograd.grad(
+            #         outputs=phi_x,
+            #         inputs=points,
+            #         grad_outputs=torch.ones_like(phi_x),
+            #         create_graph=True
+            #     )[0]
+            #
+            #     # Compute F(x_batch)
+            #     F_x = dynamics_function(points, interpolated_inputs_expanded[0])
+            #
+            #     # Main loss term: ||phi'(x) F(x) - phi(x)||^2
+            #     dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True)
+            #
+            #     # Use shuffle_normaliser to compute the normalized loss
+            #     normalised_loss = shuffle_normaliser(dot_prod, phi_x)
+            #     print(f"Normalised loss for set {i+1}:", normalised_loss)
+            #
+            #     # # Evaluate the log likelihood at the points
+            #     # log_likelihoods = dist.log_prob(points)
+            #     # print(f"Log likelihoods at points for set {i+1}:", log_likelihoods)
+            #
+            #     # Evaluate the log likelihood at zero
+            #     # zero_point = torch.zeros_like(points)
+            #     # log_likelihoods_zero = dist.log_prob(zero_point)
+            #     # print(f"Log likelihoods at zero for set {i+1}:", log_likelihoods_zero)
+            #
+            #     # Plot PDE errors for each set
+            #     plt.scatter(
+            #         dot_prod.detach().cpu().repeat(1, phi_x.shape[-1]), phi_x.detach().cpu(), color=colors[i], label=label, alpha=0.4
+            #     )
+            #
+            # plt.xlabel(r'$\nabla \psi(x) \cdot f(x)$')
+            # plt.ylabel(r'$\lambda \psi(x)$')
+            # plt.legend()
+            # # plt.aspect('equal')
+            # plt.tight_layout()
+            # plt.show()
+            # plt.savefig(Path(cfg.savepath) / "PDE_scatter.png", dpi=300)
 
-            #dist_PC1 = instantiate(cfg.dynamics.IC_distribution_task_relevant_PC1)
 
-            colors = ['g', 'b', 'y',  'purple', 'r', 'orange']  # Colors for each set
-            labels = ['Isotropic','Task data', 'Task data PC1', 'interpolated_points', 'line', 'line+noise0.4',]
-
-            from mpl_toolkits.mplot3d import Axes3D
-
-            plt.close()
-            fig = plt.figure()
-            ax = fig.add_subplot(111, projection='3d')
-            for i, (points, label) in enumerate(zip(point_sets, labels)):
-                if i<2:
-                    continue
-                # Transform points using PCA
-                transformed_points = P.transform(points.detach().cpu().numpy())
-                # Plot PC1, PC2, and PC3
-                ax.scatter(transformed_points[:, 0], transformed_points[:, 1], transformed_points[:, 2], label=label, alpha=0.4, c=colors[i])
-            ax.set_xlabel('PC1')
-            ax.set_ylabel('PC2')
-            ax.set_zlabel('PC3')
-            ax.legend()
-            plt.show()
-
-            vector_1 = point_sets[2][1] - point_sets[2][0]
-            vector_2 = point_sets[4][1] - point_sets[4][0]  # Adjusted index to match the provided point_sets
-            from scipy.stats import pearsonr
-            pearson_corr, _ = pearsonr(vector_1.detach().cpu(), vector_2.detach().cpu())
-            print(f"Pearson's correlation of the two vectors: {pearson_corr}")
-            
-
-            plt.close()
-            plt.figure()
-            for i, (points, label) in enumerate(zip(point_sets,labels)):
-                if i<3:
-                    continue
-                if i>4:
-                    continue
-                points.requires_grad_(True)
-                inputs = torch.concat([points, interpolated_inputs_expanded[0]], axis=-1)
-                phi_x = SL.predict(inputs, no_grad=False)
-
-                phi_x_prime = torch.autograd.grad(
-                    outputs=phi_x,
-                    inputs=points,
-                    grad_outputs=torch.ones_like(phi_x),
-                    create_graph=True
-                )[0]
-
-                # Compute F(x_batch)
-                F_x = dynamics_function(points, interpolated_inputs_expanded[0])
-
-                # Main loss term: ||phi'(x) F(x) - phi(x)||^2
-                dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True)
-
-                # Use shuffle_normaliser to compute the normalized loss
-                normalised_loss = shuffle_normaliser(dot_prod, phi_x)
-                print(f"Normalised loss for set {i+1}:", normalised_loss)
-
-                # # Evaluate the log likelihood at the points
-                # log_likelihoods = dist.log_prob(points)
-                # print(f"Log likelihoods at points for set {i+1}:", log_likelihoods)
-
-                # Evaluate the log likelihood at zero
-                # zero_point = torch.zeros_like(points)
-                # log_likelihoods_zero = dist.log_prob(zero_point)
-                # print(f"Log likelihoods at zero for set {i+1}:", log_likelihoods_zero)
-
-                # Plot PDE errors for each set
-                plt.scatter(
-                    dot_prod.detach().cpu().repeat(1, phi_x.shape[-1]), phi_x.detach().cpu(), color=colors[i], label=label, alpha=0.4
-                )
-
-            plt.xlabel(r'$\nabla \psi(x) \cdot f(x)$')
-            plt.ylabel(r'$\lambda \psi(x)$')
-            plt.legend()
-            # plt.aspect('equal')
-            plt.tight_layout()
-            plt.show()
-            plt.savefig(Path(cfg.savepath) / "PDE_scatter.png", dpi=300)
-
-
-
+            print('transforming interpolated points')
 
             # Transform interpolated trajectories using PCA
             interpolated_trajectories_pca = P.transform(interpolated_trajectories_r.reshape(-1, interpolated_trajectories_r.shape[-1]).detach().cpu().numpy())
             interpolated_trajectories_pca = interpolated_trajectories_pca.reshape(*interpolated_trajectories_r.shape[:-1], -1)
+            # interpolated_trajectories_lowtol_pca = P.transform(interpolated_trajectories_lowtol_r.reshape(-1, interpolated_trajectories_lowtol_r.shape[-1]).detach().cpu().numpy())
+            # interpolated_trajectories_lowtol_pca = interpolated_trajectories_lowtol_pca.reshape(*interpolated_trajectories_lowtol_r.shape[:-1], -1)
 
             # Create figure for PCA trajectories over time
             fig, ax = plt.subplots(figsize=(10, 6))
@@ -1082,6 +1160,8 @@ def main_multimodel(cfg):
 
             # Concatenate points and inputs for KEF evaluation
             concat_traj = torch.cat([interpolated_trajectories_r, interpolated_inputs_expanded], dim=-1)
+
+            print('evaluating KEFs')
 
             # Evaluate KEFs
             KEFvals_traj = []
@@ -1140,9 +1220,12 @@ def main_multimodel(cfg):
 
             # Plot final PCA timepoint in bottom subplot
             pca_final = interpolated_trajectories_pca[-1,:,0]  # Get final timepoint
-            ax2.plot(alpha, pca_final)
+            # pca_final_lowtol = interpolated_trajectories_lowtol_pca[-1,:,0]  # Get final timepoint with lower tolerance
+            ax2.plot(alpha, pca_final, label='Standard tolerance')
+            # ax2.plot(alpha, pca_final_lowtol, label='Low tolerance', ls='--')
             ax2.set_xlabel('Alpha')
             ax2.set_ylabel('Final PC1')
+            ax2.legend()
 
             # plt.tight_layout()
             fig.savefig(Path(cfg.savepath) / "KEF_pca_vs_alpha.png", dpi=300)

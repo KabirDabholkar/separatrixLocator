@@ -113,8 +113,15 @@ class SeparatrixLocator(BaseEstimator):
     def score(self, func, distribution, **kwargs):
         scores = []
         for model in self.models:
-            score = eval_loss(model, func, distribution, dynamics_dim=self.dynamics_dim, **kwargs)
-            scores.append(score)
+            if isinstance(distribution,Iterable):
+                model_scores = []
+                for dist in distribution:
+                    score = eval_loss(model, func, dist, dynamics_dim=self.dynamics_dim, **kwargs)
+                    model_scores.append(score)
+                scores.append(torch.stack(model_scores))
+            else:
+                score = eval_loss(model, func, distribution, dynamics_dim=self.dynamics_dim, **kwargs)
+                scores.append(score)
         self.scores = scores
         return torch.stack(self.scores)
 

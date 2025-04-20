@@ -15,13 +15,18 @@ run_traj : true
 #####################
 
 IC_distribution_fit:
-  - ${..IC_distribution_twentieth}
-  - ${..IC_distribution_tenth}
-  - ${..IC_distribution_quarter}
-  - ${..IC_distribution_half}
-#  - ${..IC_distribution_full}
-#  - ${..IC_distribution_3}
-#  - ${..IC_interpolation_line_2}
+  _target_  : custom_distributions.isotropic_gaussians
+  mean      : ${..point_on_separatrix}
+  scales    :
+    _target_  : numpy.multiply
+    _args_  :
+      - ${....scale_range}
+      - ${....spectral_norm}
+
+
+scale_range :
+  _target_  : numpy.array
+  object  : [0.005,0.01,0.1,0.5]
 
 
 external_input_distribution_fit:
@@ -31,8 +36,6 @@ external_input_distribution_fit:
   - ${..external_input_distribution_narrow2}
 #  - ${..external_input_distribution_narrow2}
 #  - ${..external_input_distribution_narrow2}
-#  - ${..external_input_distribution_narrow2}
-
 #  - ${..external_input_distribution_full}
 #  - ${..external_input_distribution_narrow1}
 
@@ -80,6 +83,10 @@ hidden_full :
   _target_ : rnn.extract_hidden_from_model
   model: ${..loaded_RNN_model}
   dataset: ${..RNN_dataset}
+
+spectral_norm :
+  _target_  : rnn.get_spectral_norm
+  hidden   : ${..hidden_full}
 
 IC_distribution_3:
   _target_  : rnn.hidden_distribution_with_spectral_norm
@@ -200,9 +207,10 @@ point_on_separatrix :
     - 0
     - ${....input_range_2[0]}
   attractors        : ${..attractors2}
+  num_iterations    : 2
+  num_points        : 10
 
-IC_distribution_on_separatrix:
-  _target_  : isotropic_gaussian
+
 
 ###################
 
@@ -258,4 +266,4 @@ RNN_dataset:
 
 RNN_analysis_dataset : ${.RNN_dataset}
 
-name  : finkelstein_fontolan_RNN_multiscale #_line2
+name  : finkelstein_fontolan_RNN_multiscale_on_separatrix

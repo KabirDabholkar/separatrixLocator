@@ -6,6 +6,59 @@ from sklearn.decomposition import PCA
 from rnn import reshape_hidden
 from typing import Union
 
+def isotropic_gaussian(mean, scale=1.0):
+    """
+    Create a multivariate isotropic Gaussian distribution.
+
+    Args:
+        mean: Mean vector of the distribution
+        scale: Scale factor for the covariance matrix (default: 1.0)
+
+    Returns:
+        dist: torch.distributions.MultivariateNormal with isotropic covariance
+    """
+    dim = len(mean)
+    cov = torch.eye(dim) * scale
+    return D.MultivariateNormal(mean, cov)
+
+
+def isotropic_gaussians(mean, scales):
+    """
+    Create a list of multivariate isotropic Gaussian distributions with the same mean but different scales.
+
+    Args:
+        mean: Mean vector of the distributions
+        scales: List of scale factors for the covariance matrices
+
+    Returns:
+        dists: List of torch.distributions.MultivariateNormal with isotropic covariance
+    """
+    return [isotropic_gaussian(mean, scale) for scale in scales]
+
+def random_gaussians(dim: int, num_distributions: int, mean_range: tuple = (-1.0, 1.0), scale_range: tuple = (0.1, 2.0)) -> list:
+    """
+    Create a list of multivariate isotropic Gaussian distributions with random means and scales.
+
+    Args:
+        dim: Dimension of each Gaussian distribution
+        num_distributions: Number of Gaussian distributions to create
+        mean_range: Tuple (min, max) for sampling means uniformly
+        scale_range: Tuple (min, max) for sampling scales uniformly
+
+    Returns:
+        dists: List of torch.distributions.MultivariateNormal with random means and scales
+    """
+    dists = []
+    for _ in range(num_distributions):
+        # Sample random mean vector
+        mean = torch.rand(dim) * (mean_range[1] - mean_range[0]) + mean_range[0]
+        # Sample random scale
+        scale = torch.rand(1) * (scale_range[1] - scale_range[0]) + scale_range[0]
+        dists.append(isotropic_gaussian(mean, scale))
+    return dists
+
+
+
 def makeIIDMultiVariate(dist, dim):
     # Expand the distribution so that its batch_shape becomes (dim,)
     # Then wrap it with Independent to treat these as event dimensions.

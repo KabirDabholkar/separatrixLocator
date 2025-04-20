@@ -1,11 +1,32 @@
 import torch
 import numpy as np
+from functools import partial
 
+def concatenator(functions,split_size_or_sections=2):
+    def concatenated_func(z):
+        zdots = []
+        splits = torch.split(z, split_size_or_sections, dim=-1)
+        for func, split in zip(functions, splits):
+            zdot = func(split)
+            zdots.append(zdot)
+        return torch.concat(zdots, axis=-1)
+    return concatenated_func
+
+def nonnormal_amplifcation(z):
+    A = torch.tensor([[-1,10],[0,-2]]).type_as(z)
+    return (z.reshape(-1,z.shape[-1]) @ A.T).reshape(z.shape)
 
 
 def bistable_ND(z,dim=2,pos=1):
     mask = torch.arange(dim,device=z.device) == pos
     return (z-z**3) * mask.type(z.dtype) + (-z) * (~mask).type(z.dtype)
+
+
+bistable4D_nonnormal = concatenator(
+    [partial(bistable_ND, dim=2, pos=0),
+    nonnormal_amplifcation],
+    split_size_or_sections = 2
+)
 
 def bistable_ND_koopman_eigenfunction(z,dim=2,pos=1):
     mask = torch.arange(dim,device=z.device) == pos
@@ -124,13 +145,19 @@ if __name__ == '__main__':
     # )
     from torchdiffeq import odeint
     from functools import partial
-    y0 = torch.randn((30,2))
+    y0 = torch.randn((30,4))
     times = torch.linspace(0,10,100)
-    sol = odeint(lambda t,x: bistable_ND(x,dim=2,pos=0),y0,times)
+
+    func = concatenator(
+        [partial(bistable_ND, dim=2, pos=0),
+        nonnormal_amplifcation],
+        split_size_or_sections = 2
+    )
+    sol = odeint(lambda t,x: func(x),y0,times)
     import matplotlib.pyplot as plt
-    plt.plot(sol[...,0],sol[...,1])
-    plt.scatter(sol[-1,..., 0], sol[-1,..., 1],c='red')
+    plt.plot(sol[...,2],sol[...,3])
+    plt.scatter(sol[-1,..., 2], sol[-1,..., 3],c='red')
     plt.show()
-    # bistable_ND(torch.tensor([0,1])[None,None],dim=2,pos=1)
+    bistable_ND(torch.tensor([0,1])[None,None],dim=2,pos=1)
 
 
