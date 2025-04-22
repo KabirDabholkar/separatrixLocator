@@ -37,8 +37,9 @@ def get_autonomous_dynamics_from_model(model,device='cpu',rnn_submodule_name='rn
     return dynamics
 
 def extract_hidden_from_model(model, dataset):
-    inputs, _ = dataset()
-    _, hidden = model(torch.tensor(inputs, dtype=torch.float32), return_hidden=True)
+    with torch.no_grad():
+        inputs, _ = dataset()
+        _, hidden = model(torch.tensor(inputs, dtype=torch.float32), return_hidden=True)
     return hidden
 
 def extract_after(data, after):

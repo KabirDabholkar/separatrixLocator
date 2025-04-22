@@ -6,6 +6,12 @@ function :
 
 run_traj : true
 
+IC_distribution_fit:
+  -
+
+
+#########
+
 IC_distribution :
 #  _target_  : rnn.hidden_distribution_from_model
 #  model     : ${..loaded_RNN_model}
@@ -64,5 +70,34 @@ RNN_analysis_dataset:
   sign    : 1
 #  sign    : -1
 
+hidden_full :
+  _target_ : rnn.extract_hidden_from_model
+  model: ${..loaded_RNN_model}
+  dataset: ${..RNN_dataset}
+
+all_attractors:
+  _target_ : odeint_utils.run_odeint_to_final
+  func     : ${..function}
+  y0       : ${..hidden_full}
+  inputs   :
+    _target_  : torch.tensor
+    data: [0.0]
+  T       : 30
+
+attractors:
+  _target_  : clustering.get_cluster_centroids
+  data      : ${..all_attractors}
+  k         : 2
+
+point_on_separatrix :
+  _target_          : separatrix_point_finder.find_separatrix_point_along_line
+  dynamics_function : ${..function}
+  external_input    :
+    _target_  : torch.tensor
+    data  : [0.0]
+  attractors        : ${..attractors}
+  num_iterations    : 4
+  num_points        : 20
+  final_time        : 30
 
 name  : ${.RNN_dataset.n_bits}bitFlipFlop_long_isotropic_Vanilla${.dim}

@@ -50,7 +50,235 @@ project_path = os.getenv("PROJECT_PATH")
 def decorated_main(cfg):
     # return main(cfg)
     # return main_multimodel(cfg)
-    return finkelstein_fontolan(cfg)
+    # return finkelstein_fontolan(cfg)
+    # return finkelstein_fontolan_point_finder_test(cfg)
+    # return finkelstein_fontolan_analysis_test(cfg)
+    return test_RNN(cfg)
+
+def test_RNN(cfg):
+    omegaconf_resolvers()
+
+    # hidden = instantiate(cfg.dynamics.hidden_full)
+    # print(hidden)
+    # attractors = instantiate(cfg.dynamics.attractors)
+    print(instantiate(cfg.dynamics.point_on_separatrix))
+
+def finkelstein_fontolan_analysis_test(cfg):
+    omegaconf_resolvers()
+
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+
+
+    if 'finkelstein_fontolan' in cfg.dynamics.name:
+        dynamics_function = instantiate(cfg.dynamics.function)
+        attractors = instantiate(cfg.dynamics.attractors2)
+
+        from interpolation import cubic_hermite
+    
+        num_points = 40
+        rand_scale = 4.1 #10.0
+        # Example usage
+        x,y = attractors.detach().cpu().numpy()#
+        # x = np.array([0, 0])  # Start point
+        # y = np.array([1, 1])  # End point
+        m_x = -x + y  # Tangent at x
+        m_y = -x + y  # Tangent at y
+
+        num_curves = 20 #20  # Number of random curves to generate
+        plt.figure(figsize=(10, 10))
+
+        # Accumulate all points
+        all_points = []
+        for _ in range(num_curves):
+            # Generate random perturbations for tangents
+            m_x_perturbed = m_x * 1.4 + np.random.randn(m_x.shape[0]) * rand_scale
+            m_y_perturbed = m_y * 1.4 + np.random.randn(m_x.shape[0]) * rand_scale
+
+            # Generate points on the cubic Hermite curve
+            points = cubic_hermite(x, y, m_x_perturbed, m_y_perturbed, num_points)
+            all_points.append(points)
+
+        # Stack all points into a single array
+        all_points = np.vstack(all_points)
+
+        # Perform PCA
+        from sklearn.decomposition import PCA
+        pca = PCA(n_components=2)
+        pca_points = pca.fit_transform(all_points)
+
+        # Convert points to torch tensor and run ODE integration
+        points_tensor = torch.tensor(all_points, dtype=torch.float32)
+        time_points = torch.linspace(0, 1000, 20)  # Adjust time range and steps as needed
+
+        ext_input = torch.tensor([0.0,0.0,0.91]).type_as(points_tensor)
+        ext_input = ext_input[None]
+        ext_input = ext_input.repeat(all_points.shape[0],1)
+
+        # Run ODE integration for all points
+        with torch.no_grad():
+            trajectories = odeint(lambda t, x: dynamics_function(x,ext_input), points_tensor, time_points)
+
+        # Convert trajectories to numpy and reshape for PCA
+        trajectories_np = trajectories.detach().cpu().numpy()
+        trajectories_reshaped = trajectories_np.reshape(-1, trajectories_np.shape[-1])
+
+
+        from sklearn.cluster import KMeans
+        kmeans = KMeans(n_clusters=2, random_state=42)
+        cluster_labels = kmeans.fit_predict(trajectories_np[-1])
+
+        # Plot PCA results
+        plt.figure(figsize=(10, 10))
+        plt.scatter(pca_points[:, 0], pca_points[:, 1], c=['C0' if label == 0 else 'C1' for label in cluster_labels], alpha=1.0)
+
+        # Plot endpoints in PCA space
+        endpoints = np.array([x, y])
+        pca_endpoints = pca.transform(endpoints)
+        plt.scatter(pca_endpoints[:, 0], pca_endpoints[:, 1], color='red', label="Endpoints")
+
+        plt.legend()
+        plt.xlabel('Principal Component 1')
+        plt.ylabel('Principal Component 2')
+        plt.title('PCA of Cubic Hermite Interpolations')
+        plt.grid(True)
+        plt.savefig("test_plots/hermite_cubic_interpolations_plus_clustering.png")
+        plt.show()
+
+        print(points_tensor.shape, ext_input.shape)
+        full_input_to_KEF = torch.concat([points_tensor, ext_input], axis=-1)
+        full_input_to_KEF = full_input_to_KEF.reshape(num_curves, num_points, -1)
+
+        cluster_labels = kmeans.fit_predict(trajectories_np[-1])
+        cluster_labels = cluster_labels.reshape(num_curves, num_points)
+        changes = np.diff(cluster_labels, axis=1) != 0
+        change_points = np.argmax(changes, axis=1)
+        # Handle cases where there are no changes (all zeros or all ones)
+        no_changes = ~np.any(changes, axis=1)
+        change_points[no_changes] = num_points // 2
+
+        change_points = np.linspace(0,1, num_points)[change_points]
+
+        # Plot the change points
+        fig = plt.figure()
+        plt.hist(change_points, bins=num_points, alpha=0.7)
+        plt.xlabel('Point Index')
+        plt.ylabel('Number of Curves')
+        plt.title('Distribution of Change Points')
+        plt.grid(True)
+        fig.savefig(Path(cfg.savepath) / "change_points_distribution.png", dpi=300)
+        plt.show()
+
+
+def finkelstein_fontolan_point_finder_test(cfg):
+    omegaconf_resolvers()
+
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+    dynamics_function = instantiate(cfg.dynamics.function)
+
+    attractors = instantiate(cfg.dynamics.attractors2)
+
+    from separatrix_point_finder import find_separatrix_point_along_line
+
+    # Find separatrix point along line between attractors
+    separatrix_point = find_separatrix_point_along_line(
+        dynamics_function=dynamics_function,
+        external_input=torch.tensor([0.0,0.0,0.90]),
+        attractors=attractors,
+        num_points=20,
+        num_iterations=5
+    )
+
+    ####
+
+    # Sample points near separatrix point with different noise scales
+    num_samples = 100
+    noise_scales = np.logspace(-7,0,15)
+    class_ratios = []
+    all_final_points = []
+    all_initial_points = []
+
+    for noise_scale in noise_scales:
+        initial_points = separatrix_point + torch.randn(num_samples, separatrix_point.shape[0]) * noise_scale
+        all_initial_points.append(initial_points)
+
+        # Run trajectories from these points
+        time_points = torch.linspace(0, 1000, 2)
+        with torch.no_grad():
+            trajectories = odeint(
+                lambda t, x: dynamics_function(x, torch.tensor([0.0,0.0,0.90])[None].repeat(num_samples,1)),
+                initial_points,
+                time_points
+            ).detach().cpu()
+
+        # Get final points
+        final_points = trajectories[-1]
+        all_final_points.append(final_points)
+
+    # Combine all final points and perform k-means clustering
+    combined_final_points = torch.cat(all_final_points, dim=0)
+    from sklearn.cluster import KMeans
+    kmeans = KMeans(n_clusters=2, random_state=0).fit(combined_final_points)
+    labels = kmeans.labels_
+
+    # Calculate class ratios for each noise scale
+    start_idx = 0
+    for i, noise_scale in enumerate(noise_scales):
+        end_idx = start_idx + num_samples
+        scale_labels = labels[start_idx:end_idx]
+        class_ratio = np.sum(scale_labels == 0) / len(scale_labels)
+        class_ratios.append(class_ratio)
+        start_idx = end_idx
+
+    # Plot class ratios vs noise scales
+    plt.figure(figsize=(8, 6))
+    plt.plot(noise_scales, class_ratios, 'o-')
+    plt.xlabel('Noise Scale')
+    plt.ylabel('Class Ratio (Cluster 0 / Total)')
+    plt.title('Class Ratio vs Noise Scale')
+    plt.grid(True)
+    plt.xscale('log')
+    plt.show()
+
+    ######
+
+    # # Sample points near separatrix point with Gaussian noise
+    # num_samples = 100
+    # noise_scale = 0.1
+    # initial_points = separatrix_point + torch.randn(num_samples, separatrix_point.shape[0]) * noise_scale
+
+    # # Run trajectories from these points
+    # time_points = torch.linspace(0, 5000, 200)
+    # with torch.no_grad():
+    #     trajectories = odeint(
+    #         lambda t, x: dynamics_function(x, torch.tensor([0.0,0.0,0.90])[None].repeat(num_samples,1)),
+    #         initial_points,
+    #         time_points
+    #     ).detach().cpu()
+
+    # # Reshape trajectories for PCA (flatten time dimension)
+    # trajectories_reshaped = trajectories.reshape(-1, trajectories.shape[-1])
+
+    # # Perform PCA
+    # from sklearn.decomposition import PCA
+    # pca = PCA(n_components=2)
+    # pca_trajectories = pca.fit_transform(trajectories_reshaped)
+
+    # # Reshape back to separate trajectories
+    # pca_trajectories = pca_trajectories.reshape(trajectories.shape[0], trajectories.shape[1], 2)
+
+    # # Plot PCA trajectories
+    # plt.figure(figsize=(8, 8))
+    # plt.plot(pca_trajectories[..., 0], pca_trajectories[..., 1], 'b-', alpha=0.1)
+    # plt.scatter(pca_trajectories[0, 0, 0], pca_trajectories[0, 0, 1], c='r', label='Initial Points')
+    # plt.scatter(pca_trajectories[0, -1, 0], pca_trajectories[0, -1, 1], c='g', label='Final Points')
+    # plt.title('PCA of Trajectories Near Separatrix')
+    # plt.xlabel('PC1')
+    # plt.ylabel('PC2')
+    # plt.legend()
+    # plt.show()
+
+    # print(f"Found separatrix point at: {separatrix_point}")
+
 
 def finkelstein_fontolan(cfg):
     omegaconf_resolvers()
@@ -95,35 +323,35 @@ def finkelstein_fontolan(cfg):
 
     num_curves = 20 #20  # Number of random curves to generate
     plt.figure(figsize=(10, 10))
-    
+
     # Accumulate all points
     all_points = []
     for _ in range(num_curves):
         # Generate random perturbations for tangents
         m_x_perturbed = m_x * 1.4 + np.random.randn(m_x.shape[0]) * rand_scale
         m_y_perturbed = m_y * 1.4 + np.random.randn(m_x.shape[0]) * rand_scale
-        
+
         # Generate points on the cubic Hermite curve
         points = cubic_hermite(x, y, m_x_perturbed, m_y_perturbed, num_points)
         all_points.append(points)
-    
+
     # Stack all points into a single array
     all_points = np.vstack(all_points)
-    
+
     # Perform PCA
     from sklearn.decomposition import PCA
     pca = PCA(n_components=2)
     pca_points = pca.fit_transform(all_points)
-    
+
     # Plot PCA results
     plt.figure(figsize=(10, 10))
     plt.plot(pca_points[:, 0], pca_points[:, 1], alpha=0.3)
-    
+
     # Plot endpoints in PCA space
     endpoints = np.array([x, y])
     pca_endpoints = pca.transform(endpoints)
     plt.scatter(pca_endpoints[:, 0], pca_endpoints[:, 1], color='red', label="Endpoints")
-    
+
     plt.legend()
     plt.xlabel('Principal Component 1')
     plt.ylabel('Principal Component 2')
@@ -146,7 +374,7 @@ def finkelstein_fontolan(cfg):
     # Convert trajectories to numpy and reshape for PCA
     trajectories_np = trajectories.detach().cpu().numpy()
     trajectories_reshaped = trajectories_np.reshape(-1, trajectories_np.shape[-1])
-    
+
 
     from sklearn.cluster import KMeans
     kmeans = KMeans(n_clusters=2, random_state=42)
@@ -172,7 +400,7 @@ def finkelstein_fontolan(cfg):
     # # Perform PCA on trajectories using the same PCA object as before
     # pca_trajectories = pca.transform(trajectories_reshaped)
     # pca_trajectories = pca_trajectories.reshape(trajectories_np.shape[0], trajectories_np.shape[1], -1)
-    
+
     # # Plot trajectories in PCA space
     # plt.figure(figsize=(10, 10))
     # for i in range(len(all_points)):
@@ -190,11 +418,6 @@ def finkelstein_fontolan(cfg):
     # plt.title('Trajectories from Cubic Hermite Interpolations')
     # plt.grid(True)
     # plt.show()
-
-
-
-
-
 
 
 
@@ -669,7 +892,7 @@ def main_multimodel(cfg):
 
                 # Plot KEF values vs residuals
                 fig, ax = plt.subplots()
-                ax.scatter(torch.abs(phi_x).detach().cpu().numpy(), residual.detach().cpu().numpy(), 
+                ax.scatter(torch.abs(phi_x).detach().cpu().numpy(), residual.detach().cpu().numpy(),
                            label=name, alpha=0.5)
                 ax.set_xlabel(r'$\psi(x)$')
                 ax.set_ylabel(r'$|\nabla \psi(x) \cdot f(x) - \lambda\psi(x)|$')
@@ -681,7 +904,7 @@ def main_multimodel(cfg):
                 # Plot standard deviation vs residuals
                 std_i = torch.std(input_tensor.detach(), axis=-1, keepdims=True)
                 fig, ax = plt.subplots()
-                ax.scatter(std_i.cpu().numpy(), residual.detach().cpu().numpy(), 
+                ax.scatter(std_i.cpu().numpy(), residual.detach().cpu().numpy(),
                           label=name, s=5, alpha=0.5)
                 ax.set_xlabel(r'$std(x_i)$')
                 ax.set_ylabel(r'$|\nabla \psi(x) \cdot f(x) - \lambda\psi(x)|$')
@@ -697,7 +920,7 @@ def main_multimodel(cfg):
                 ax.set_xlabel(r'$\lambda\psi(x)$')
                 ax.set_ylabel(r'$\nabla \psi(x) \cdot f(x)$')
                 ax.legend()
-                
+
                 # Add a dashed line for x=y
                 xlim = ax.get_xlim()
                 ylim = ax.get_ylim()
@@ -707,100 +930,238 @@ def main_multimodel(cfg):
                 fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"KEF_LHS_RHS_{name}.png", dpi=200)
                 plt.close(fig)
 
-        elif cfg.dynamics.dim > 2:
-            # pass
-            num_trials = 50
-            times = torch.linspace(0, 500, 100)
-            needs_dim = True
-            if hasattr(cfg.dynamics, 'dist_requires_dim'):
-                needs_dim = cfg.dynamics.dist_requires_dim
+        # elif cfg.dynamics.dim > 2:
+        #     # pass
+        #     num_trials = 50
+        #     times = torch.linspace(0, 500, 100)
+        #     needs_dim = True
+        #     if hasattr(cfg.dynamics, 'dist_requires_dim'):
+        #         needs_dim = cfg.dynamics.dist_requires_dim
+        #
+        #     distribution_relevant = instantiate(cfg.dynamics.IC_distribution_task_relevant)
+        #
+        #     initial_conditions = distribution_relevant.sample(
+        #         sample_shape=[num_trials] + ([cfg.dynamics.dim] if needs_dim else []))
+        #     external_inputs = input_distribution.sample(sample_shape=[num_trials] + ([cfg.dynamics.dim] if needs_dim else []))
+        #
+        #     trajectories = odeint(lambda t, x: dynamics_function(x, external_inputs), initial_conditions, times)
+        #     trajectories = trajectories.detach().cpu().numpy()
+        #
+        #     # Instantiate the dataset
+        #     dataset = instantiate(cfg.dynamics.RNN_analysis_dataset)
+        #     inputs, targets = dataset()
+        #     inputs = torch.from_numpy(inputs).type(torch.float)
+        #
+        #     inputs = inputs
+        #
+        #     # Run trajectories using rnn and inputs from dataset
+        #     rnn = instantiate(cfg.dynamics.loaded_RNN_model)
+        #     outputs, hidden_trajectories = rnn(inputs, return_hidden=True, deterministic=False)
+        #     hidden_trajectories = hidden_trajectories.detach().cpu().numpy()
+        #
+        #     # Perform another odeint run using the first time step from hidden_trajectories as the initial conditions
+        #     hidden_initial_conditions = torch.from_numpy(hidden_trajectories[0]).type(torch.float)
+        #     external_inputs_last_step = inputs[-1000]  # Use the last time step of inputs as external inputs
+        #     new_trajectories = odeint(lambda t, x: dynamics_function(x, external_inputs_last_step), hidden_initial_conditions, times)
+        #     new_trajectories = new_trajectories.detach().cpu().numpy()
+        #
+        #
+        #     # Option to fit PCA on one set of trajectories, the other, or both
+        #     fit_on = 'both'  # Options: 'hidden', 'trajectories', 'both'
+        #
+        #     if fit_on == 'hidden':
+        #         pca = PCA(n_components=2)
+        #         hidden_trajectories_reshaped = hidden_trajectories.reshape(-1, hidden_trajectories.shape[-1])
+        #         pca.fit(hidden_trajectories_reshaped)
+        #     elif fit_on == 'trajectories':
+        #         pca = PCA(n_components=2)
+        #         trajectories_reshaped = trajectories.reshape(-1, trajectories.shape[-1])
+        #         pca.fit(trajectories_reshaped)
+        #     else:  # fit_on == 'both'
+        #         combined_trajectories = np.concatenate((hidden_trajectories.reshape(-1, hidden_trajectories.shape[-1]),
+        #                                                 trajectories.reshape(-1, trajectories.shape[-1])), axis=0)
+        #         pca = PCA(n_components=2)
+        #         pca.fit(combined_trajectories)
+        #
+        #     # Transform the new trajectories using PCA
+        #     pca_new_trajectories = pca.transform(new_trajectories.reshape(-1, new_trajectories.shape[-1]))
+        #     pca_new_trajectories = pca_new_trajectories.reshape(new_trajectories.shape[0], new_trajectories.shape[1], -1)
+        #
+        #     # Transform both sets of trajectories
+        #     pca_hidden_trajectories = pca.transform(hidden_trajectories.reshape(-1, hidden_trajectories.shape[-1]))
+        #     pca_hidden_trajectories = pca_hidden_trajectories.reshape(hidden_trajectories.shape[0], hidden_trajectories.shape[1], -1)
+        #
+        #     pca_trajectories = pca.transform(trajectories.reshape(-1, trajectories.shape[-1]))
+        #     pca_trajectories = pca_trajectories.reshape(trajectories.shape[0], trajectories.shape[1], -1)
+        #
+        #     from_t = 0
+        #
+        #     # Plot combined PCA of both sets of trajectories
+        #     plt.figure(figsize=(10, 6))
+        #     for i in range(pca_hidden_trajectories.shape[1]):
+        #         plt.plot(pca_hidden_trajectories[:, i, 0], pca_hidden_trajectories[:, i, 1], lw=1, alpha=0.5, label='Hidden Trajectories' if i == 0 else "")
+        #         plt.scatter(pca_hidden_trajectories[0, i, 0], pca_hidden_trajectories[0, i, 1], c='blue', marker='o', zorder=5)
+        #         plt.scatter(pca_hidden_trajectories[-1, i, 0], pca_hidden_trajectories[-1, i, 1], c='orange', marker='o', zorder=5)
+        #
+        #     for i in range(num_trials):
+        #         plt.plot(pca_trajectories[from_t:, i, 0], pca_trajectories[from_t:, i, 1], lw=1, alpha=0.5, label='Trajectories' if i == 0 else "")
+        #         plt.scatter(pca_trajectories[from_t, i, 0], pca_trajectories[from_t, i, 1], c='green', marker='o', zorder=5)
+        #         plt.scatter(pca_trajectories[-1, i, 0], pca_trajectories[-1, i, 1], c='red', marker='o', zorder=5)
+        #
+        #     for i in range(pca_new_trajectories.shape[1]):
+        #         plt.plot(pca_new_trajectories[:, i, 0], pca_new_trajectories[:, i, 1], lw=1, alpha=0.5, label='New Trajectories' if i == 0 else "")
+        #         plt.scatter(pca_new_trajectories[0, i, 0], pca_new_trajectories[0, i, 1], c='purple', marker='o', zorder=5)
+        #         plt.scatter(pca_new_trajectories[-1, i, 0], pca_new_trajectories[-1, i, 1], c='yellow', marker='o', zorder=5)
+        #
+        #     plt.xlabel('PC1')
+        #     plt.ylabel('PC2')
+        #     plt.title('Combined PCA of Hidden and Regular Trajectories')
+        #     plt.legend()
+        #     plt.tight_layout()
+        #     # plt.show()
+        #     plt.savefig(Path(cfg.savepath) / "pca_trajectories.png", dpi=300)
+        #     plt.close()
 
-            distribution_relevant = instantiate(cfg.dynamics.IC_distribution_task_relevant)
 
-            initial_conditions = distribution_relevant.sample(
-                sample_shape=[num_trials] + ([cfg.dynamics.dim] if needs_dim else []))
-            external_inputs = input_distribution.sample(sample_shape=[num_trials] + ([cfg.dynamics.dim] if needs_dim else []))
+        if 'finkelstein_fontolan' in cfg.dynamics.name:
+            dynamics_function = instantiate(cfg.dynamics.function)
+            attractors = instantiate(cfg.dynamics.attractors2)
 
-            trajectories = odeint(lambda t, x: dynamics_function(x, external_inputs), initial_conditions, times)
-            trajectories = trajectories.detach().cpu().numpy()
+            from interpolation import cubic_hermite
 
-            # Instantiate the dataset
-            dataset = instantiate(cfg.dynamics.RNN_analysis_dataset)
-            inputs, targets = dataset()
-            inputs = torch.from_numpy(inputs).type(torch.float)
+            num_points = 100
+            rand_scale = 4.0 #4.1  # 10.0
+            # Example usage
+            x, y = attractors.detach().cpu().numpy()  #
+            # x = np.array([0, 0])  # Start point
+            # y = np.array([1, 1])  # End point
+            m_x = -x + y  # Tangent at x
+            m_y = -x + y  # Tangent at y
 
-            inputs = inputs
+            num_curves = 100  # 20  # Number of random curves to generate
+            plt.figure(figsize=(10, 10))
 
-            # Run trajectories using rnn and inputs from dataset
-            rnn = instantiate(cfg.dynamics.loaded_RNN_model)
-            outputs, hidden_trajectories = rnn(inputs, return_hidden=True, deterministic=False)
-            hidden_trajectories = hidden_trajectories.detach().cpu().numpy()
+            # Accumulate all points
+            all_points = []
+            for _ in range(num_curves):
+                # Generate random perturbations for tangents
+                m_x_perturbed = m_x * 1.4 + np.random.randn(m_x.shape[0]) * rand_scale
+                m_y_perturbed = m_y * 1.4 + np.random.randn(m_x.shape[0]) * rand_scale
 
-            # Perform another odeint run using the first time step from hidden_trajectories as the initial conditions
-            hidden_initial_conditions = torch.from_numpy(hidden_trajectories[0]).type(torch.float)
-            external_inputs_last_step = inputs[-1000]  # Use the last time step of inputs as external inputs
-            new_trajectories = odeint(lambda t, x: dynamics_function(x, external_inputs_last_step), hidden_initial_conditions, times)
-            new_trajectories = new_trajectories.detach().cpu().numpy()
+                # Generate points on the cubic Hermite curve
+                points = cubic_hermite(x, y, m_x_perturbed, m_y_perturbed, num_points)
+                all_points.append(points)
 
+            # Stack all points into a single array
+            all_points = np.vstack(all_points)
 
-            # Option to fit PCA on one set of trajectories, the other, or both
-            fit_on = 'both'  # Options: 'hidden', 'trajectories', 'both'
+            # Perform PCA
+            from sklearn.decomposition import PCA
+            pca = PCA(n_components=2)
+            pca_points = pca.fit_transform(all_points)
 
-            if fit_on == 'hidden':
-                pca = PCA(n_components=2)
-                hidden_trajectories_reshaped = hidden_trajectories.reshape(-1, hidden_trajectories.shape[-1])
-                pca.fit(hidden_trajectories_reshaped)
-            elif fit_on == 'trajectories':
-                pca = PCA(n_components=2)
-                trajectories_reshaped = trajectories.reshape(-1, trajectories.shape[-1])
-                pca.fit(trajectories_reshaped)
-            else:  # fit_on == 'both'
-                combined_trajectories = np.concatenate((hidden_trajectories.reshape(-1, hidden_trajectories.shape[-1]),
-                                                        trajectories.reshape(-1, trajectories.shape[-1])), axis=0)
-                pca = PCA(n_components=2)
-                pca.fit(combined_trajectories)
+            # Convert points to torch tensor and run ODE integration
+            points_tensor = torch.tensor(all_points, dtype=torch.float32)
+            time_points = torch.linspace(0, 1000, 20)  # Adjust time range and steps as needed
 
-            # Transform the new trajectories using PCA
-            pca_new_trajectories = pca.transform(new_trajectories.reshape(-1, new_trajectories.shape[-1]))
-            pca_new_trajectories = pca_new_trajectories.reshape(new_trajectories.shape[0], new_trajectories.shape[1], -1)
+            inp = [0.0, 0.0, 0.91]
+            ext_input = torch.tensor(inp).type_as(points_tensor)
+            ext_input = ext_input[None]
+            ext_input = ext_input.repeat(all_points.shape[0], 1)
 
-            # Transform both sets of trajectories
-            pca_hidden_trajectories = pca.transform(hidden_trajectories.reshape(-1, hidden_trajectories.shape[-1]))
-            pca_hidden_trajectories = pca_hidden_trajectories.reshape(hidden_trajectories.shape[0], hidden_trajectories.shape[1], -1)
+            # Run ODE integration for all points
+            with torch.no_grad():
+                trajectories = odeint(lambda t, x: dynamics_function(x, ext_input), points_tensor, time_points)
 
-            pca_trajectories = pca.transform(trajectories.reshape(-1, trajectories.shape[-1]))
-            pca_trajectories = pca_trajectories.reshape(trajectories.shape[0], trajectories.shape[1], -1)
+            # Convert trajectories to numpy and reshape for PCA
+            trajectories_np = trajectories.detach().cpu().numpy()
+            trajectories_reshaped = trajectories_np.reshape(-1, trajectories_np.shape[-1])
 
-            from_t = 0
+            from sklearn.cluster import KMeans
+            kmeans = KMeans(n_clusters=2, random_state=42)
+            cluster_labels = kmeans.fit_predict(trajectories_np[-1])
 
-            # Plot combined PCA of both sets of trajectories
-            plt.figure(figsize=(10, 6))
-            for i in range(pca_hidden_trajectories.shape[1]):
-                plt.plot(pca_hidden_trajectories[:, i, 0], pca_hidden_trajectories[:, i, 1], lw=1, alpha=0.5, label='Hidden Trajectories' if i == 0 else "")
-                plt.scatter(pca_hidden_trajectories[0, i, 0], pca_hidden_trajectories[0, i, 1], c='blue', marker='o', zorder=5)
-                plt.scatter(pca_hidden_trajectories[-1, i, 0], pca_hidden_trajectories[-1, i, 1], c='orange', marker='o', zorder=5)
+            # Plot PCA results
+            fig = plt.figure(figsize=(10, 10))
+            plt.scatter(pca_points[:, 0], pca_points[:, 1],
+                        c=['C0' if label == 0 else 'C1' for label in cluster_labels], alpha=1.0)
 
-            for i in range(num_trials):
-                plt.plot(pca_trajectories[from_t:, i, 0], pca_trajectories[from_t:, i, 1], lw=1, alpha=0.5, label='Trajectories' if i == 0 else "")
-                plt.scatter(pca_trajectories[from_t, i, 0], pca_trajectories[from_t, i, 1], c='green', marker='o', zorder=5)
-                plt.scatter(pca_trajectories[-1, i, 0], pca_trajectories[-1, i, 1], c='red', marker='o', zorder=5)
+            # Plot endpoints in PCA space
+            endpoints = np.array([x, y])
+            pca_endpoints = pca.transform(endpoints)
+            plt.scatter(pca_endpoints[:, 0], pca_endpoints[:, 1], color='red', label="Endpoints")
 
-            for i in range(pca_new_trajectories.shape[1]):
-                plt.plot(pca_new_trajectories[:, i, 0], pca_new_trajectories[:, i, 1], lw=1, alpha=0.5, label='New Trajectories' if i == 0 else "")
-                plt.scatter(pca_new_trajectories[0, i, 0], pca_new_trajectories[0, i, 1], c='purple', marker='o', zorder=5)
-                plt.scatter(pca_new_trajectories[-1, i, 0], pca_new_trajectories[-1, i, 1], c='yellow', marker='o', zorder=5)
+            plt.xlabel('Principal Component 1')
+            plt.ylabel('Principal Component 2')
+            plt.title('PCA of Cubic Hermite Interpolations')
+            plt.grid(True)
+            fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"hermite_cubic_interpolations_plus_clustering_scale{rand_scale}.png", dpi=300)
+            plt.show()
+            plt.close(fig)
 
-            plt.xlabel('PC1')
-            plt.ylabel('PC2')
-            plt.title('Combined PCA of Hidden and Regular Trajectories')
-            plt.legend()
+            # print(points_tensor.shape, ext_input.shape)
+            full_input_to_KEF = torch.concat([points_tensor, ext_input], axis=-1)
+            full_input_to_KEF = full_input_to_KEF.reshape(num_curves, num_points, -1)
+
+            KEFvals = SL.predict(full_input_to_KEF)
+
+            cluster_labels = kmeans.fit_predict(trajectories_np[-1])
+            cluster_labels = cluster_labels.reshape(num_curves, num_points)
+            changes = np.diff(cluster_labels, axis=1) != 0
+            change_points = np.argmax(changes, axis=1)
+            # Handle cases where there are no changes (all zeros or all ones)
+            no_changes = ~np.any(changes, axis=1)
+            change_points[no_changes] = num_points // 2
+
+            change_points = np.linspace(0, 1, num_points)[change_points]
+
+            q = 0.05
+            absKEFvals = np.abs(KEFvals.numpy())[..., 0]
+            quantiles = np.quantile(absKEFvals, q, axis=1)
+            # Find indices where KEF values are below the quantile threshold
+            below_quantile = absKEFvals < quantiles[:, np.newaxis]
+            below_threshold = absKEFvals < absKEFvals.max() / 100
+
+            # Set values above quantile to -1 to ensure they're not selected by argmax
+            masked_KEFvals = deepcopy(absKEFvals)
+            masked_KEFvals[~below_threshold] = -np.inf
+
+            # For each curve, find the maximum KEF value that's below the quantile
+            max_below_threshold_id = np.argmax(masked_KEFvals, axis=1)
+            # If all values were above quantile (all -1), set to middle point
+            # max_below_quantile[max_below_quantile == 0] = num_points // 2
+
+            max_below_threshold_position = np.linspace(0, 1, num_points)[max_below_threshold_id]
+
+            fig = plt.figure()
+            plt.scatter(change_points, max_below_threshold_position)
+            plt.xlabel('true separatrix point')
+            plt.ylabel('KEF foot point')
+            plt.show()
+            fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"separatrix_poisition_along_curves{rand_scale}.png", dpi=300)
+
+            fig, axes = plt.subplots(4, 10, figsize=(20, 8))
+            axes = axes.flatten()
+            
+            for i in range(min(num_curves,len(axes.flatten()))):
+                ax = axes[i]
+                ax.plot(np.linspace(0,1,num_points), KEFvals[i,:,0])
+                ax.axvline(x=change_points[i], color='r', linestyle='--', alpha=0.7)
+                ax.set_title(f'Curve {i+1}')
+                ax.grid(True)
+            
+            # Hide any unused subplots
+            for i in range(num_curves, len(axes)):
+                axes[i].set_visible(False)
+            
             plt.tight_layout()
-            # plt.show()
-            plt.savefig(Path(cfg.savepath) / "pca_trajectories.png", dpi=300)
-            plt.close()
+            plt.show()
+            fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"hermite_cubic_interpolations_KEFvals_scale{rand_scale}.png", dpi=300)
 
 
-        if hasattr(cfg.dynamics,'RNN_dataset'):
+
+
+        if False: #hasattr(cfg.dynamics,'RNN_dataset'):
             dataset = instantiate(cfg.dynamics.RNN_analysis_dataset)
             dataset.N_trials_cd = 20
             rnn = instantiate(cfg.dynamics.loaded_RNN_model)

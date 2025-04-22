@@ -26,7 +26,8 @@ IC_distribution_fit:
 
 scale_range :
   _target_  : numpy.array
-  object  : [0.005,0.01,0.1,0.5]
+  object  : [1e-3,5e-3,1e-2,0.1,0.5,1.0,2.0]
+#  object  : [1e-4,1e-3,5e-3,1e-2,0.1,0.5]
 
 
 external_input_distribution_fit:
@@ -34,8 +35,9 @@ external_input_distribution_fit:
   - ${..external_input_distribution_narrow2}
   - ${..external_input_distribution_narrow2}
   - ${..external_input_distribution_narrow2}
-#  - ${..external_input_distribution_narrow2}
-#  - ${..external_input_distribution_narrow2}
+  - ${..external_input_distribution_narrow2}
+  - ${..external_input_distribution_narrow2}
+  - ${..external_input_distribution_narrow2}
 #  - ${..external_input_distribution_full}
 #  - ${..external_input_distribution_narrow1}
 
@@ -191,24 +193,38 @@ IC_interpolation_line_2:
   squeeze_first_two_dims  : false
   multiply_scale : 1.0
 
-attractors2 :
+attractors2_unrefined :
   _target_    : finkelstein_fontolan_RNN.extract_opposite_attractors_from_model
   model       : ${..loaded_RNN_model}
   dataset     : ${..RNN_dataset}
   input_range : ${..input_range_2}
+
+attractors2:
+  _target_ : odeint_utils.run_odeint_to_final
+  func     : ${..function}
+  y0       : ${..attractors2_unrefined}
+  inputs   :
+    _target_  : torch.tensor
+    data:
+      - 0.0
+      - 0.0
+      - ${....input_range_2[0]}
+  T       : 1000
+
 
 point_on_separatrix :
   _target_          : separatrix_point_finder.find_separatrix_point_along_line
   dynamics_function : ${..function} 
   external_input    :
     _target_  : torch.tensor
-    data  : 
-    - 0
-    - 0
-    - ${....input_range_2[0]}
+    data  :
+      - 0.0
+      - 0.0
+      - ${....input_range_2[0]}
   attractors        : ${..attractors2}
-  num_iterations    : 2
-  num_points        : 10
+  num_iterations    : 4
+  num_points        : 20
+  final_time        : 5000
 
 
 

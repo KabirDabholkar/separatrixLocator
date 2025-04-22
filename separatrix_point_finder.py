@@ -3,7 +3,7 @@ from torchdiffeq import odeint
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 
-def find_separatrix_point_along_line(dynamics_function, external_input, attractors, num_points=5, num_iterations=5, time_points=None, return_all_points=False):
+def find_separatrix_point_along_line(dynamics_function, external_input, attractors, num_points=5, num_iterations=5, time_points=None, return_all_points=False, final_time=5000):
     """
     Find a point on the separatrix along the line between two attractors by iteratively refining the search space.
     
@@ -27,21 +27,19 @@ def find_separatrix_point_along_line(dynamics_function, external_input, attracto
             labels: Cluster labels for the final points
     """
     if time_points is None:
-        time_points = torch.linspace(0, 5000, 2)
+        time_points = torch.linspace(0, final_time, 2)
         
     attractor1, attractor2 = attractors
     current_points = attractor1 + torch.linspace(0, 1, num_points).unsqueeze(-1) * (attractor2 - attractor1)
     current_t_values = torch.linspace(0, 1, num_points)
     
     for iteration in range(num_iterations):
-        # Run trajectories for all current points
-        trajectories = []
-        for point in current_points:
-            trajectory = odeint(lambda t, x: dynamics_function(x, external_input), point, time_points).detach().cpu()
-            trajectories.append(trajectory)
+        # Run trajectories for all current points in batch
+        with torch.no_grad():
+            trajectories = odeint(lambda t, x: dynamics_function(x, external_input[None].repeat(num_points,1)), current_points, time_points).detach().cpu()
         
         # Get final points and perform k-means clustering
-        final_points = torch.stack([traj[-1] for traj in trajectories])
+        final_points = trajectories[-1]
         kmeans = KMeans(n_clusters=2, random_state=0).fit(final_points)
         labels = kmeans.labels_
         

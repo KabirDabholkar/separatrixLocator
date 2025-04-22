@@ -4,7 +4,11 @@ from typing import Union
 from collections.abc import Iterable
 import numpy as np
 import os
+import itertools
 
+
+def list_concat(*lists):
+    return list(itertools.chain.from_iterable(lists))
 
 def indicator_func_to_matrix(size,indicator_func,dtype=bool):
     A = np.zeros(size)
@@ -68,10 +72,12 @@ setattrs_kwargs = lambda target,**kwargs: setattrs(target,*list(zip(*kwargs.item
 #     return np.split(self,indices,axis=axis)
 
 
+
+
 batch_choice = lambda p:  np.stack([np.random.choice(p.shape[1],p=p[i]) for i in range(len(p))])
 
 normalise = lambda array,axis=None: array/array.sum(axis=axis,keepdims=True)
 
 
 if __name__ == '__main__':
-    pass
+    print(list_concat([1],[2]))
