@@ -91,7 +91,7 @@ run_fixed_point_finder  : false
 #model_choice  : s4
 #model_choice  : DNN_layers6
 #model_choice  : transformer
-model_choice  : ResNet_layers40
+#model_choice  : ResNet_layers40
 #model_choice  : BistableLinear
 #model_choice  : RBFResNet_layers15
 #model_choice  : RBF_DNN_layers6
@@ -168,17 +168,17 @@ classifier_based_separatrix_locator_fit_kwargs  :
 
 separatrix_locator :
   _target_    : separatrixLocator.SeparatrixLocator
-  num_models  : 2 #10 #10 #4 #5 #0 #0
+  num_models  : 4 #10 #10 #4 #5 #0 #0
   dynamics_dim : ${dynamics.dim}
   use_multiprocessing : false
   verbose : true
   model_class: null
-  device  : cuda:0
+  device  : cpu
 
 experiment_details : experiment_${model.name}_lr${separatrix_locator_fit_kwargs.optimizer.lr}_l2${separatrix_locator_fit_kwargs.optimizer.weight_decay}_batch${separatrix_locator_fit_kwargs.batch_size}_${separatrix_locator_fit_kwargs.normaliser._target_}_gmmratio${separatrix_locator_fit_kwargs.gmm_mix_ratio}
 
 separatrix_locator_fit_kwargs:
-  num_epochs: 0 #10000 #1000 #500 #500 #1000 #500 #1000 #500 #100 #500 #500 #500 # 1000 #1000 #2000 #500 #500 #1000 #400 #1000 #5000 #5000 #3000 #5000 #10000 #5000 #20000 #2000 #500 #2000 #2000 #2000 #1000 #2000 #500 #500 #500 #1000 #1500 #400 #200 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
+  num_epochs: 0 #1000 #1000 #10000 #1000 #500 #500 #1000 #500 #1000 #500 #100 #500 #500 #500 # 1000 #1000 #2000 #500 #500 #1000 #400 #1000 #5000 #5000 #3000 #5000 #10000 #5000 #20000 #2000 #500 #2000 #2000 #2000 #1000 #2000 #500 #500 #500 #1000 #1500 #400 #200 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
   optimizer :
     _target_  : torch.optim.Adam
     _partial_ : true
@@ -216,7 +216,7 @@ separatrix_locator_fit_kwargs:
   gmm_mix_ratio : 0.0
 
 separatrix_locator_score_kwargs:
-  batch_size: 20000
+  batch_size: 2000 #0
   ext_inp_batch_size  : 50
   eigenvalue : 1
   drop_values_outside_range: null
@@ -256,7 +256,7 @@ separatrix_find_separatrix_kwargs:
     step_size: 1000 #50
     gamma: 0.9
   batch_size: 1000 #00 #00
-  resample_above_threshold: true
+  resample_above_threshold: false
 
 #### Fixed point finder params
 fpf_hps :

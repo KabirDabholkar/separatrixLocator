@@ -469,6 +469,110 @@ def process_initial_conditions(
 
     return initial_conditions, batch_size, orig_indices
 
+def runGD_basic(
+        func,
+        initial_conditions=None,
+        external_inputs=None,
+        num_steps=100,
+        partial_optim=partial(torch.optim.Adam, lr=1e-2),
+        threshold=5e-2,
+        lr_scheduler=None,
+        optimize_initial_conditions=True,
+        optimize_external_inputs=False,
+        return_indices=False,
+        return_mask=False,
+        save_trajectories_every=10000,
+):
+
+    if hasattr(threshold,'start_threshold'):
+        start_threshold = threshold['start_threshold']
+        end_threshold = threshold['end_threshold']
+    else:
+        start_threshold = threshold
+        end_threshold = threshold
+
+    # For threshold filtering, use a fixed copy (detached) of external_inputs.
+    # external_inputs_fixed = external_inputs.detach()
+
+    # Set gradient requirements based on optimization flags.
+    if optimize_initial_conditions:
+        initial_conditions = initial_conditions.requires_grad_()
+    else:
+        initial_conditions = initial_conditions.detach()
+    if external_inputs is not None:
+        if optimize_external_inputs:
+            external_inputs = external_inputs.requires_grad_()
+        else:
+            external_inputs = external_inputs.detach()
+
+    # Collect parameters to optimize.
+    params_to_optimize = []
+    if optimize_initial_conditions:
+        params_to_optimize.append(initial_conditions)
+    if optimize_external_inputs:
+        params_to_optimize.append(external_inputs)
+    optimizer = partial_optim(params_to_optimize)
+    scheduler = lr_scheduler(optimizer) if lr_scheduler else None
+
+    trajectories_initial = []
+    trajectories_external = []
+    below_threshold_mask = torch.zeros(initial_conditions.shape[0], dtype=torch.bool)
+    below_threshold_points = []
+    below_threshold_indices = []  # Tracks original indices of points that drop below threshold
+
+    for step in range(num_steps):
+        if step % save_trajectories_every == 0:
+            trajectories_initial.append(initial_conditions.clone().detach().cpu().numpy())
+            if external_inputs is not None:
+                trajectories_external.append(external_inputs.clone().detach().cpu().numpy())
+
+        optimizer.zero_grad()
+
+        # Concatenate initial conditions and external inputs along the last dimension.
+        inputs = initial_conditions
+        if external_inputs is not None:
+            inputs = torch.cat((initial_conditions, external_inputs), dim=-1)
+        losses = func(inputs)
+        loss = losses.sum()
+        loss.backward()
+        print(initial_conditions.grad)
+        optimizer.step()
+        if scheduler:
+            scheduler.step()
+
+        # Identify initial conditions that drop below the threshold.
+        newly_below_threshold = (losses[..., 0] < end_threshold) & ~below_threshold_mask
+        if newly_below_threshold.any():
+            indices = newly_below_threshold.nonzero(as_tuple=True)[0]
+            below_threshold_selection = initial_conditions[indices].detach().clone()
+            if external_inputs is not None:
+                below_threshold_selection = torch.cat([below_threshold_selection,external_inputs[indices].detach().clone()],axis=-1)
+            below_threshold_points.append(
+                below_threshold_selection
+            )
+            # below_threshold_indices.append(orig_indices[indices].detach().clone())
+            below_threshold_mask[indices] = True
+
+    # Stack trajectories
+    trajectories_initial = np.stack(trajectories_initial) if len(trajectories_initial) > 0 else None
+    # trajectories_external = torch.stack(trajectories_external)
+
+    if below_threshold_points:
+        below_threshold_points = torch.cat(below_threshold_points, dim=0)
+        # below_threshold_indices = torch.cat(below_threshold_indices, dim=0)
+    else:
+        below_threshold_points = torch.empty((0, ))
+        below_threshold_indices = torch.empty((0,), dtype=torch.long)
+
+    to_return = [trajectories_initial, below_threshold_points]  # trajectories_external
+    if return_indices:
+        to_return += [below_threshold_indices]
+    if return_mask:
+        mask = torch.zeros(initial_conditions.shape[0], dtype=torch.bool)
+        mask[below_threshold_indices] = True
+        to_return += [mask]
+    return tuple(to_return)
+
 
 def runGD(
         func,
@@ -551,10 +655,10 @@ def runGD(
     external_inputs_fixed = external_inputs.detach()
 
     # Process initial conditions using the fixed external inputs.
-    initial_conditions, batch_size, orig_indices = process_initial_conditions(
-        func, init_cond_dist, initial_conditions, input_dim, dist_needs_dim, batch_size, start_threshold,
-        resample_above_threshold, external_inputs_fixed=external_inputs_fixed
-    )
+    # initial_conditions, batch_size, orig_indices = process_initial_conditions(
+    #     func, init_cond_dist, initial_conditions, input_dim, dist_needs_dim, batch_size, start_threshold,
+    #     resample_above_threshold, external_inputs_fixed=external_inputs_fixed
+    # )
 
     # Set gradient requirements based on optimization flags.
     if optimize_initial_conditions:

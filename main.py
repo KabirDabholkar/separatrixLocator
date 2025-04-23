@@ -53,7 +53,28 @@ def decorated_main(cfg):
     # return finkelstein_fontolan(cfg)
     # return finkelstein_fontolan_point_finder_test(cfg)
     # return finkelstein_fontolan_analysis_test(cfg)
-    return test_RNN(cfg)
+    # return test_RNN(cfg)
+    return test_run_GD(cfg)
+
+def test_run_GD(cfg):
+    omegaconf_resolvers()
+
+    from learn_koopman_eig import runGD_basic
+    hidden = torch.randn(size=(10,1))
+    def f(x):
+        return torch.abs(x)
+
+    traj, below_thr_points = runGD_basic(
+        f,
+        initial_conditions=hidden.clone(),
+        save_trajectories_every=1,
+        threshold=1e-2
+    )
+    # traj = traj.detach().cpu().numpy()
+    plt.plot(traj[:,:,0])
+    plt.scatter(torch.zeros_like(hidden),hidden)
+    plt.scatter(torch.zeros_like(below_thr_points), below_thr_points,marker='x')
+    plt.show()
 
 def test_RNN(cfg):
     omegaconf_resolvers()
@@ -1023,9 +1044,9 @@ def main_multimodel(cfg):
         #     plt.close()
 
 
-        if 'finkelstein_fontolan' in cfg.dynamics.name:
+        if hasattr(cfg.dynamics,'attractors'):
             dynamics_function = instantiate(cfg.dynamics.function)
-            attractors = instantiate(cfg.dynamics.attractors2)
+            attractors = instantiate(cfg.dynamics.attractors)
 
             from interpolation import cubic_hermite
 
@@ -1064,8 +1085,8 @@ def main_multimodel(cfg):
             points_tensor = torch.tensor(all_points, dtype=torch.float32)
             time_points = torch.linspace(0, 1000, 20)  # Adjust time range and steps as needed
 
-            inp = [0.0, 0.0, 0.91]
-            ext_input = torch.tensor(inp).type_as(points_tensor)
+            # inp = [0.0, 0.0, 0.91]
+            ext_input = instantiate(cfg.dynamics.static_external_input) #torch.tensor(inp).type_as(points_tensor)
             ext_input = ext_input[None]
             ext_input = ext_input.repeat(all_points.shape[0], 1)
 
@@ -1100,7 +1121,9 @@ def main_multimodel(cfg):
             plt.close(fig)
 
             # print(points_tensor.shape, ext_input.shape)
-            full_input_to_KEF = torch.concat([points_tensor, ext_input], axis=-1)
+            full_input_to_KEF = points_tensor
+            if hasattr(cfg.dynamics,'external_input_distribution_fit'):
+                full_input_to_KEF = torch.concat([points_tensor, ext_input], axis=-1)
             full_input_to_KEF = full_input_to_KEF.reshape(num_curves, num_points, -1)
 
             KEFvals = SL.predict(full_input_to_KEF)
@@ -1145,7 +1168,7 @@ def main_multimodel(cfg):
             
             for i in range(min(num_curves,len(axes.flatten()))):
                 ax = axes[i]
-                ax.plot(np.linspace(0,1,num_points), KEFvals[i,:,0])
+                ax.plot(np.linspace(0,1,num_points), KEFvals[i,:,:])
                 ax.axvline(x=change_points[i], color='r', linestyle='--', alpha=0.7)
                 ax.set_title(f'Curve {i+1}')
                 ax.grid(True)
@@ -1159,6 +1182,29 @@ def main_multimodel(cfg):
             fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"hermite_cubic_interpolations_KEFvals_scale{rand_scale}.png", dpi=300)
 
 
+            num_points = 20
+            noise_scale = 0.1
+            hidden = attractors.repeat(num_points//2,1)
+            hidden = hidden + torch.randn(hidden.shape) * noise_scale
+            hidden.shape
+
+            from learn_koopman_eig import runGD_basic
+
+            SL.models[0].eval()
+            runGD_basic(
+                SL.models[0],
+                initial_conditions=hidden,
+            )
+
+            GD_traj, all_below_threshold_points, all_below_threshold_masks  = SL.find_separatrix(
+                distribution,
+                initial_conditions = hidden,
+                external_inputs = None,
+                dist_needs_dim=False,
+                return_indices = False,
+                return_mask = True,
+                **instantiate(cfg.separatrix_find_separatrix_kwargs)
+            )
 
 
         if False: #hasattr(cfg.dynamics,'RNN_dataset'):

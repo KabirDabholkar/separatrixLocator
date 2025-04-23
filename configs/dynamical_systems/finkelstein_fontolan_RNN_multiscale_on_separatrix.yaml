@@ -211,6 +211,7 @@ attractors2:
       - ${....input_range_2[0]}
   T       : 1000
 
+attractors  : ${.attractors2}
 
 point_on_separatrix :
   _target_          : separatrix_point_finder.find_separatrix_point_along_line

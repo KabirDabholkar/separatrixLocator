@@ -199,10 +199,11 @@ class SeparatrixLocator(BaseEstimator):
                 samples_ext = ext_input_dist.sample(sample_shape=shape_ext)
             else:
                 # If not provided, use a dummy tensor (zeros) of the same shape as samples_ic.
-                samples_ext = torch.zeros_like(samples_ic)
+                samples_ext = torch.zeros_like(samples_ic)[...,0:0]
             # Concatenate the samples along the last dimension.
             combined_samples = torch.cat((samples_ic, samples_ext), dim=-1)
-            # Calculate the normalisation value over the combined inputs.
+
+            # Calculate the normalisation value over the combined inputs
             norm_val = float(torch.mean(torch.sum(f(combined_samples) ** 2, dim=-1)).sqrt().detach().numpy())
             # Update f to normalize its output.
             f = compose(lambda x: x / norm_val, f)

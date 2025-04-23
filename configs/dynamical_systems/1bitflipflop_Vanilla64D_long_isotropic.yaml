@@ -6,9 +6,21 @@ function :
 
 run_traj : true
 
-IC_distribution_fit:
-  -
+####
 
+IC_distribution_fit:
+  _target_  : custom_distributions.isotropic_gaussians
+  mean      : ${..point_on_separatrix}
+  scales    :
+    _target_  : numpy.multiply
+    _args_  :
+      - ${....scale_range}
+      - ${....spectral_norm}
+
+
+scale_range :
+  _target_  : numpy.array
+  object  : [1e-3,5e-3,1e-2,0.1,0.5,1.0,2.0]
 
 #########
 
@@ -75,14 +87,21 @@ hidden_full :
   model: ${..loaded_RNN_model}
   dataset: ${..RNN_dataset}
 
+static_external_input :
+  _target_: torch.tensor
+  data: [ 0.0 ]
+
 all_attractors:
   _target_ : odeint_utils.run_odeint_to_final
   func     : ${..function}
   y0       : ${..hidden_full}
-  inputs   :
-    _target_  : torch.tensor
-    data: [0.0]
+  inputs   : ${..static_external_input}
   T       : 30
+
+spectral_norm :
+  _target_  : rnn.get_spectral_norm
+  hidden   : ${..hidden_full}
+
 
 attractors:
   _target_  : clustering.get_cluster_centroids
