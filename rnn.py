@@ -101,6 +101,8 @@ class RNN(nn.Module):
         super().__init__()
         self.rnn = getattr(nn,RNN_class)(ob_size, num_h)
         self.linear = nn.Linear(num_h, act_size)
+        # Initialize weights with normal distribution scaled by 1/sqrt(num_h)
+        # nn.init.normal_(self.linear.weight, mean=0, std=1/num_h)
 
     def forward(self, x, return_hidden = False):
         out, hidden = self.rnn(x)

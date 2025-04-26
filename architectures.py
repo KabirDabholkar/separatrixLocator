@@ -3,6 +3,29 @@ import torch.nn as nn
 import torch.nn.functional as F
 # from s4.models.s4.s4 import S4Block
 from s4torch import S4Model
+class PadLayer(nn.Module):
+    def __init__(self, target_dim):
+        super().__init__()
+        self.target_dim = target_dim
+
+    def forward(self, x):
+        if x.shape[-1] < self.target_dim:
+            # Pad with zeros to reach target dimension
+            pad_size = self.target_dim - x.shape[-1]
+            return F.pad(x, (0, pad_size), "constant", 0)
+        return x
+
+class TruncateLayer(nn.Module):
+    def __init__(self, target_dim):
+        super().__init__()
+        self.target_dim = target_dim
+
+    def forward(self, x):
+        if x.shape[-1] > self.target_dim:
+            # Truncate to target dimension
+            return x[..., :self.target_dim]
+        return x
+
 
 class AdditiveModel(nn.Module):
     def __init__(self, *models):
@@ -24,6 +47,70 @@ class ResidualBlock(nn.Module):
 
     def forward(self, x):
         return x + self.block(x)  # Skip connection
+
+
+class DeepResNetVariableWidth(nn.Module):
+    def __init__(self, input_dim, hidden_dims, output_dim, nonlin=nn.Tanh()):
+        """
+        A ResNet architecture that can handle both increasing and decreasing widths.
+        For increasing widths: uses padding
+        For decreasing widths: uses truncation
+        
+        Args:
+            input_dim: Dimension of input features
+            hidden_dims: List of hidden dimensions for each residual block
+            output_dim: Dimension of output features
+            nonlin: Nonlinearity to use in residual blocks
+        """
+        super().__init__()
+        
+        # Input layer maps to first hidden dimension
+        self.input_layer = nn.Linear(input_dim, hidden_dims[0])
+        
+        # Create residual blocks with variable widths
+        self.residual_layers = nn.ModuleList()
+        for i in range(len(hidden_dims)-1):
+            # Main residual block path - single linear layer
+            self.residual_layers.append(
+                nn.Sequential(
+                    nn.Linear(hidden_dims[i], hidden_dims[i+1]),
+                    nonlin
+                )
+            )
+            
+            # Skip connection handling
+            if hidden_dims[i] < hidden_dims[i+1]:
+                # If next layer is wider, pad with zeros
+                self.residual_layers.append(PadLayer(hidden_dims[i+1] - hidden_dims[i]))
+            elif hidden_dims[i] > hidden_dims[i+1]:
+                # If next layer is narrower, truncate
+                self.residual_layers.append(TruncateLayer(hidden_dims[i+1]))
+            else:
+                # If same width, use identity
+                self.residual_layers.append(nn.Identity())
+        
+        # Output layer maps from last hidden dimension to output dimension
+        self.output_layer = nn.Linear(hidden_dims[-1], output_dim)
+        
+    def forward(self, x):
+        x = self.input_layer(x)
+        
+        for i in range(0, len(self.residual_layers), 2):
+            # Get residual block and skip connection
+            residual_block = self.residual_layers[i]
+            skip_connection = self.residual_layers[i+1]
+            
+            # Apply residual block
+            out = residual_block(x)
+            
+            # Apply skip connection (padding, truncation, or identity)
+            x_skip = skip_connection(x)
+            
+            x = x_skip + out
+            
+        return self.output_layer(x)
+
+
 
 
 class DeepResNet(nn.Module):
@@ -172,7 +259,7 @@ if __name__ == "__main__":
     # )
     # model(u[...,0]).shape
 
-    model = AdditiveModel(nn.Linear(10,2),nn.Linear(10,2))
+    # model = AdditiveModel(nn.Linear(10,2),nn.Linear(10,2))
 
     # import torch
     # import torch.nn as nn
@@ -196,4 +283,35 @@ if __name__ == "__main__":
     #     loss.backward()  # Backward pass
     #     optimizer.step()  # Update weights
     #
+    #     print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
+
+    # Create a DeepResNet model
+    input_dim = 10
+    hidden_dims = [64, 32, 16, 8]
+    output_dim = 2
+    num_blocks = 3
+    model = DeepResNetVariableWidth(input_dim, hidden_dims, output_dim)
+
+    # Generate some sample data
+    x = torch.randn(5, input_dim)  # 5 samples, 10 features
+    y = torch.randint(0, 2, (5, output_dim)).float()  # 5 samples, 2 output classes
+
+    # Forward pass
+    output = model(x)
+    print("Input shape:", x.shape)
+    print("Output shape:", output.shape)
+    print("Sample output:", output[0])
+
+    # # Define loss and optimizer
+    # criterion = nn.MSELoss()
+    # optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+    # # Training loop
+    # num_epochs = 3
+    # for epoch in range(num_epochs):
+    #     optimizer.zero_grad()
+    #     outputs = model(x)
+    #     loss = criterion(outputs, y)
+    #     loss.backward()
+    #     optimizer.step()
     #     print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')

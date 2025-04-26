@@ -99,14 +99,14 @@ class RNNModel(nn.Module):
 
         # Ensure M is a tensor of shape (N+input_size, N+input_size)
         if not torch.is_tensor(M):
-            M = torch.tensor(M, dtype=torch.float32, requires_grad=False)
+            M = torch.tensor(M, dtype=torch.float32, requires_grad=True)
         # Make M a learnable parameter.
         self.M = nn.Parameter(M)
 
         # Ensure h is a tensor of shape (N+input_size,)
         if not torch.is_tensor(h):
             h = torch.tensor(h, dtype=torch.float32)
-            h = nn.Parameter(h, requires_grad=False)
+            h = nn.Parameter(h, requires_grad=True)
         self.register_buffer('h', h)
 
         self.eff_dt = eff_dt
@@ -327,6 +327,68 @@ def extract_opposite_attractors_from_model(model,dataset,input_range=(0.9,0.92))
     attractors = get_points_on_opposite_attractors(inputs,hidden,return_separately=False,input_range=input_range)
     return attractors
 
+
+def extract_submodel(model, indices):
+    """
+    Extract a sub-model from an RNNModel by selecting specific neurons.
+    
+    Args:
+        model: RNNModel instance
+        indices: List or tensor of indices to extract
+        
+    Returns:
+        submodel: New RNNModel with only the selected neurons
+    """
+    # Get the original parameters
+    N = len(indices)  # New number of neurons
+    input_size = model.input_size
+    
+    # Extract the relevant parts of M
+    # M has shape (N+input_size, N+input_size)
+    # We need to select both the rows and columns corresponding to the selected neurons
+    # and keep the input dimensions intact
+    M_sub = torch.zeros(N + input_size, N + input_size)
+    
+    # Copy the neuron-to-neuron connections
+    M_sub[:N, :N] = model.M[indices, :][:, indices]
+    
+    # Copy the input-to-neuron connections
+    M_sub[:N, N:] = model.M[indices, -input_size:]
+    
+    # Copy the neuron-to-input connections
+    M_sub[N:, :N] = model.M[-input_size:, indices]
+    
+    # Copy the input-to-input connections
+    M_sub[N:, N:] = model.M[-input_size:, -input_size:]
+    
+    # Extract the relevant parts of h
+    h_sub = torch.zeros(N + input_size)
+    h_sub[:N] = model.h[indices]
+    h_sub[N:] = model.h[-input_size:]
+    
+    # Extract the initial condition
+    x_init_sub = model.x_init[indices]
+    
+    # Create new model with the same parameters but new N, M, h, and x_init
+    submodel = RNNModel(
+        dt=model.dt,
+        N=N,
+        input_size=input_size,
+        ramp_train=model.ramp_train,
+        tau=model.tau,
+        f0=model.f0,
+        beta0=model.beta0,
+        theta0=model.theta0,
+        M=M_sub,
+        eff_dt=model.eff_dt,
+        h=h_sub,
+        sigma_noise=model.sigma_noise,
+        init_sigma=model.init_sigma,
+        x_init=x_init_sub
+    )
+    
+    return submodel
+
 if "__main__" == __name__:
     torch.manual_seed(2)
     #
@@ -403,20 +465,74 @@ if "__main__" == __name__:
     point2_additional_transformed = pca.transform(point2_additional.reshape(-1, point2_additional.shape[-1]))
 
     # Plot PC1 and PC2 of hidden as well as the two sets of points
-    plt.figure(figsize=(8, 6))
-    plt.plot(hidden_pca[:,:, 0], hidden_pca[:,:, 1], alpha=0.5)
-    plt.scatter(point1_transformed[:, 0], point1_transformed[:, 1], color='red', label='Point 1 (0.9, 0.92)', marker='x', s=100)
-    plt.scatter(point2_transformed[:, 0], point2_transformed[:, 1], color='blue', label='Point 2 (0.9, 0.92)', marker='x', s=100)
-    plt.scatter(point1_additional_transformed[:, 0], point1_additional_transformed[:, 1], color='green', label='Point 1 (0.7, 0.72)', marker='x', s=100)
-    plt.scatter(point2_additional_transformed[:, 0], point2_additional_transformed[:, 1], color='orange', label='Point 2 (0.7, 0.72)', marker='x', s=100)
-    plt.xlabel('PC1')
-    plt.ylabel('PC2')
-    plt.title('PCA of Hidden States and Points')
-    plt.legend()
-    plt.grid()
-    plt.show()
+    # plt.figure(figsize=(8, 6))
+    # plt.plot(hidden_pca[:,:, 0], hidden_pca[:,:, 1], alpha=0.5)
+    # plt.scatter(point1_transformed[:, 0], point1_transformed[:, 1], color='red', label='Point 1 (0.9, 0.92)', marker='x', s=100)
+    # plt.scatter(point2_transformed[:, 0], point2_transformed[:, 1], color='blue', label='Point 2 (0.9, 0.92)', marker='x', s=100)
+    # plt.scatter(point1_additional_transformed[:, 0], point1_additional_transformed[:, 1], color='green', label='Point 1 (0.7, 0.72)', marker='x', s=100)
+    # plt.scatter(point2_additional_transformed[:, 0], point2_additional_transformed[:, 1], color='orange', label='Point 2 (0.7, 0.72)', marker='x', s=100)
+    # plt.xlabel('PC1')
+    # plt.ylabel('PC2')
+    # plt.title('PCA of Hidden States and Points')
+    # plt.legend()
+    # plt.grid()
+    # plt.show()
 
 
+    # Extract a submodel from the original model
+    # submodel = extract_submodel(model, indices=[0, 1, 2])  # Example: extract first 3 neurons
+    #
+    # # Test the submodel with some input
+    # test_input = torch.randn(1, 1, model.input_size)  # batch_size=1, seq_len=1
+    # output,_ = submodel(test_input)
+    # print("Submodel output shape:", output.shape)
+    #
+    # # Verify the submodel has the correct number of neurons
+    # print("Original model neurons:", model.N)
+    # print("Submodel neurons:", submodel.N)
+    # assert submodel.N == 3  # Should match the number of indices we extracted
+
+    # submodel = extract_submodel(
+    #     model,
+    #     # indices=np.random.permutation(np.arange(model.N))
+    #     # indices=np.random.permutation(np.arange(model.N-5))
+    #     # indices = np.random.choice(668,size=(668,),replace=True)
+    #     indices=sort_idx[10:]
+    # )
+
+
+    # # Run the simulation
+    # _,hidden = submodel(inputs,deterministic=True)
+    #
+    # # Detach and convert hidden to numpy
+    # hidden_np = hidden.detach().cpu().numpy()
+    #
+    # # Fit PCA on the hidden states
+    # pca = PCA(n_components=2)
+    # pca.fit(hidden_np.reshape(-1, hidden_np.shape[-1]))
+    # hidden_pca = pca.transform(hidden_np.reshape(-1, hidden_np.shape[-1]))
+    # hidden_pca = hidden_pca.reshape(hidden_np.shape[0], hidden_np.shape[1], -1)
+
+    #
+    # # Plot PC1 and PC2 of hidden as well as the two sets of points
+    # plt.figure(figsize=(8, 6))
+    # plt.plot(hidden_pca[:,:, 0], hidden_pca[:,:, 1], alpha=0.5)
+    # plt.scatter(point1_transformed[:, 0], point1_transformed[:, 1], color='red', label='Point 1 (0.9, 0.92)', marker='x', s=100)
+    # plt.scatter(point2_transformed[:, 0], point2_transformed[:, 1], color='blue', label='Point 2 (0.9, 0.92)', marker='x', s=100)
+    # plt.scatter(point1_additional_transformed[:, 0], point1_additional_transformed[:, 1], color='green', label='Point 1 (0.7, 0.72)', marker='x', s=100)
+    # plt.scatter(point2_additional_transformed[:, 0], point2_additional_transformed[:, 1], color='orange', label='Point 2 (0.7, 0.72)', marker='x', s=100)
+    # plt.xlabel('PC1')
+    # plt.ylabel('PC2')
+    # plt.title('PCA of Hidden States and Points')
+    # plt.legend()
+    # plt.grid()
+    # plt.show()
+
+    # # Test that the submodel's weights are properly extracted
+    # for i, idx in enumerate([0, 1, 2]):
+    #     assert torch.allclose(submodel.M[i], model.M[idx])
+
+    
 
     # model(r_in_cd[:,0],x_init=x_init)
     # print()
@@ -443,3 +559,73 @@ if "__main__" == __name__:
     # assert np.allclose(new_model.M[:model.N, :model.N].detach().numpy(), model.M[:model.N, :model.N].detach().numpy())
     #
     # assert np.allclose(new_model.M[:model.N,model.N+model.input_size:].detach().numpy(),np.eye(model.N))
+
+    # Create a random submodel with N=5 neurons
+    random_indices = torch.randperm(model.N)[:5]
+    submodel = extract_submodel(model, random_indices)
+
+    # Get the top 5 PCs of the original model's activity
+    pca = PCA(n_components=5)
+    hidden_reshaped = hidden_np.reshape(-1, hidden_np.shape[-1])
+    pca.fit(hidden_reshaped)
+    top_5_pcs = pca.components_  # Shape: (5, N)
+
+    # Training loop
+    optimizer = torch.optim.Adam(submodel.parameters(), lr=0.1)
+    criterion = nn.MSELoss()
+    num_epochs = 100
+
+    for epoch in range(num_epochs):
+        inputs, _ = dataset()
+        inputs = torch.from_numpy(inputs).type(torch.float32)
+
+        optimizer.zero_grad()
+        
+        # Sample from original model
+        with torch.no_grad():
+            _, original_hidden = model(inputs, deterministic=True)
+        original_hidden_np = original_hidden.detach().cpu().numpy()
+        original_hidden_reshaped = original_hidden_np.reshape(-1, original_hidden_np.shape[-1])
+        
+        # Get target PCs
+        target_activity = pca.transform(original_hidden_reshaped).reshape(*original_hidden.shape[0:2], -1)
+        target_activity = torch.from_numpy(target_activity).float()
+        
+        # Get submodel output
+        _, submodel_hidden = submodel(inputs, deterministic=True)
+        # print(submodel_hidden.shape, target_activity.shape)
+        # Calculate loss and update
+        loss = criterion(submodel_hidden, target_activity)
+        loss.backward()
+        optimizer.step()
+        
+        if (epoch + 1) % 10 == 0:
+            print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
+
+    # Evaluate the trained submodel
+    submodel.eval()
+    with torch.no_grad():
+        _, trained_hidden = model(inputs, deterministic=True)
+        trained_hidden_np = trained_hidden.detach().cpu().numpy()
+        
+        # Compare with target PCs
+        trained_pca = PCA(n_components=5)
+        trained_pca.fit(trained_hidden_np.reshape(-1, trained_hidden_np.shape[-1]))
+        
+        # Calculate alignment between original and trained PCs
+        alignment = np.abs(trained_pca.components_ @ top_5_pcs.T)
+        print("\nAlignment between original and trained PCs:")
+        print(alignment)
+
+
+    # # Run the simulation
+    _,hidden = submodel(inputs,deterministic=True)
+
+    # Detach and convert hidden to numpy
+    hidden_np = hidden.detach().cpu().numpy()
+
+    # Fit PCA on the hidden states
+    pca = PCA(n_components=2)
+    pca.fit(hidden_np.reshape(-1, hidden_np.shape[-1]))
+    hidden_pca = pca.transform(hidden_np.reshape(-1, hidden_np.shape[-1]))
+    hidden_pca = hidden_pca.reshape(hidden_np.shape[0], hidden_np.shape[1], -1)

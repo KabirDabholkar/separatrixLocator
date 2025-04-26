@@ -3,6 +3,7 @@ function :
   _partial_ : true
   dim       : ${..dim}
   pos       : ${..bistable_axis}
+  scale     : 1 #e-3
 
 #######
 
@@ -147,8 +148,8 @@ hidden_axis:
   pos       : ${..bistable_axis}
   length    : ${..dim}
 
-name : bistable${.dim}D_multiscale #_offcenter${.loc} #_random # #0.1 #${.IC_distribution.dist.scale}
-dim  : 4 #600 #20 #100 #600 #200 #200 #20 #600 #200 # 600
+name : bistable${.dim}D_slow${.function.scale} #_offcenter${.loc} #_random # #0.1 #${.IC_distribution.dist.scale}
+dim  : 2 #600 #20 #100 #600 #200 #200 #20 #600 #200 # 600
 bistable_axis : 0 #15 #123
 equation_latex  : x-x^3
 analytical_eigenfunction:

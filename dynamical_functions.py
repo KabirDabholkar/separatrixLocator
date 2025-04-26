@@ -2,6 +2,12 @@ import torch
 import numpy as np
 from functools import partial
 
+def change_speed(func,factor=1.0):
+    def new_func(*args, **kwargs):
+        return func(*args, **kwargs) * factor
+
+    return new_func
+
 def concatenator(functions,split_size_or_sections=2):
     def concatenated_func(z):
         zdots = []
@@ -17,9 +23,10 @@ def nonnormal_amplifcation(z):
     return (z.reshape(-1,z.shape[-1]) @ A.T).reshape(z.shape)
 
 
-def bistable_ND(z,dim=2,pos=1):
+def bistable_ND(z,dim=2,pos=1,scale=1.0):
     mask = torch.arange(dim,device=z.device) == pos
-    return (z-z**3) * mask.type(z.dtype) + (-z) * (~mask).type(z.dtype)
+    zdot = (z-z**3) * mask.type(z.dtype) + (-z) * (~mask).type(z.dtype)
+    return scale * zdot
 
 
 bistable4D_nonnormal = concatenator(
@@ -153,6 +160,7 @@ if __name__ == '__main__':
         nonnormal_amplifcation],
         split_size_or_sections = 2
     )
+    func = change_speed(func,factor=0.1)
     sol = odeint(lambda t,x: func(x),y0,times)
     import matplotlib.pyplot as plt
     plt.plot(sol[...,2],sol[...,3])

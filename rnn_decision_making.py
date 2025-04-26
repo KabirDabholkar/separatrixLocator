@@ -68,11 +68,16 @@ def main(cfg):
     net = instantiate(cfg.dynamics.RNN_model) #Net(num_h=64,ob_size=ob_size, act_size=act_size).to(device)
     # criterion = nn.CrossEntropyLoss()
     criterion = instantiate(cfg.dynamics.RNN_criterion)
-    optimizer = torch.optim.Adam(net.parameters(), lr=1e-2)
+    optimizer = torch.optim.Adam(
+        net.parameters(),
+        # lr=1e-2,
+        lr=2e-3,
+        weight_decay=1e-3
+    )
 
     running_loss = 0.0
     loss_hist = []
-    for i in range(50): #100 #2000
+    for i in range(200): #100 #2000
         inputs, labels = dataset()
         inputs = torch.from_numpy(inputs).type(torch.float).to(device)
         # labels = torch.from_numpy(labels.flatten()).type(torch.long).to(device)

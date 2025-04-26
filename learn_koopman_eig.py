@@ -535,7 +535,7 @@ def runGD_basic(
         losses = func(inputs)
         loss = losses.sum()
         loss.backward()
-        print(initial_conditions.grad)
+        # print(initial_conditions.grad)
         optimizer.step()
         if scheduler:
             scheduler.step()
@@ -751,7 +751,9 @@ def log_metrics(logger, metrics, epoch):
         logger = [logger]
 
     for log in logger:
+        # print(log)
         if hasattr(log, "add_scalar"):  # TensorBoard-like logger
+            # print('adding scalar to tensorboard like logger')
             for key, value in metrics.items():
                 log.add_scalar(key, value, epoch)
         elif hasattr(log, "log"):  # WandB-like logger
@@ -1223,7 +1225,7 @@ def eval_loss(model, F, dist, external_input_dist=None, dist_requires_dim=True, 
 
     # plt.scatter(phi_x.detach().cpu().numpy()[:,0],dot_prod.detach().cpu().numpy())
     # plt.show()
-
+    # print('Eigenvalue in score:',eigenvalue)
     if batch_size != ext_inp_batch_size:
         # Reshape dot_prod
         new_shape_dot_prod = (batch_size // ext_inp_batch_size, ext_inp_batch_size) + dot_prod.shape[1:]
@@ -1233,9 +1235,9 @@ def eval_loss(model, F, dist, external_input_dist=None, dist_requires_dim=True, 
         new_shape_phi_x = (batch_size // ext_inp_batch_size, ext_inp_batch_size) + phi_x.shape[1:]
         phi_x = phi_x.view(new_shape_phi_x)
         
-        main_loss = normaliser(dot_prod, eigenvalue * phi_x, axis=(0, 1))
+        main_loss = normaliser(dot_prod/eigenvalue, phi_x, axis=(0, 1))
     else:
-        main_loss = normaliser(dot_prod, eigenvalue * phi_x)
+        main_loss = normaliser(dot_prod/eigenvalue, phi_x)
 
     return main_loss
 
@@ -1697,7 +1699,7 @@ def train_with_logger_ext_inp(
                 torch.zeros_like(torch.mean((x - y) ** 2))
             )
         # normalised_loss, main_loss, shuffle_loss = normaliser(dot_prod, eigenvalue * phi_x)
-        normalised_loss, main_loss, shuffle_loss = normaliser(dot_prod, eigenvalue * phi_x)
+        normalised_loss, main_loss, shuffle_loss = normaliser(dot_prod / eigenvalue, phi_x)
         total_loss = normalised_loss
 
         # External input regularisation term
@@ -1994,7 +1996,7 @@ def train_with_logger_multiple_dists(
         model, F, dists, external_input_dist=None, dist_requires_dim=True, num_epochs=1000,
         batch_size=64,
         dynamics_dim=1, decay_module=None, logger=None, lr_scheduler=None,
-        eigenvalue=1, print_every_num_epochs=10, device='cpu', param_specific_hyperparams=[],
+        eigenvalue=1.0, print_every_num_epochs=10, device='cpu', param_specific_hyperparams=[],
         normaliser=partial(variance_normaliser, axis=None, return_terms=True),
         verbose=False,
         restrict_to_distribution_lambda=0,
@@ -2090,9 +2092,9 @@ def train_with_logger_multiple_dists(
             F_x = F(*F_inputs)
 
             dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True)
-            main_loss = torch.mean((dot_prod - eigenvalue * phi_x) ** 2)
+            main_loss = torch.mean((dot_prod/eigenvalue - phi_x) ** 2)
 
-            normalised_loss, _, _ = normaliser(dot_prod, phi_x, axis=None, return_terms=True)
+            normalised_loss, _, _ = normaliser(dot_prod/eigenvalue, phi_x, axis=None, return_terms=True)
             normalised_losses.append(normalised_loss.item())
             total_loss += normalised_loss
 
@@ -2118,7 +2120,7 @@ def train_with_logger_multiple_dists(
 
             with torch.no_grad():
                 if gmm_mix_ratio > 0:  # Only proceed if gmm_mix_ratio is greater than 0
-                    residuals = torch.mean((dot_prod - eigenvalue * phi_x) ** 2, axis=-1)
+                    residuals = torch.mean((dot_prod/eigenvalue - phi_x) ** 2, axis=-1)
                     if epoch > 0 and gmm_mix_ratio < 1.0:
                         gmm_models[i] = fit_gmm(x_batch[:x_dist.shape[0]].detach(), residuals[:x_dist.shape[0]].detach(),
                                                 gmm_n_components)
@@ -2537,24 +2539,31 @@ def main():
     # )
     #
 
-    model = RBFLayer(
-        in_features_dim=1,
-        out_features_dim=1,
-        num_kernels=3,
-        radial_function=rbf_gaussian,
-        norm_function=l_norm,
-    )
+    # model = RBFLayer(
+    #     in_features_dim=1,
+    #     out_features_dim=1,
+    #     num_kernels=3,
+    #     radial_function=rbf_gaussian,
+    #     norm_function=l_norm,
+    # )
+    #
+    # x = torch.randn(size=(20,1))
+    # x.requires_grad_(True)
+    # print(
+    #     model(x)
+    # )
+    #
+    # print(
+    #     model.get_kernels_centers.min(),
+    #     model.get_kernels_centers.max()
+    # )
 
-    x = torch.randn(size=(20,1))
-    x.requires_grad_(True)
-    print(
-        model(x)
-    )
+    from torch.utils.tensorboard import SummaryWriter
+    # this way, flush and close are automatic
+    with SummaryWriter(log_dir='test_outputs/test_logs', flush_secs=10) as test_logger:
+        for i in range(0, 100, 10):
+            log_metrics(test_logger, {"loss": 0.1}, i)
 
-    print(
-        model.get_kernels_centers.min(),
-        model.get_kernels_centers.max()
-    )
 
 if __name__ == '__main__':
     main()

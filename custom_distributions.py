@@ -6,6 +6,49 @@ from sklearn.decomposition import PCA
 from rnn import reshape_hidden
 from typing import Union
 
+
+class CubicHermiteSampler:
+    """
+    A distribution that samples points along a cubic Hermite curve with added noise.
+    
+    Attributes:
+        x: Starting point of the curve
+        y: Ending point of the curve
+        scale: Scale of noise to add to sampled points
+    """
+    def __init__(self, x, y, scale=0.1):
+        super().__init__()
+        self.x = x
+        self.y = y
+        self.scale = scale
+        
+    def sample(self, sample_shape=torch.Size()):
+        """
+        Sample points along the cubic Hermite curve with added noise.
+        
+        Args:
+            sample_shape: Shape of the sample to generate
+            
+        Returns:
+            samples: Tensor of sampled points with shape sample_shape + (dim,)
+        """
+        # Generate alpha values for interpolation
+        alpha = torch.rand(sample_shape)
+        
+        # Generate noisy tangent vectors around the x-y vector
+        xy_vector = self.y - self.x
+        m_x = xy_vector + torch.randn_like(xy_vector) * self.scale
+        m_y = xy_vector + torch.randn_like(xy_vector) * self.scale
+        
+        # Compute points on the curve using cubic Hermite interpolation
+        points = (2 * alpha ** 3 - 3 * alpha ** 2 + 1).unsqueeze(-1) * self.x + \
+                (-2 * alpha ** 3 + 3 * alpha ** 2).unsqueeze(-1) * self.y + \
+                (alpha ** 3 - 2 * alpha ** 2 + alpha).unsqueeze(-1) * m_x + \
+                (alpha ** 3 - alpha ** 2).unsqueeze(-1) * m_y
+     
+        return points
+
+
 def isotropic_gaussian(mean, scale=1.0):
     """
     Create a multivariate isotropic Gaussian distribution.
@@ -20,7 +63,6 @@ def isotropic_gaussian(mean, scale=1.0):
     dim = len(mean)
     cov = torch.eye(dim) * scale
     return D.MultivariateNormal(mean, cov)
-
 
 def isotropic_gaussians(mean, scales):
     """

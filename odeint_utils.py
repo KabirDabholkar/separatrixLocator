@@ -6,7 +6,9 @@ def add_t_arg_to_dynamical_function(f,*args,**kwargs):
         return f(x,*args,**kwargs)
     return new_f
 
-def run_odeint_to_final(func,y0,T,inputs=None):
+def run_odeint_to_final(func,y0,T,inputs=None,steps=2,return_last_only=True,no_grad=True):
+    times = torch.linspace(0,T,steps).type_as(y0)
+
     args = []
     if inputs is not None:
         if len(y0.shape) > 1:
@@ -16,14 +18,23 @@ def run_odeint_to_final(func,y0,T,inputs=None):
         # print('\nmodified inputs shape',inputs.shape)
         args += [inputs]
 
-    with torch.no_grad():
+    if no_grad:
+        with torch.no_grad():
+            traj = odeint(
+                add_t_arg_to_dynamical_function(func,*args),
+                y0,
+                times,
+            )
+    else:
         traj = odeint(
             add_t_arg_to_dynamical_function(func,*args),
             y0,
-            torch.tensor([0,T]).type_as(y0),
+            times,
         )
     # print('traj shape',traj.shape, 'y0.shape',y0.shape)
-    return traj[-1]
+    if return_last_only:
+        return traj[-1]
+    return traj
 
 
 if __name__ == "__main__":

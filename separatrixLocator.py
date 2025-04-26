@@ -177,6 +177,39 @@ class SeparatrixLocator(BaseEstimator):
     #         all_trajectories.append(trajectories)
     #         all_below_threshold_points.append(below_threshold_points)
     #     return all_trajectories, all_below_threshold_points
+    def prepare_models_for_gradient_descent(self,distribution,**kwargs):
+        self.functions_for_gradient_descent = []
+        if self.verbose:
+            print('Preparing models for gradient descent...')
+        for model in self.models:
+            f = compose(
+                # lambda x: x ** 0.1,
+                torch.log, lambda x: x + 1, torch.exp,
+                partial(torch.sum, dim=-1, keepdims=True),
+                torch.log, torch.abs, model
+            )
+            # Sample initial conditions.
+            shape = [1000] #+ ([self.dynamics_dim] if self.dist_needs_dim else [])
+            samples_ic = distribution.sample(sample_shape=shape)
+            # If an external input distribution is provided, sample external inputs.
+            if "external_input_dist" in kwargs:
+                ext_input_dist = kwargs["external_input_dist"]
+                ext_input_dim = kwargs.get("external_input_dim", 0)
+                shape_ext = [1000] #+ ([ext_input_dim] if self.dist_needs_dim else [])
+                samples_ext = ext_input_dist.sample(sample_shape=shape_ext)
+            else:
+                # If not provided, use a dummy tensor (zeros) of the same shape as samples_ic.
+                samples_ext = torch.zeros_like(samples_ic)[...,0:0]
+            # Concatenate the samples along the last dimension.
+            combined_samples = torch.cat((samples_ic, samples_ext), dim=-1)
+
+            # Calculate the normalisation value over the combined inputs
+            norm_val = float(torch.mean(torch.sum(f(combined_samples) ** 2, dim=-1)).sqrt().detach().numpy())
+            # Update f to normalize its output.
+            f = compose(lambda x: x / norm_val, f)
+            self.functions_for_gradient_descent.append(f)
+        print('Models are prepared for gradient descent.')
+        return self.functions_for_gradient_descent
 
     def find_separatrix(self, distribution, dist_needs_dim=True,
                         return_indices=False, return_mask=False, **kwargs):
@@ -230,12 +263,14 @@ class SeparatrixLocator(BaseEstimator):
 if __name__ == '__main__':
     # model_class = KoopmanEigenfunctionModel
     from learn_koopman_eig import create_phi_network as model_class
-    from torch.distributions import Normal, Uniform
-    model_class = partial(model_class, num_layers=7, output_dim=10)
-    dist = Normal(0, 1)
+    from torch.distributions import Normal, Uniform, MultivariateNormal
+    # model_class = partial(model_class, num_layers=7, output_dim=10)
+    model_class = partial(torch.nn.Linear,out_features=1)
+    # dist = Normal(0, 1)
+    dist = MultivariateNormal(torch.zeros(1), torch.eye(1))
     SL = SeparatrixLocator(
         num_models = 2,
-        dynamics_dim = 2,
+        dynamics_dim = 1,
         use_multiprocessing = False,
         verbose = True,
         model_class = model_class
@@ -247,7 +282,13 @@ if __name__ == '__main__':
     #     dist_requires_dim = True,
     #     batch_size = 2 #000
     # )
-    inputs = dist.sample(sample_shape = (2,2))
+    inputs = dist.sample(sample_shape = (2,))
     print(
         SL.predict(inputs).shape
     )
+
+    SL.prepare_models_for_gradient_descent(dist)
+
+    from learn_koopman_eig import runGD_basic
+
+    hidden = dist.sample(sample_shape = (2,))

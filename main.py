@@ -41,8 +41,6 @@ CONFIG_PATH = "configs"
 # CONFIG_NAME = "test"
 CONFIG_NAME = "main"
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 project_path = os.getenv("PROJECT_PATH")
 
 
@@ -54,7 +52,320 @@ def decorated_main(cfg):
     # return finkelstein_fontolan_point_finder_test(cfg)
     # return finkelstein_fontolan_analysis_test(cfg)
     # return test_RNN(cfg)
-    return test_run_GD(cfg)
+    # return test_run_GD(cfg)
+    # return plot_ODE_line_IC(cfg)
+    # lowDapprox_test(cfg)
+    check_basin_of_attraction(cfg)
+
+def check_basin_of_attraction(cfg):
+    omegaconf_resolvers()
+
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+
+    from odeint_utils import run_odeint_to_final
+    from custom_distributions import CubicHermiteSampler
+    dynamics_function = instantiate(cfg.dynamics.function)
+
+    attractors = instantiate(cfg.dynamics.attractors)
+
+    distributions = list(instantiate(cfg.dynamics.IC_distribution_fit))
+    xtick_labels = [f'Isotropic {r}' for r in list(cfg.dynamics.scale_range.object)]
+    distributions += [
+        CubicHermiteSampler(*attractors,scale=0.1),
+        CubicHermiteSampler(*attractors, scale=0.5),
+        CubicHermiteSampler(*attractors, scale=1.0),
+        CubicHermiteSampler(*attractors, scale=2.0),
+        CubicHermiteSampler(*attractors, scale=4.0),
+    ]
+    xtick_labels += ['Cubic 0.1', 'Cubic 0.5', 'Cubic 1.0', 'Cubic 2.0', 'Cubic 4.0']
+    finals = []
+    
+    for i, dist in enumerate(distributions):
+        initial_conditions = dist.sample(sample_shape=(200,))
+        
+        T = 50
+        final = run_odeint_to_final(
+            dynamics_function,
+            initial_conditions,
+            inputs=torch.tensor([0.0, 0.0, 0.9]),
+            T=T,
+            return_last_only=True
+        )
+        finals.append(final)
+
+    # Stack the final states from all distributions
+    stacked_finals = torch.stack(finals)
+    
+
+    from sklearn.cluster import KMeans
+    import matplotlib.pyplot as plt
+
+    # Convert final tensors to numpy arrays for KMeans
+    final_nps = stacked_finals.detach().cpu().numpy().reshape(-1,stacked_finals.shape[-1])
+
+    # Try different numbers of clusters for each distribution
+    n_clusters_range = range(1, 11)
+    inertias = []
+
+
+    dist_inertias = []
+    for n_clusters in n_clusters_range:
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+        kmeans.fit(final_nps)
+        dist_inertias.append(kmeans.inertia_)
+    inertias.append(dist_inertias)
+
+    # Plot the elbow curves
+    plt.figure(figsize=(5,4))
+    for i, dist_inertias in enumerate(inertias):
+        plt.plot(n_clusters_range, dist_inertias, 'bo-', label=f'Distribution {i+1}')
+    plt.xlabel('Number of clusters')
+    plt.ylabel('Inertia')
+    plt.title('Elbow Method For Optimal Number of Clusters')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+    labels = kmeans.labels_.reshape(*stacked_finals.shape[:2])
+
+    # Count occurrences of each label for each distribution
+    for i, dist_labels in enumerate(labels):
+        unique_labels, counts = np.unique(dist_labels, return_counts=True)
+        print(f"\nDistribution {i+1} label counts:")
+        for label, count in zip(unique_labels, counts):
+            print(f"Label {label}: {count} points")
+
+    num_distributions = labels.shape[0]
+    all_unique_labels = np.unique(labels)
+
+    # Build a count matrix: rows = distributions, columns = label counts
+    count_matrix = np.zeros((num_distributions, len(all_unique_labels)))
+
+    for i, dist_labels in enumerate(labels):
+        unique_labels, counts = np.unique(dist_labels, return_counts=True)
+        for label, count in zip(unique_labels, counts):
+            label_idx = np.where(all_unique_labels == label)[0][0]
+            count_matrix[i, label_idx] = count
+
+    # Now plot
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    bottom = np.zeros(num_distributions)  # To stack bars on top of each other
+    for j, label in enumerate(all_unique_labels):
+        ax.bar(
+            np.arange(num_distributions),
+            count_matrix[:, j],
+            bottom=bottom,
+            label=f'Cluster {label}'
+        )
+        bottom += count_matrix[:, j]
+
+
+    ax.set_xlabel('Distribution radius')
+    ax.set_xticks(np.arange(len(xtick_labels)))
+    ax.set_xticklabels(xtick_labels)
+    ax.set_xticklabels(xtick_labels, rotation=90)
+    ax.set_ylabel('Number of points')
+    ax.set_title('Final point clustering for different IC distributions')
+    ax.legend()
+    plt.tight_layout()
+    plt.show()
+    plt.savefig(os.path.join(cfg.savepath, 'clustering.png'))
+
+    # plt.close()
+
+    # # Print the inertia values for analysis
+    # print("Inertia values for different numbers of clusters:")
+    # for n, inertia in zip(n_clusters_range, inertias):
+    #     print(f"n_clusters={n}: inertia={inertia:.2f}")
+    #
+    # # Run KMeans with the optimal number of clusters (you can adjust this based on the elbow plot)
+    # optimal_n_clusters = 3  # This can be adjusted based on the elbow plot
+    # kmeans = KMeans(n_clusters=optimal_n_clusters, random_state=42)
+    # cluster_labels = kmeans.fit_predict(final_np)
+    #
+    # # Print cluster sizes
+    # unique_labels, counts = np.unique(cluster_labels, return_counts=True)
+    # print("\nCluster sizes:")
+    # for label, count in zip(unique_labels, counts):
+    #     print(f"Cluster {label}: {count} points")
+
+
+
+
+def lowDapprox_test(cfg):
+    omegaconf_resolvers()
+
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+
+    from odeint_utils import run_odeint_to_final
+    from torch import nn
+
+    dynamics_function = instantiate(cfg.dynamics.function)
+    distribution = instantiate(cfg.dynamics.IC_distribution_fit)[1]
+    # distribution = instantiate(cfg.dynamics.IC_distribution_task_relevant)
+    # distribution = instantiate(cfg.dynamics.IC_interpolation_line_2)
+
+    device = 'cpu'
+
+    # print(traj.shape)
+
+    compressed_dim = 20
+    T = 30
+    original_dim = cfg.dynamics.dim
+    
+    encoder = nn.Linear(in_features=original_dim, out_features=compressed_dim)
+    small_dynamics_func = nn.Sequential(
+        nn.Linear(in_features=compressed_dim, out_features=compressed_dim),
+        nn.Tanh(),
+        nn.Linear(in_features=compressed_dim, out_features=compressed_dim)
+    )
+    decoder = nn.Linear(in_features=compressed_dim, out_features=original_dim)
+
+        # Move models to device
+    encoder = encoder.to(device)
+    small_dynamics_func = small_dynamics_func.to(device)
+    decoder = decoder.to(device)
+
+    # # Create optimizer for all models
+    # optimizer = torch.optim.Adam([
+    #     {'params': encoder.parameters()},
+    #     {'params': small_dynamics_func.parameters()},
+    #     {'params': decoder.parameters()}
+    # ], lr=1e-1)
+    #
+    # # Pre-training without ODE integration
+    # num_pretrain_epochs = 500
+    # pretrain_batch_size = 500
+    #
+    # # Sample initial conditions and run ODE integration
+    # x_batch = distribution.sample(sample_shape=(pretrain_batch_size,))
+    # x_batch = run_odeint_to_final(
+    #     dynamics_function,
+    #     x_batch,
+    #     inputs=torch.tensor([0.0, 0.0, 0.9]),
+    #     T=30,
+    #     steps=30,
+    #     return_last_only=True
+    # )
+    #
+    # for pretrain_epoch in range(num_pretrain_epochs):
+    #     optimizer.zero_grad()
+    #
+    #     # Sample batch from distribution
+    #     # x_batch = distribution.sample(sample_shape=(pretrain_batch_size,))
+    #
+    #     # Forward pass through the full model
+    #     encoded = encoder(x_batch)
+    #     compressed = small_dynamics_func(encoded)
+    #     decoded = decoder(compressed)
+    #
+    #     # Compute target using original dynamics
+    #     target = dynamics_function(x_batch)
+    #
+    #     # Calculate MSE loss
+    #     pretrain_loss = torch.nn.functional.mse_loss(decoded, target)
+    #
+    #     # Backpropagate
+    #     pretrain_loss.backward()
+    #     optimizer.step()
+    #
+    #     if pretrain_epoch % 10 == 0:
+    #         print(f"Pre-train Epoch {pretrain_epoch}, Loss: {pretrain_loss.item()}")
+
+    # Create optimizer for all models
+    optimizer = torch.optim.Adam([
+        {'params': encoder.parameters()},
+        {'params': small_dynamics_func.parameters()},
+        {'params': decoder.parameters()}
+    ], lr=1e-2)
+
+
+    initial_conditions = distribution.sample(sample_shape=(200,))
+    traj = run_odeint_to_final(
+        dynamics_function,
+        initial_conditions,
+        inputs=torch.tensor([0.0, 0.0, 0.9]),
+        T=T,
+        steps=300,
+        return_last_only=False
+    )
+
+    # Training loop
+    num_epochs = 1 #30 #30 #00
+    for epoch in range(num_epochs):
+        optimizer.zero_grad()
+
+
+        # Encode initial conditions
+        encoded_ic = encoder(initial_conditions)
+        
+        # Run dynamics in compressed space
+        compressed_traj = run_odeint_to_final(
+            small_dynamics_func,
+            encoded_ic,
+            T=T,
+            steps=300,
+            return_last_only=False,
+            no_grad=False,
+        )
+        
+        # Decode trajectories back to original space
+        decoded_traj = decoder(compressed_traj)
+        
+        # Calculate MSE loss
+        loss = torch.nn.functional.mse_loss(decoded_traj, traj)
+        
+        # Backpropagate
+        loss.backward()
+        optimizer.step()
+        
+        if epoch % 10 == 0:
+            print(f"Epoch {epoch}, Loss: {loss.item()}")
+
+    # Test the trained models
+    with torch.no_grad():
+        encoded_ic = encoder(initial_conditions)
+        compressed_traj = run_odeint_to_final(
+            small_dynamics_func,
+            encoded_ic,
+            T=T,
+            steps=300,
+            return_last_only=False
+        )
+        decoded_traj = decoder(compressed_traj)
+        
+        # Concatenate trajectories for PCA
+        combined_traj = torch.cat([traj, decoded_traj], dim=0)
+        combined_traj_reshaped = combined_traj.reshape(-1, combined_traj.shape[-1])
+        
+        # Perform PCA
+        from sklearn.decomposition import PCA
+        pca = PCA(n_components=2)
+        pca_result = pca.fit_transform(combined_traj_reshaped.detach().cpu().numpy())
+        
+        # Split back into original and reconstructed
+        n_points = traj.shape[0] * traj.shape[1]
+        original_pca = pca_result[:n_points].reshape(traj.shape[0], traj.shape[1], 2)
+        reconstructed_pca = pca_result[n_points:].reshape(traj.shape[0], traj.shape[1], 2)
+        
+        # Plot PCA results
+        plt.figure(figsize=(10, 5))
+        for i in range(traj.shape[1]):
+            plt.plot(original_pca[:, i, 0], original_pca[:, i, 1], alpha=0.1, label='Original' if i == 0 else None, c='C0')
+            # plt.plot(reconstructed_pca[:, i, 0], reconstructed_pca[:, i, 1], alpha=0.5, label='Reconstructed' if i == 0 else None, c='C1')
+        plt.scatter(original_pca[-1, :, 0], original_pca[-1, :, 1], alpha=1, c='red')
+        plt.title('PCA of Original vs Reconstructed Trajectories')
+        plt.legend()
+        plt.show()
+
+    # Save the trained models in separate files
+    torch.save(encoder.state_dict(), 'encoder.pth')
+    torch.save(decoder.state_dict(), 'decoder.pth')
+    torch.save(small_dynamics_func.state_dict(), 'small_dynamics_func.pth')
+    
+    # Save optimizer state separately
+    torch.save(optimizer.state_dict(), 'optimizer.pth')
 
 def test_run_GD(cfg):
     omegaconf_resolvers()
@@ -75,6 +386,52 @@ def test_run_GD(cfg):
     plt.scatter(torch.zeros_like(hidden),hidden)
     plt.scatter(torch.zeros_like(below_thr_points), below_thr_points,marker='x')
     plt.show()
+
+def plot_ODE_line_IC(cfg):
+    omegaconf_resolvers()
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+
+    dynamics_function = instantiate(cfg.dynamics.function)
+
+    attractors = instantiate(cfg.dynamics.attractors)
+
+    # Create 100 points along the line joining the attractors
+    num_points = 100
+    T = 25
+    steps = 100
+    times = torch.linspace(0, T, steps)
+    alpha = torch.linspace(0, 1, num_points)[:, None]
+    line_points = attractors[0] * (1 - alpha) + attractors[1] * alpha
+
+    from odeint_utils import run_odeint_to_final
+
+    # Run dynamics for each point
+    trajectories = run_odeint_to_final(
+        dynamics_function,
+        line_points,
+        T,
+        inputs = instantiate(cfg.dynamics.static_external_input),
+        steps = steps,
+        return_last_only=False
+    )
+    trajectories = trajectories.detach().cpu().numpy()
+
+    # Perform PCA on trajectories
+    from sklearn.decomposition import PCA
+    pca = PCA(n_components=2)
+    pca_trajectories = pca.fit_transform(trajectories.reshape(-1, trajectories.shape[-1]))
+    pca_trajectories = pca_trajectories.reshape(trajectories.shape[0], -1, 2)
+
+    # Plot PC1 against time
+    plt.figure(figsize=(10, 5))
+    # for i in range(num_points):
+    plt.plot(times[:,None].repeat(1,pca_trajectories.shape[1]),pca_trajectories[:, :, 0])
+    plt.xlabel('Time')
+    plt.ylabel('PC1')
+    plt.title('PC1 vs Time for Trajectories')
+    # plt.legend()
+    # plt.show()
+    plt.savefig(Path(cfg.savepath) / 'PC1_line_trajectories.png')
 
 def test_RNN(cfg):
     omegaconf_resolvers()
@@ -1051,7 +1408,7 @@ def main_multimodel(cfg):
             from interpolation import cubic_hermite
 
             num_points = 100
-            rand_scale = 4.0 #4.1  # 10.0
+            rand_scale = 4.0 #1.0 #4.0 #4.1  # 10.0
             # Example usage
             x, y = attractors.detach().cpu().numpy()  #
             # x = np.array([0, 0])  # Start point
@@ -1083,7 +1440,7 @@ def main_multimodel(cfg):
 
             # Convert points to torch tensor and run ODE integration
             points_tensor = torch.tensor(all_points, dtype=torch.float32)
-            time_points = torch.linspace(0, 1000, 20)  # Adjust time range and steps as needed
+            time_points = torch.linspace(0, 30, 2)  # Adjust time range and steps as needed
 
             # inp = [0.0, 0.0, 0.91]
             ext_input = instantiate(cfg.dynamics.static_external_input) #torch.tensor(inp).type_as(points_tensor)
@@ -1131,12 +1488,12 @@ def main_multimodel(cfg):
             cluster_labels = kmeans.fit_predict(trajectories_np[-1])
             cluster_labels = cluster_labels.reshape(num_curves, num_points)
             changes = np.diff(cluster_labels, axis=1) != 0
-            change_points = np.argmax(changes, axis=1)
+            change_points_id = np.argmax(changes, axis=1)
             # Handle cases where there are no changes (all zeros or all ones)
             no_changes = ~np.any(changes, axis=1)
-            change_points[no_changes] = num_points // 2
+            change_points_id[no_changes] = num_points // 2
 
-            change_points = np.linspace(0, 1, num_points)[change_points]
+            change_points = np.linspace(0, 1, num_points)[change_points_id]
 
             q = 0.05
             absKEFvals = np.abs(KEFvals.numpy())[..., 0]
@@ -1182,29 +1539,168 @@ def main_multimodel(cfg):
             fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"hermite_cubic_interpolations_KEFvals_scale{rand_scale}.png", dpi=300)
 
 
-            num_points = 20
+            num_points = 500 #00 #00
             noise_scale = 0.1
             hidden = attractors.repeat(num_points//2,1)
-            hidden = hidden + torch.randn(hidden.shape) * noise_scale
+            hidden = hidden*0 + torch.randn(hidden.shape) * noise_scale
             hidden.shape
 
             from learn_koopman_eig import runGD_basic
 
             SL.models[0].eval()
-            runGD_basic(
-                SL.models[0],
-                initial_conditions=hidden,
+            SL.prepare_models_for_gradient_descent(distribution)
+
+            anchor_point = attractors[0:1]
+
+            SL.functions_for_gradient_descent[0] = compose(
+                SL.functions_for_gradient_descent[0],
+                lambda x: x + anchor_point
             )
 
-            GD_traj, all_below_threshold_points, all_below_threshold_masks  = SL.find_separatrix(
-                distribution,
-                initial_conditions = hidden,
-                external_inputs = None,
-                dist_needs_dim=False,
-                return_indices = False,
-                return_mask = True,
-                **instantiate(cfg.separatrix_find_separatrix_kwargs)
+
+            traj, below_thr_points = runGD_basic(
+                SL.functions_for_gradient_descent[0],
+                initial_conditions=hidden,
+                partial_optim=partial(torch.optim.Adam, lr=0.6e-3, weight_decay=0.1),
+                threshold=1e-2,
+                num_steps=2000,
+                save_trajectories_every=100,
             )
+            new_traj, below_thr_points = runGD_basic(
+                SL.functions_for_gradient_descent[0],
+                initial_conditions=hidden,
+                partial_optim=partial(torch.optim.Adam, lr=0.6e-3, weight_decay=0.1),
+                threshold=1e-2,
+                num_steps=2000,
+                save_trajectories_every=100,
+            )
+            traj = np.concatenate((traj,new_traj))
+            traj_distances = np.linalg.norm(traj, axis=-1)
+
+
+            f = SL.functions_for_gradient_descent[0]
+            best_id = np.argmin(np.linalg.norm(below_thr_points - anchor_point,axis=-1))
+            new_point = below_thr_points[best_id:best_id+1] #[1:2]
+            KEFat_new_point = f(new_point)
+            print("KEFat_new_point",KEFat_new_point)
+            with torch.no_grad():
+                KEFtraj = f(torch.tensor(traj))
+
+            fig,axs = plt.subplots(2,1, sharex=True)
+            ax = axs[0]
+            ax.plot(traj_distances)
+            ax.set_ylabel('Distance from attractor')
+            ax = axs[1]
+            ax.plot(KEFtraj[...,0])
+            ax.set_ylabel('KEF value')
+            ax.set_xlabel('training iterations')
+            plt.show()
+
+
+            num_points = 1000 #0 #00
+            alpha = torch.linspace(0,10,num_points)[:,None]
+            og_line = torch.zeros_like(new_point) * (1-alpha) + new_point * alpha
+
+            n_shuffles = 10 #0 #00 #000
+
+            from odeint_utils import run_odeint_to_final
+            shuffled_lines = [og_line[...,np.random.permutation(og_line.shape[-1])] for _ in range(n_shuffles)]
+
+            ### generate hermite curves
+
+            num_curves = 10 #0 #100  # 20  # Number of random curves to generate
+            rand_scale = 4.0  # 4.1  # 10.0
+            x, y = attractors.detach().cpu().numpy()  #
+            m_x = -x + y  # Tangent at x
+            m_y = -x + y  # Tangent at y
+            all_points = []
+            for _ in range(num_curves):
+                m_x_perturbed = m_x * 1.4 + np.random.randn(m_x.shape[0]) * rand_scale
+                m_y_perturbed = m_y * 1.4 + np.random.randn(m_x.shape[0]) * rand_scale
+                points = cubic_hermite(x, y, m_x_perturbed, m_y_perturbed, num_points)
+                all_points.append(points)
+            all_points = np.stack(all_points)
+
+            ####
+
+            # all_lines =
+            all_lines = torch.concat([
+                torch.tensor(all_points).type_as(og_line) - anchor_point,
+                torch.stack([og_line] + shuffled_lines, dim=0),
+            ])
+            # final_points = []
+            # for line in [og_line]+shuffled_lines:
+            #     final_point = run_odeint_to_final(
+            #         dynamics_function,
+            #         line + anchor_point,
+            #         cfg.dynamics.all_attractors.T
+            #     )
+            #     final_points.append(final_point)
+            # final_points = np.stack(final_points)
+            final_points = run_odeint_to_final(
+                dynamics_function,
+                all_lines.reshape(-1,all_lines.shape[-1]) + anchor_point,
+                cfg.dynamics.all_attractors.T
+            )
+            from sklearn.cluster import KMeans
+            kmeans = KMeans(n_clusters=2, random_state=0).fit(final_points.reshape(-1,final_points.shape[-1]))
+            labels = kmeans.labels_.reshape(*all_lines.shape[:2])
+
+
+            # plt.figure()
+            # for i in range(n_shuffles):
+            #     l_shuffle, = plt.plot(alpha.flatten(), labels[i], label='shuffled',c='C1',lw=0.5)
+            # l_orig, = plt.plot(alpha.flatten(), labels[0], label='optimised', c='C0')
+            # plt.legend([l_orig, l_shuffle],['l_orig','l_shuffle'])
+            # plt.show()
+
+            trajectory_num,position = np.where(np.abs(np.diff(labels,axis=1))==1)
+            all_dists = np.linalg.norm(all_lines[trajectory_num,position],axis=-1)
+            curve_dists, og_dist, perm_dists = np.split(all_dists,([num_curves,num_curves+1]),axis=0)
+
+            # trajectories_reshaped = trajectories_np[-1].reshape(num_curves,-1,trajectories_np.shape[-1])
+            # traj_change_points = np.stack([trajectories_reshaped[i,change_points_id[i]] for i in range(num_curves)])
+            # euclidean_dists_curve_change_points =  np.linalg.norm(traj_change_points - anchor_point.detach().cpu().numpy(),axis=-1)
+            # all_dists = np.linalg.norm(all_lines[shuffle_num,position],axis=-1)
+            # optimized_dist = all_dists[0]
+            # shuffled_dists = all_dists[1:]
+            #
+            # plt.figure()
+            # plt.axvline(alpha[position[0]], color='r', linestyle='--')
+            # plt.hist(alpha[position[1:]], density=True, bins=20)
+            # plt.xticks(np.arange(0, 11, 2))
+            # plt.show()
+            print(curve_dists,og_dist,perm_dists)
+            interpolating_point_dist = np.linalg.norm(instantiate(cfg.dynamics.point_on_separatrix) - anchor_point)
+
+            plt.figure()
+            plt.axvline(og_dist, color='r', linestyle='--',label=r'GD on KEF')
+            plt.axvline(interpolating_point_dist, color='g', linestyle='--', label=r'where interpolating line meets separatrix')
+            plt.hist(perm_dists, density=True, bins=20, label='where permutated vector line meets separatrix',alpha=0.5)
+            plt.hist(curve_dists,density=True,label='where hermite curves meet separatrix',alpha=0.5)
+            plt.legend()
+            plt.xlabel('Distance from attractor')
+            plt.show()
+
+
+
+            # P = PCA(n_components=2)
+            # P.fit(
+            #     np.stack([
+            #         anchor_point,traj.reshape(-1,traj.shape[-1])
+            #     ])
+            # )
+
+
+            # GD_traj, all_below_threshold_points, all_below_threshold_masks  = SL.find_separatrix(
+            #     distribution,
+            #     initial_conditions = hidden,
+            #     external_inputs = None,
+            #     dist_needs_dim=False,
+            #     return_indices = False,
+            #     return_mask = True,
+            #     **instantiate(cfg.separatrix_find_separatrix_kwargs)
+            # )
 
 
         if False: #hasattr(cfg.dynamics,'RNN_dataset'):
