@@ -1,6 +1,24 @@
 import torch
 import numpy as np
 from functools import partial
+from compose import compose
+
+def compose_dynamics(dynamical_function, transform, inverse_transform):
+    """
+    Composes a dynamical function with coordinate transforms.
+    
+    Args:
+        dynamical_function: Function that takes a tensor and returns its time derivative
+        transform: Function that transforms coordinates from original space to new space
+        inverse_transform: Function that transforms coordinates from new space back to original space
+        
+    Returns:
+        Function that takes coordinates in new space, transforms to original space,
+        applies dynamical function, and transforms back to new space
+    """
+    composed_dynamics = compose(inverse_transform, dynamical_function, transform)
+        
+    return composed_dynamics
 
 def change_speed(func,factor=1.0):
     def new_func(*args, **kwargs):
@@ -28,6 +46,15 @@ def bistable_ND(z,dim=2,pos=1,scale=1.0):
     zdot = (z-z**3) * mask.type(z.dtype) + (-z) * (~mask).type(z.dtype)
     return scale * zdot
 
+A = torch.tensor([[1,1],
+                  [0,1]],dtype=torch.float32) #/ np.sqrt(2)
+
+
+affine_bistable2D = compose_dynamics(
+    partial(bistable_ND,dim=2,pos=0),
+    lambda x: (A @ x.T).T,
+    lambda x: (torch.linalg.inv(A) @ x.T).T,
+)
 
 bistable4D_nonnormal = concatenator(
     [partial(bistable_ND, dim=2, pos=0),
@@ -150,22 +177,35 @@ if __name__ == '__main__':
     # print(
     #     partial(hopfield,A=init_hopfield(10,3,seed=0))(torch.ones(10,1)).shape
     # )
-    from torchdiffeq import odeint
-    from functools import partial
-    y0 = torch.randn((30,4))
-    times = torch.linspace(0,10,100)
+    # from torchdiffeq import odeint
+    # from functools import partial
+    # y0 = torch.randn((30,4))
+    # times = torch.linspace(0,10,100)
+    #
+    # func = concatenator(
+    #     [partial(bistable_ND, dim=2, pos=0),
+    #     nonnormal_amplifcation],
+    #     split_size_or_sections = 2
+    # )
+    # func = change_speed(func,factor=0.1)
+    # sol = odeint(lambda t,x: func(x),y0,times)
+    # import matplotlib.pyplot as plt
+    # plt.plot(sol[...,2],sol[...,3])
+    # plt.scatter(sol[-1,..., 2], sol[-1,..., 3],c='red')
+    # plt.show()
+    # bistable_ND(torch.tensor([0,1])[None,None],dim=2,pos=1)
 
-    func = concatenator(
-        [partial(bistable_ND, dim=2, pos=0),
-        nonnormal_amplifcation],
-        split_size_or_sections = 2
+    from functools import partial
+    from compose import compose
+
+    affine_bistable2D = compose(
+        lambda x: A @ x,
+        partial(
+            bistable_ND,
+            dim=2,
+            pos=0
+        ),
+        lambda x: np.linalg.inv(A) @ x,
     )
-    func = change_speed(func,factor=0.1)
-    sol = odeint(lambda t,x: func(x),y0,times)
-    import matplotlib.pyplot as plt
-    plt.plot(sol[...,2],sol[...,3])
-    plt.scatter(sol[-1,..., 2], sol[-1,..., 3],c='red')
-    plt.show()
-    bistable_ND(torch.tensor([0,1])[None,None],dim=2,pos=1)
 
 

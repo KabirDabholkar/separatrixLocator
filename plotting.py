@@ -2,6 +2,35 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 
+def plot_flow_streamlines(F, ax, x_limits=(-2, 2), y_limits=(-2, 2), resolution=500, density=1.0, color='k', linewidth=0.5, alpha=1.0):
+    """
+    Plots the flow field using streamlines for a given vector field F.
+
+    Parameters:
+        F (callable): Function that computes the vector field.
+        ax (matplotlib.axes.Axes): The axis object where the plot will be drawn.
+        x_limits (tuple): Limits for the x-axis.
+        y_limits (tuple): Limits for the y-axis.
+        resolution (int): Resolution for the grid.
+        density (float): Controls the closeness of streamlines.
+        color (str): Color of the streamlines.
+        linewidth (float): Width of the streamlines.
+        alpha (float): Transparency of the streamlines.
+    """
+    # Define grid for streamlines
+    x = np.linspace(x_limits[0], x_limits[1], resolution)
+    y = np.linspace(y_limits[0], y_limits[1], resolution)
+    X, Y = np.meshgrid(x, y)
+    grid = torch.tensor(np.stack([X.flatten(), Y.flatten()], axis=1), dtype=torch.float32)
+
+    # Compute F values for the grid
+    F_val = F(grid).detach().cpu().numpy()
+    U = F_val[:, 0].reshape(resolution, resolution)
+    V = F_val[:, 1].reshape(resolution, resolution)
+
+    # Plot streamlines
+    lines = ax.streamplot(X, Y, U, V, density=density, color=color, linewidth=linewidth)
+    lines.lines.set_alpha(alpha)
 
 def plot_kinetic_energy(F, ax, x_limits=(-2, 2), y_limits=(-2, 2), heatmap_resolution=500, quiver_resolution=25,
                         below_threshold_points=None):

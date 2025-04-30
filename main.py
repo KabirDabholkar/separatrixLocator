@@ -55,7 +55,312 @@ def decorated_main(cfg):
     # return test_run_GD(cfg)
     # return plot_ODE_line_IC(cfg)
     # lowDapprox_test(cfg)
-    check_basin_of_attraction(cfg)
+    # check_basin_of_attraction(cfg)
+    # plot_cubichermitesampler(cfg)
+    # return RNN_modify_inputs(cfg)
+    plot_dynamics_2D(cfg)
+
+def plot_dynamics_2D(cfg):
+    omegaconf_resolvers()
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+
+    dynamics_function = instantiate(cfg.dynamics.function)
+
+    distribution = instantiate(cfg.dynamics.IC_distribution)
+
+    ### Loading separatrix locator models
+    SL = instantiate(cfg.separatrix_locator)
+    # SL.init_models()
+    SL.models = [instantiate(cfg.model).to(SL.device) for _ in range(cfg.separatrix_locator.num_models)]
+    new_format_path = Path(cfg.savepath) / cfg.experiment_details
+    print(new_format_path)
+    if os.path.exists(new_format_path):
+        load_path = new_format_path
+    else:
+        load_path = Path(cfg.savepath)
+        print(new_format_path, 'does not exist, loading', load_path, 'instead.')
+    SL.load_models(load_path)
+
+
+    points = distribution.sample(sample_shape=(50,))
+
+
+    # Run dynamics forward using odeint
+    time_points = torch.linspace(0, 20, 100)  # 10 seconds, 100 time points
+    # trajectories = odeint(lambda t, x: dynamics_function(x), points, time_points).detach().cpu()
+
+    # Create a grid of points
+    n_grid = 300
+    x = np.linspace(*cfg.dynamics.lims.x, n_grid)
+    y = np.linspace(*cfg.dynamics.lims.y, n_grid)
+    X, Y = np.meshgrid(x, y)
+
+    # Convert grid points to tensor and evaluate dynamics
+    grid_points = torch.tensor(np.stack([X.flatten(), Y.flatten()], axis=1), dtype=torch.float32)
+    with torch.no_grad():
+        dynamics = dynamics_function(grid_points)
+
+    # Reshape dynamics for plotting
+    U = dynamics[:, 0].reshape(X.shape)
+    V = dynamics[:, 1].reshape(X.shape)
+    # Compute norm of vector field at each point
+    norm = 0.5 * (U**2 + V**2)
+
+    # KEFvalgrid = SL.predict(grid_points)[...,0]
+    KEFvalgrid = instantiate(cfg.dynamics.cartoon_separatrix_function)(grid_points)
+    KEFvalgrid = KEFvalgrid.reshape(X.shape)
+
+    pointsets = [
+        {
+            'x':[1,-1],
+            'y':[0,0],
+            'marker':'o',
+            'label': 'stable fixed point',
+        },
+        {
+            'x':[0],
+            'y':[0],
+            'marker':'x',
+            'label': 'unstable fixed point',
+        }
+    ]
+
+
+    # Plot the trajectories
+    fig, axs = plt.subplots(1, 3, figsize=(10, 3))
+    # Plot initial conditions
+    ax = axs[0]
+    for pointset in pointsets:
+        ax.scatter(**pointset)
+
+    xsep = np.linspace(-2,2)
+    ysep = -xsep
+    ax.plot(xsep,ysep,ls='dashed')
+
+    traj = [[-1, 0],[-1,1.2]]
+    traj = torch.tensor(traj,dtype=torch.float32)
+    traj = torch.concat([
+        traj,
+        odeint(lambda t, x: dynamics_function(x), traj[-1], time_points).detach().cpu()
+    ])
+    ax.plot(traj[...,0],traj[...,1])
+
+    traj = [[-1, 0], [-0.48, 0.52]]
+    traj = torch.tensor(traj, dtype=torch.float32)
+    traj = torch.concat([
+        traj,
+        odeint(lambda t, x: dynamics_function(x), traj[-1], time_points).detach().cpu()
+    ])
+    ax.plot(traj[..., 0], traj[..., 1])
+
+
+    # Create arrows like coordinate axes
+    arrow_length = 0.5
+    arrow_start = [-1, -1.3]  # Starting point for all arrows
+    
+    # Vertical arrow
+    ax.arrow(arrow_start[0], arrow_start[1], 0, arrow_length, 
+             head_width=0.1, head_length=0.1, fc='k', ec='k', )
+    ax.text(arrow_start[0], arrow_start[1] + arrow_length + 0.1, 'input', ha='center',va='bottom')
+    
+    # Diagonal arrow
+    ax.arrow(arrow_start[0], arrow_start[1], arrow_length/np.sqrt(2), arrow_length/np.sqrt(2),
+             head_width=0.1, head_length=0.1, fc='k', ec='k')
+    ax.text(arrow_start[0] + arrow_length/np.sqrt(2) + 0.1, 
+            arrow_start[1] + arrow_length/np.sqrt(2) + 0.1, 
+            'optimal')
+    
+    # Horizontal arrow
+    ax.arrow(arrow_start[0], arrow_start[1], arrow_length, 0,
+             head_width=0.1, head_length=0.1, fc='k', ec='k')
+    ax.text(arrow_start[0] + arrow_length + 0.1, arrow_start[1], 'choice', ha='left')
+    # ax.streamplot(X, Y, U, V, density=0.8, color='k', linewidth=0.5)
+    # ax.set_title(r'Flow vector field $\dot x = f(x)$')
+
+
+
+    # Plot vector field
+    ax = axs[1]
+    im = ax.imshow(torch.log(norm), extent=[*cfg.dynamics.lims.x, *cfg.dynamics.lims.y], origin='lower', cmap='viridis')
+    ax.set_title(r'Kinetic energy $\frac{1}{2}\Vert f(x) \Vert^2$')
+    # plt.colorbar(im, ax=ax)
+    # ax.quiver(X, Y, U, V, alpha=0.5)
+    # ax.set_title('Vector Field')
+
+    # Plot streamlines
+    ax = axs[2]
+    line_x = np.linspace(-2,2,10)
+    # ax.plot(line_x,-line_x,ls='dashed')
+    ax.set_title(r'$\psi(x)$')
+    im = ax.imshow(torch.log(torch.abs(KEFvalgrid)), extent=[*cfg.dynamics.lims.x, *cfg.dynamics.lims.y], origin='lower', cmap='viridis')
+
+
+    for ax in axs.flatten():
+        ax.set_xlim(*cfg.dynamics.lims.x)
+        ax.set_ylim(*cfg.dynamics.lims.y)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_aspect('equal')
+
+    fig.tight_layout()
+    fig.savefig('plots_for_publication/'+'fig1.pdf')
+    plt.show()
+
+
+def RNN_modify_inputs(cfg):
+    omegaconf_resolvers()
+
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+
+    orig_model = instantiate(cfg.dynamics.loaded_RNN_model)
+
+    ### Loading separatrix locator models
+    SL = instantiate(cfg.separatrix_locator)
+    # SL.init_models()
+    SL.models = [instantiate(cfg.model).to(SL.device) for _ in range(cfg.separatrix_locator.num_models)]
+    new_format_path = Path(cfg.savepath) / cfg.experiment_details
+    print(new_format_path)
+    if os.path.exists(new_format_path):
+        load_path = new_format_path
+    else:
+        load_path = Path(cfg.savepath)
+        print(new_format_path, 'does not exist, loading', load_path, 'instead.')
+    SL.load_models(load_path)
+
+
+    # dataset = instantiate(cfg.dynamics.RNN_dataset)
+    # dataset = instantiate(cfg.dynamics.RNN_analysis_dataset)
+    dataset = instantiate(cfg.dynamics.RNN_analysis_dataset_opposite)
+    # print(model)
+
+    num_models = 50
+    models = []
+    for _ in range(num_models):
+        models.append(deepcopy(orig_model))
+    
+    frac_to_permute = 0.25
+    
+    for model in models:
+        # Get the current input weights
+        current_weights = model.rnn.weight_ih_l0
+        # Create a random permutation of the input dimension
+        num_to_permute = int(current_weights.shape[0] * frac_to_permute)  
+        perm = torch.arange(current_weights.shape[0])
+        indices_to_permute = torch.randperm(current_weights.shape[0])[:num_to_permute]
+        perm[indices_to_permute] = perm[indices_to_permute[torch.randperm(num_to_permute)]]
+        # Apply the permutation to the input weights
+        model.rnn.weight_ih_l0 = torch.nn.Parameter(current_weights[perm])
+
+    inputs,targets = dataset()
+    inputs[:20] = 0
+    # inputs *= 30
+    inputs = torch.tensor(inputs,dtype=torch.float32)
+    # Run all models on inputs
+    outputs = []
+    hiddens = []
+    for model in models:
+        with torch.no_grad():
+            output,hidden = model(inputs,return_hidden=True)
+            outputs.append(output.detach())
+            hiddens.append(hidden.detach())
+
+    orig_output = orig_model(inputs).detach()
+    orig_output_np = orig_output.detach().numpy()
+
+    KEFvals = SL.predict(torch.stack(hiddens))
+    
+    # Convert outputs to numpy for plotting
+    outputs_np = [out.detach().cpu().numpy() for out in outputs]
+
+    outputs_np = np.stack(outputs_np,axis=0)
+    outputs_np_sign = np.sign(outputs_np[:,-1]).astype(int)
+    outputs_np_sign = (outputs_np_sign+1)//2
+    # Plot the outputs
+    import matplotlib.pyplot as plt
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
+
+    trial_num = 7
+
+    # Plot inputs in upper panel
+    ax1.plot(inputs[:, trial_num, 0], 'b-', label='Input', linewidth=1)
+    ax1.set_ylabel('Input')
+    ax1.set_title('Input Signal')
+    ax1.grid(True)
+
+    # Plot outputs in middle panel
+    for i, output in enumerate(outputs_np):
+        color = f'C{outputs_np_sign[i,trial_num,0]}'
+        ax2.plot(output[:, trial_num, 0], alpha=0.3, label=f'Model {i+1}',c=color, linewidth=2)
+    # ax2.plot(targets[:, trial_num, 0], 'k--', label='Target', linewidth=2)
+    ax2.plot(orig_output_np[:, trial_num, 0], 'k--', label='Original model output', linewidth=2)
+    ax2.set_ylabel('Output')
+    ax2.set_title('Outputs from Different Models with Permuted Input Weights')
+    # ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax2.grid(True)
+
+    # Plot KEF values in lower panel
+    KEFmodelnum = 0
+    for i in range(len(outputs_np)):
+        color = f'C{outputs_np_sign[i,trial_num,0]}'
+        ax3.plot(KEFvals[i, :, trial_num, KEFmodelnum], label='KEF Values', linewidth=1, color=color)
+    ax3.set_xlabel('Time')
+    ax3.set_ylabel('KEF Value')
+    ax3.set_title('KEF Values Over Time')
+    ax3.grid(True)
+
+    for ax in [ax1, ax2, ax3]:
+        ax.set_xlim(250,270)
+
+    plt.tight_layout()
+    plt.show()
+
+    plt.savefig(os.path.join(cfg.savepath, 'RNN_permuted_input_weights.png'))
+
+def plot_cubichermitesampler(cfg):
+    omegaconf_resolvers()
+
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+
+
+    attractors = instantiate(cfg.dynamics.attractors)
+
+    distributions = list(instantiate(cfg.dynamics.IC_distribution_fit))
+    # distribution = distributions[5]
+
+    # distribution = CubicHermiteSampler(attractors, alpha_dist=torch.distributions.Beta(4,4), scale=20.0)
+    # Sample points from all distributions
+    all_points = []
+    for dist in distributions:
+        points = dist.sample(sample_shape=(200,))
+        all_points.append(points)
+    
+    # Concatenate all points
+    points = torch.cat(all_points, dim=0)
+    # points = distribution.sample(sample_shape=(200,))
+    from sklearn.decomposition import PCA
+    import matplotlib.pyplot as plt
+
+    # Convert points to numpy for PCA
+    points_np = points.detach().cpu().numpy()
+
+    # Convert attractors to numpy
+    attractors_np = attractors.detach().cpu().numpy()
+
+    # Fit PCA on points
+    pca = PCA(n_components=2)
+    points_pca = pca.fit_transform(points_np)
+    attractors_pca = pca.transform(attractors_np)
+
+    # Plot points and attractors
+    plt.figure(figsize=(6, 4))
+    plt.scatter(points_pca[:, 0], points_pca[:, 1], alpha=0.5, label='Sampled Points')
+    plt.scatter(attractors_pca[:, 0], attractors_pca[:, 1], c='red', s=100, marker='*', label='Attractors')
+    plt.xlabel('PC1')
+    plt.ylabel('PC2')
+    plt.title('Initial Conditions and Attractors in PCA Space')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
 def check_basin_of_attraction(cfg):
     omegaconf_resolvers()
@@ -69,15 +374,19 @@ def check_basin_of_attraction(cfg):
     attractors = instantiate(cfg.dynamics.attractors)
 
     distributions = list(instantiate(cfg.dynamics.IC_distribution_fit))
-    xtick_labels = [f'Isotropic {r}' for r in list(cfg.dynamics.scale_range.object)]
-    distributions += [
-        CubicHermiteSampler(*attractors,scale=0.1),
-        CubicHermiteSampler(*attractors, scale=0.5),
-        CubicHermiteSampler(*attractors, scale=1.0),
-        CubicHermiteSampler(*attractors, scale=2.0),
-        CubicHermiteSampler(*attractors, scale=4.0),
-    ]
-    xtick_labels += ['Cubic 0.1', 'Cubic 0.5', 'Cubic 1.0', 'Cubic 2.0', 'Cubic 4.0']
+    xtick_labels = range(len(distributions)) #[f'Cubic {d.scale}' for d in cfg.dynamics.IC_distribution_fit]
+
+    # distributions += list(instantiate(cfg.dynamics.IC_distribution_fit_old))
+    # xtick_labels += [f'Isotropic {r}' for r in list(cfg.dynamics.scale_range.object)]
+    #
+    # # distributions += [
+    # #     CubicHermiteSampler(*attractors,scale=0.1),
+    # #     CubicHermiteSampler(*attractors, scale=0.5),
+    # #     CubicHermiteSampler(*attractors, scale=1.0),
+    # #     CubicHermiteSampler(*attractors, scale=2.0),
+    # #     CubicHermiteSampler(*attractors, scale=4.0),
+    # # ]
+    # # xtick_labels += ['Cubic 0.1', 'Cubic 0.5', 'Cubic 1.0', 'Cubic 2.0', 'Cubic 4.0']
     finals = []
     
     for i, dist in enumerate(distributions):
@@ -87,7 +396,7 @@ def check_basin_of_attraction(cfg):
         final = run_odeint_to_final(
             dynamics_function,
             initial_conditions,
-            inputs=torch.tensor([0.0, 0.0, 0.9]),
+            inputs=instantiate(cfg.dynamics.static_external_input),
             T=T,
             return_last_only=True
         )
@@ -454,7 +763,7 @@ def finkelstein_fontolan_analysis_test(cfg):
         from interpolation import cubic_hermite
     
         num_points = 40
-        rand_scale = 4.1 #10.0
+        rand_scale = 3.1 #10.0
         # Example usage
         x,y = attractors.detach().cpu().numpy()#
         # x = np.array([0, 0])  # Start point
@@ -1408,7 +1717,7 @@ def main_multimodel(cfg):
             from interpolation import cubic_hermite
 
             num_points = 100
-            rand_scale = 4.0 #1.0 #4.0 #4.1  # 10.0
+            rand_scale = 3.0 #1.0 #4.0 #4.1  # 10.0
             # Example usage
             x, y = attractors.detach().cpu().numpy()  #
             # x = np.array([0, 0])  # Start point

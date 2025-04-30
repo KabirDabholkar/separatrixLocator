@@ -2,16 +2,16 @@ _target_: utils.setattrs_kwargs
 target:
   _target_: architectures.AdditiveModel
   _args_  : 
-#    - _target_: architectures.DeepResNet
-#      input_dim: ${....input_size}
-#      hidden_dim: ${....hidden_size}
-#      output_dim: ${....output_size}
-#      num_blocks: ${....num_layers}
-
-    - _target_: architectures.DeepResNetVariableWidth
+    - _target_: architectures.DeepResNet
       input_dim: ${....input_size}
-      hidden_dims: ${....hidden_sizes}
+      hidden_dim: ${....hidden_size}
       output_dim: ${....output_size}
+      num_blocks: ${....num_layers}
+#
+#    - _target_: architectures.DeepResNetVariableWidth
+#      input_dim: ${....input_size}
+#      hidden_dims: ${....hidden_sizes}
+#      output_dim: ${....output_size}
 
 #      nonlin  :
 #        _target_ : torch.nn.ReLU
@@ -61,9 +61,11 @@ input_size  : ${dynamics.dim}
 output_size : 1
 num_kernels : 10 #0
 
-hidden_size : 1000
-num_layers  : 5
-#name: AdditiveRBFResNet_hidden${.hidden_size}_output${.output_size}_numKernels${.num_kernels}_numlayers${.num_layers}
+#hidden_size : 1000
+#num_layers  : 5
+hidden_size : 100
+num_layers  : 20
+name: AdditiveRBFResNet_hidden${.hidden_size}_output${.output_size}_numKernels${.num_kernels}_numlayers${.num_layers}
 
 
 #hidden_sizes : [16000,4000,2000,1000,500,100,50,10]
@@ -75,9 +77,9 @@ num_layers  : 5
 
 #hidden_sizes : [8096,4096,2048,1024,1024,512,512,256,256,128,128]
 #name: AdditiveRBFResNet_evenwidertaperinglayers11_output${.output_size}_numKernels${.num_kernels} #_numlayers${.num_layers}
-#
-hidden_sizes : [4096,4096,2048,1024,1024,512,512,256,256,128,128]
-name: AdditiveRBFResNet_widetaperinglayers11_output${.output_size}_numKernels${.num_kernels} #_numlayers${.num_layers}
+
+#hidden_sizes : [4096,4096,2048,1024,1024,512,512,256,256,128,128]
+#name: AdditiveRBFResNet_widetaperinglayers11_output${.output_size}_numKernels${.num_kernels} #_numlayers${.num_layers}
 
 
 #name: AdditiveRBFResNet_taperinglayers51_output${.output_size}_numKernels${.num_kernels} #_numlayers${.num_layers}

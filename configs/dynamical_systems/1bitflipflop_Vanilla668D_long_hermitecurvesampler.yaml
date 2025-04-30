@@ -9,18 +9,31 @@ run_traj : true
 ####
 
 IC_distribution_fit:
-  _target_  : custom_distributions.isotropic_gaussians
-  mean      : ${..point_on_separatrix}
-  scales    :
-    _target_  : numpy.multiply
-    _args_  :
-      - ${....scale_range}
-      - ${....spectral_norm}
+  - _target_  : custom_distributions.CubicHermiteSampler
+    x         : ${...attractors}
+    scale     : 0.1
+    alpha_dist  : ${...alpha_dist}
+  - _target_  : custom_distributions.CubicHermiteSampler
+    x         : ${...attractors}
+    scale     : 0.5
+    alpha_dist  : ${...alpha_dist}
+  - _target_  : custom_distributions.CubicHermiteSampler
+    x         : ${...attractors}
+    scale     : 1.0
+    alpha_dist  : ${...alpha_dist}
+  - _target_  : custom_distributions.CubicHermiteSampler
+    x         : ${...attractors}
+    scale     : 3.0
+  - _target_  : custom_distributions.CubicHermiteSampler
+    x         : ${...attractors}
+    scale     : 4.0
+    alpha_dist  : ${...alpha_dist}
 
+alpha_dist  :
+  _target_  : torch.distributions.Beta
+  concentration1: 4
+  concentration0: 4
 
-scale_range :
-  _target_  : numpy.array
-  object  : [1e-3,5e-3,1e-2,0.1,0.5,1.0,2.0]
 
 #########
 
@@ -56,7 +69,7 @@ perturbable_RNN_model:
   _target_  : rnn.convert_to_perturbableRNN
   old_model : ${..loaded_RNN_model}
 
-dim  : 64
+dim  : 668
 k_bit : 1
 
 RNN_criterion :
@@ -78,20 +91,9 @@ RNN_analysis_dataset:
   n_bits    : ${..k_bit}
   p         : 0.2
   random_seed : 2
-  repeats : 10
+  repeats : 3
   sign    : 1
 #  sign    : -1
-
-RNN_analysis_dataset_opposite:
-  _target_  : task_utils.FlipFlopSweepDataset
-  n_trials  : 10
-  n_time    : 50
-  n_bits    : ${..k_bit}
-  p         : 0.2
-  random_seed : 2
-  repeats : 10
-  sign    : -1
-
 
 hidden_full :
   _target_ : rnn.extract_hidden_from_model
@@ -130,4 +132,4 @@ point_on_separatrix :
   num_points        : 20
   final_time        : 30
 
-name  : ${.RNN_dataset.n_bits}bitFlipFlop_long_isotropic_Vanilla${.dim}
+name  : ${.RNN_dataset.n_bits}bitFlipFlop_long_Vanilla${.dim}_hermitecurvesamplerBeta_4_4

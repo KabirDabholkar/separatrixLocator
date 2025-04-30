@@ -10,44 +10,114 @@ from typing import Union
 class CubicHermiteSampler:
     """
     A distribution that samples points along a cubic Hermite curve with added noise.
-    
+
     Attributes:
         x: Starting point of the curve
         y: Ending point of the curve
         scale: Scale of noise to add to sampled points
+        alpha_dist: torch.distribution to sample alpha values from. Defaults to uniform.
     """
-    def __init__(self, x, y, scale=0.1):
+
+    def __init__(self, x, y=None, scale=0.1, alpha_dist=None):
         super().__init__()
-        self.x = x
-        self.y = y
+        if y is None:
+            if x.shape[0] != 2:
+                raise ValueError("If y is not provided, x must be a (2,dim) tensor")
+            self.x = x[0]
+            self.y = x[1]
+        else:
+            self.x = x
+            self.y = y
+        self.dim = self.x.shape[-1]
         self.scale = scale
-        
+        self.alpha_dist = alpha_dist if alpha_dist is not None else D.Uniform(0, 1)
+        self.vector_noise = torch.distributions.MultivariateNormal(torch.zeros(self.dim),
+                                                                   torch.eye(self.dim) * self.scale ** 2)
+
     def sample(self, sample_shape=torch.Size()):
         """
         Sample points along the cubic Hermite curve with added noise.
-        
+
         Args:
             sample_shape: Shape of the sample to generate
-            
+
         Returns:
             samples: Tensor of sampled points with shape sample_shape + (dim,)
         """
+        dim = self.x.shape[-1]
+
         # Generate alpha values for interpolation
-        alpha = torch.rand(sample_shape)
-        
+        alpha = self.alpha_dist.sample(sample_shape)
+
         # Generate noisy tangent vectors around the x-y vector
-        xy_vector = self.y - self.x
-        m_x = xy_vector + torch.randn_like(xy_vector) * self.scale
-        m_y = xy_vector + torch.randn_like(xy_vector) * self.scale
-        
+        diff = -self.x + self.y
+        norm = (diff ** 2).mean().sqrt()
+        xy_vector = (diff).expand(*sample_shape, dim)
+        # print('alpha term shape', (2 * alpha ** 3 - 3 * alpha ** 2 + 1).unsqueeze(-1).shape)
+        m_x = xy_vector
+        m_y = xy_vector
+
+        m_x = m_x + self.vector_noise.sample(sample_shape=(*sample_shape,))/norm
+        m_y = m_y + self.vector_noise.sample(sample_shape=(*sample_shape,))/norm
+
+        # Expand x and y points to match sample shape
+        x_expanded = self.x.expand(*sample_shape, dim)
+        y_expanded = self.y.expand(*sample_shape, dim)
+
         # Compute points on the curve using cubic Hermite interpolation
-        points = (2 * alpha ** 3 - 3 * alpha ** 2 + 1).unsqueeze(-1) * self.x + \
-                (-2 * alpha ** 3 + 3 * alpha ** 2).unsqueeze(-1) * self.y + \
-                (alpha ** 3 - 2 * alpha ** 2 + alpha).unsqueeze(-1) * m_x + \
-                (alpha ** 3 - alpha ** 2).unsqueeze(-1) * m_y
-     
+        points = (2 * alpha ** 3 - 3 * alpha ** 2 + 1).unsqueeze(-1) * x_expanded + \
+                 (-2 * alpha ** 3 + 3 * alpha ** 2).unsqueeze(-1) * y_expanded + \
+                 (alpha ** 3 - 2 * alpha ** 2 + alpha).unsqueeze(-1) * m_x + \
+                 (alpha ** 3 - alpha ** 2).unsqueeze(-1) * m_y
+
         return points
 
+
+def create_hermite_samplers_from_three_points(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor,
+                                              scale1: float, scale2: float,
+                                              alpha_dist1: D.Distribution = None,
+                                              alpha_dist2: D.Distribution = None) -> tuple[
+    CubicHermiteSampler, CubicHermiteSampler]:
+    """
+    Create two CubicHermiteSampler objects from three points.
+
+    Args:
+        a: First point
+        b: Second point (middle point)
+        c: Third point
+        scale1: Scale parameter for first sampler (a to b)
+        scale2: Scale parameter for second sampler (b to c)
+        alpha_dist1: Alpha distribution for first sampler
+        alpha_dist2: Alpha distribution for second sampler
+
+    Returns:
+        Tuple of two CubicHermiteSampler objects
+    """
+    sampler1 = CubicHermiteSampler(a, b, scale=scale1, alpha_dist=alpha_dist1)
+    sampler2 = CubicHermiteSampler(b, c, scale=scale2, alpha_dist=alpha_dist2)
+    return [sampler1, sampler2]
+
+
+def create_hermite_samplers_from_three_points_stacked(ac: torch.Tensor, b: torch.Tensor,
+                                              scale1: float, scale2: float,
+                                              alpha_dist1: D.Distribution = None,
+                                              alpha_dist2: D.Distribution = None) -> tuple[
+    CubicHermiteSampler, CubicHermiteSampler]:
+    """
+    Create two CubicHermiteSampler objects from three points, where the first and third points are stacked in a single tensor.
+
+    Args:
+        ac: Stacked tensor containing first and third points [a, c]
+        b: Second point (middle point)
+        scale1: Scale parameter for first sampler (a to b)
+        scale2: Scale parameter for second sampler (b to c)
+        alpha_dist1: Alpha distribution for first sampler
+        alpha_dist2: Alpha distribution for second sampler
+
+    Returns:
+        Tuple of two CubicHermiteSampler objects
+    """
+    return create_hermite_samplers_from_three_points(ac[0], b, ac[1], scale1, scale2, alpha_dist1, alpha_dist2)
 
 def isotropic_gaussian(mean, scale=1.0):
     """
@@ -392,12 +462,12 @@ def get_stacked_one_hot(pos=0,length=1):
 
 # Example usage:
 if __name__ == '__main__':
-    dist1 = torch.distributions.Normal(loc=0.0, scale=1.0)
-    dist2 = torch.distributions.Normal(loc=5.0, scale=1.0)
-    mixture_dist = MixtureDistribution([dist1, dist2], weights=[0.3, 0.7])
+    # dist1 = torch.distributions.Normal(loc=0.0, scale=1.0)
+    # dist2 = torch.distributions.Normal(loc=5.0, scale=1.0)
+    # mixture_dist = MixtureDistribution([dist1, dist2], weights=[0.3, 0.7])
 
     # Sample from the mixture distribution:
-    samples = mixture_dist.sample((1000,))
+    # samples = mixture_dist.sample((1000,))
     # print(samples)
 
     # Compute the log probability of a value:
@@ -410,15 +480,15 @@ if __name__ == '__main__':
 
 
     # Define specific weights and biases
-    specific_weights = [[0.1] * 1] * 10  # Replace with your specific weights
-    specific_biases = [0.1] * 10         # Replace with your specific biases
-
-    projected_dist = ProjectedDistribution(
-        makeIIDMultiVariate(torch.distributions.Normal(loc=0.0, scale=1.0), 1),
-        initialize_linear_layer(1, 10, specific_weights, specific_biases)
-    )
-    samples = projected_dist.sample((1000,))
-    print(samples.shape)
+    # specific_weights = [[0.1] * 1] * 10  # Replace with your specific weights
+    # specific_biases = [0.1] * 10         # Replace with your specific biases
+    #
+    # projected_dist = ProjectedDistribution(
+    #     makeIIDMultiVariate(torch.distributions.Normal(loc=0.0, scale=1.0), 1),
+    #     initialize_linear_layer(1, 10, specific_weights, specific_biases)
+    # )
+    # samples = projected_dist.sample((1000,))
+    # print(samples.shape)
 
     # import matplotlib.pyplot as plt
     # plt.hist(samples[:, 0].numpy().flatten(), bins=100)
@@ -468,13 +538,48 @@ if __name__ == '__main__':
     #
 
 
-    print(
-        singlePC_distribution_from_hidden(torch.randn((3,4,5)))
+    # print(
+    #     singlePC_distribution_from_hidden(torch.randn((3,4,5)))
+    # )
+    #
+    # print(
+    #     isinstance( torch.distributions.Normal(loc=0.0, scale=1.0) , ExtendedDistributions )
+    # )
+    # print(
+    #     isinstance(torch.distributions.Normal(loc=0.0, scale=1.0), torch.distributions.Distribution )
+    # )
+
+    dist1,dist2 = create_hermite_samplers_from_three_points(
+        torch.ones(2) * 0,
+        torch.ones(2) * 1,
+        torch.ones(2) * 2,
+        scale1=2.0,
+        scale2=2.0,
+        alpha_dist1=torch.distributions.Beta(20, 1),
+        alpha_dist2=torch.distributions.Beta(1, 20),
     )
 
-    print(
-        isinstance( torch.distributions.Normal(loc=0.0, scale=1.0) , ExtendedDistributions )
-    )
-    print(
-        isinstance(torch.distributions.Normal(loc=0.0, scale=1.0), torch.distributions.Distribution )
-    )
+    import matplotlib.pyplot as plt
+
+    # Sample points from both distributions
+    samples1 = dist1.sample(sample_shape=(1000,))
+    samples2 = dist2.sample(sample_shape=(1000,))
+
+    # Convert to numpy for plotting
+    samples1_np = samples1.detach().cpu().numpy()
+    samples2_np = samples2.detach().cpu().numpy()
+
+    # Create scatter plot
+    plt.figure(figsize=(8, 6))
+    plt.scatter(samples1_np[:, 0], samples1_np[:, 1], alpha=0.5, label='Distribution 1')
+    plt.scatter(samples2_np[:, 0], samples2_np[:, 1], alpha=0.5, label='Distribution 2')
+    
+    # Plot the control points
+    plt.scatter([0, 1, 2], [0, 1, 2], c='red', s=100, marker='*', label='Control Points')
+    
+    plt.xlabel('Dimension 1')
+    plt.ylabel('Dimension 2')
+    plt.title('Samples from Cubic Hermite Samplers')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
