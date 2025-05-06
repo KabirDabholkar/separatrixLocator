@@ -9,6 +9,7 @@ logs
 results
 results_old
 test_outputs
+gmm_torch
 __pycache__
 .DS_Store
 .idea
