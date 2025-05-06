@@ -45,7 +45,7 @@ defaults:
   - dynamical_systems@finkelstein_fontolan_RNN_multiscale_on_separatrix : finkelstein_fontolan_RNN_multiscale_on_separatrix
   - dynamical_systems@finkelstein_fontolan_RNN_multiscale_on_separatrix_speed40 : finkelstein_fontolan_RNN_multiscale_on_separatrix_speed40
   - dynamical_systems@finkelstein_fontolan_RNN_hermitecurvesampler_speed40 : finkelstein_fontolan_RNN_hermitecurvesampler_speed40
-
+  - dynamical_systems@microbiome_SSR_GLV_2D : microbiome_SSR_GLV_2D
 ####### Models #########
 #  - models@DNN_model  : DNN_layers6
 
@@ -85,14 +85,14 @@ defaults:
 ##### End defaults ######
 
 
-save_KEF_model    : false
+save_KEF_model    : true
 load_KEF_model    : false
 plot_KEF_of_traj  : false
 save_results      : false
-run_analysis      : true
+run_analysis      : false
 runGD_analytical  : false
 runGD             : false
-run_fixed_point_finder  : true
+run_fixed_point_finder  : false
 
 #model_choice  : s4
 model_choice  : DNN_layers6
@@ -111,7 +111,7 @@ model_choice  : DNN_layers6
 #dynamics_choice : bistable1D #1bitflipflop_2D #bistable1D # # #duffing #  # #
 #dynamics_choice : affine_bistable2D
 #dynamics_choice : bifurcating_bistable1D
-dynamics_choice : 1bitflipflop_2D #radial2D_bistable #2bitflipflop_2D #bistable2D #duffing #
+#dynamics_choice : 1bitflipflop_2D #radial2D_bistable #2bitflipflop_2D #bistable2D #duffing #
 #dynamics_choice : duffing
 #dynamics_choice : radial2D_bistable_limit_cycle
 #dynamics_choice : 1bitflipflop_3D
@@ -128,6 +128,7 @@ dynamics_choice : 1bitflipflop_2D #radial2D_bistable #2bitflipflop_2D #bistable2
 #dynamics_choice : finkelstein_fontolan_RNN_multiscale_on_separatrix
 #dynamics_choice : finkelstein_fontolan_RNN_multiscale_on_separatrix_speed40
 #dynamics_choice : finkelstein_fontolan_RNN_hermitecurvesampler_speed40
+dynamics_choice  : microbiome_SSR_GLV_2D
 #dynamics_choice : hypercube
 #dynamics_choice : hypercube
 #dynamics_choice : bistableND
@@ -187,14 +188,14 @@ separatrix_locator :
   use_multiprocessing : false
   verbose : true
   model_class: null
-  device  : cpu
+  device  : cuda
 
 experiment_details : experiment_${model.name}_lr${separatrix_locator_fit_kwargs.optimizer.lr}_l2${separatrix_locator_fit_kwargs.optimizer.weight_decay}_batch${separatrix_locator_fit_kwargs.batch_size}_${separatrix_locator_fit_kwargs.normaliser._target_}_gmmratio${separatrix_locator_fit_kwargs.gmm_mix_ratio}_eigenvalue${eigenvalue}
 
 eigenvalue  : 1 #25e-3
 
 separatrix_locator_fit_kwargs:
-  num_epochs: 0 #1000 #500 #1000 #1000 #2000 #200 #500 #5000 #1000 #1000 #10000 #1000 #500 #500 #1000 #500 #1000 #500 #100 #500 #500 #500 # 1000 #1000 #2000 #500 #500 #1000 #400 #1000 #5000 #5000 #3000 #5000 #10000 #5000 #20000 #2000 #500 #2000 #2000 #2000 #1000 #2000 #500 #500 #500 #1000 #1500 #400 #200 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
+  num_epochs: 1000 #1000 #500 #1000 #1000 #2000 #200 #500 #5000 #1000 #1000 #10000 #1000 #500 #500 #1000 #500 #1000 #500 #100 #500 #500 #500 # 1000 #1000 #2000 #500 #500 #1000 #400 #1000 #5000 #5000 #3000 #5000 #10000 #5000 #20000 #2000 #500 #2000 #2000 #2000 #1000 #2000 #500 #500 #500 #1000 #1500 #400 #200 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
   optimizer :
     _target_  : torch.optim.Adam
     _partial_ : true
@@ -352,6 +353,7 @@ dynamics_options:
   finkelstein_fontolan_RNN_multiscale_on_separatrix_speed40 : ${finkelstein_fontolan_RNN_multiscale_on_separatrix_speed40}
   finkelstein_fontolan_RNN_hermitecurvesampler_speed40  : ${finkelstein_fontolan_RNN_hermitecurvesampler_speed40}
   hypercube  : ${hypercube}
+  microbiome_SSR_GLV_2D : ${microbiome_SSR_GLV_2D}
 
 
 #model: ${dynamics.analytical_eigenfunction}

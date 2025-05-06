@@ -36,7 +36,10 @@ def find_separatrix_point_along_line(dynamics_function, external_input, attracto
     for iteration in range(num_iterations):
         # Run trajectories for all current points in batch
         with torch.no_grad():
-            trajectories = odeint(lambda t, x: dynamics_function(x, external_input[None].repeat(num_points,1)), current_points, time_points).detach().cpu()
+            if external_input is None:
+                trajectories = odeint(lambda t, x: dynamics_function(x), current_points, time_points).detach().cpu()
+            else:
+                trajectories = odeint(lambda t, x: dynamics_function(x, external_input[None].repeat(num_points,1)), current_points, time_points).detach().cpu()
         
         # Get final points and perform k-means clustering
         final_points = trajectories[-1]

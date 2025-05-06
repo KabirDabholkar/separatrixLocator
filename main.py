@@ -47,7 +47,7 @@ project_path = os.getenv("PROJECT_PATH")
 @hydra.main(version_base='1.3', config_path=CONFIG_PATH, config_name=CONFIG_NAME)
 def decorated_main(cfg):
     # return main(cfg)
-    # return main_multimodel(cfg)
+    return main_multimodel(cfg)
     # return finkelstein_fontolan(cfg)
     # return finkelstein_fontolan_point_finder_test(cfg)
     # return finkelstein_fontolan_analysis_test(cfg)
@@ -59,7 +59,8 @@ def decorated_main(cfg):
     # plot_cubichermitesampler(cfg)
     # return RNN_modify_inputs(cfg)
     # plot_dynamics_2D(cfg)
-    plot_task_io(cfg)
+    # plot_dynamics(cfg)
+    # plot_task_io(cfg)
 
 def plot_task_io(cfg):
 
@@ -80,6 +81,46 @@ def plot_task_io(cfg):
         ax.spines['left'].set_bounds(-1, 1)
     fig.savefig(Path('plots_for_publication')/'flip_flop_io.pdf')
     plt.show()
+
+def plot_dynamics(cfg):
+    """Plot dynamics streamlines and kinetic energy contours."""
+    omegaconf_resolvers()
+    dynamics_function = instantiate(cfg.dynamics.function)
+
+    from plotting import (
+        plot_flow_streamlines,
+        dynamics_to_kinetic_energy,
+        evaluate_on_grid,
+        remove_frame
+    )
+
+    fig, ax = plt.subplots(1, 1, figsize=(3, 3))
+    resolution = 50
+    # Plot streamlines
+    plot_flow_streamlines(dynamics_function, ax, 
+                         x_limits=cfg.dynamics.lims.x, 
+                         y_limits=cfg.dynamics.lims.y,
+                         resolution=resolution, density=0.5,
+                         color='red', linewidth=0.5, alpha=0.4)
+    
+    # Plot kinetic energy contours
+    kinetic_energy_function = dynamics_to_kinetic_energy(dynamics_function)
+    X, Y, kinetic_energy_vals = evaluate_on_grid(kinetic_energy_function,
+                                                x_limits=cfg.dynamics.lims.x, 
+                                                y_limits=cfg.dynamics.lims.y, 
+                                                resolution=resolution)
+    ax.contourf(X, Y, np.log(kinetic_energy_vals), levels=25, cmap='Blues_r')
+    
+    ax.set_title(r'$q(x)$')
+
+    ax.set_xlim(*cfg.dynamics.lims.x)
+    ax.set_ylim(*cfg.dynamics.lims.y)
+    remove_frame(ax)
+    ax.set_aspect('equal')
+    plt.show()
+    
+
+    
 def plot_dynamics_2D(cfg):
     omegaconf_resolvers()
     cfg.savepath = os.path.join(project_path, cfg.savepath)
