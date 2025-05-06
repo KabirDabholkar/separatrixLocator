@@ -4,7 +4,9 @@ from torch.distributions import Distribution
 import math
 from sklearn.decomposition import PCA
 from rnn import reshape_hidden
-from typing import Union
+from typing import Union, Callable, Optional
+from sklearn.base import BaseEstimator, ClassifierMixin
+import numpy as np
 
 
 class CubicHermiteSampler:
@@ -460,6 +462,124 @@ def get_stacked_one_hot(pos=0,length=1):
     vec = vec.type(torch.float32)
     return torch.stack([vec,-vec])
 
+class RejectionSamplerWithClassifier:
+    """
+    A class that combines a distribution with a classifier for rejection sampling.
+    Samples from the base distribution are accepted or rejected based on the classifier's predictions.
+    
+    Attributes:
+        base_distribution: A distribution-like object with a .sample() method
+        classifier: A sklearn classifier with .predict() method
+        target_class: The class label that should be accepted
+        max_attempts: Maximum number of sampling attempts before raising an error
+    """
+    
+    def __init__(self, 
+                 base_distribution: Union[Distribution, Callable],
+                 classifier: BaseEstimator,
+                 target_class: int = 1,
+                 max_attempts: int = 1000):
+        """
+        Initialize the rejection sampler.
+        
+        Args:
+            base_distribution: Distribution to sample from
+            classifier: Classifier to use for rejection
+            target_class: Class label to accept
+            max_attempts: Maximum sampling attempts before error
+        """
+        self.base_distribution = base_distribution
+        self.classifier = classifier
+        self.target_class = target_class
+        self.max_attempts = max_attempts
+        
+    def sample(self, sample_shape: Union[torch.Size, tuple] = torch.Size()) -> torch.Tensor:
+        """
+        Sample from the distribution, rejecting points that don't match the target class.
+        
+        Args:
+            sample_shape: Shape of the sample to generate
+            
+        Returns:
+            samples: Tensor of accepted samples
+            
+        Raises:
+            RuntimeError: If max_attempts is reached without getting enough samples
+        """
+        if isinstance(sample_shape, tuple):
+            sample_shape = torch.Size(sample_shape)
+            
+        # Calculate total number of samples needed
+        total_samples = 1
+        for dim in sample_shape:
+            total_samples *= dim
+            
+        samples = []
+        attempts = 0
+        
+        while len(samples) < total_samples and attempts < self.max_attempts:
+            # Sample from base distribution
+            new_samples = self.base_distribution.sample(sample_shape)
+            
+            # Convert to numpy for classifier
+            if isinstance(new_samples, torch.Tensor):
+                new_samples_np = new_samples.detach().cpu().numpy()
+            else:
+                new_samples_np = np.array(new_samples)
+                
+            # Reshape if needed (classifier expects 2D array)
+            if len(new_samples_np.shape) == 1:
+                new_samples_np = new_samples_np.reshape(-1, 1)
+                
+            # Get predictions
+            predictions = self.classifier.predict(new_samples_np)
+            
+            # Keep samples that match target class
+            accepted_mask = predictions == self.target_class
+            accepted_samples = new_samples[accepted_mask]
+            
+            samples.extend(accepted_samples)
+            attempts += 1
+            
+        if len(samples) < total_samples:
+            raise RuntimeError(f"Failed to generate enough samples after {attempts} attempts")
+            
+        # Convert to tensor and reshape
+        samples = torch.stack(samples[:total_samples])
+        return samples.reshape(sample_shape + samples.shape[-1:])
+    
+    def log_prob(self, value: torch.Tensor) -> torch.Tensor:
+        """
+        Compute the log probability of a value under the base distribution.
+        Note: This does not account for the rejection sampling.
+        
+        Args:
+            value: Value to compute log probability for
+            
+        Returns:
+            log_prob: Log probability of the value
+        """
+        if hasattr(self.base_distribution, 'log_prob'):
+            return self.base_distribution.log_prob(value)
+        else:
+            raise NotImplementedError("Base distribution does not support log_prob")
+            
+    def cdf(self, value: torch.Tensor) -> torch.Tensor:
+        """
+        Compute the CDF of a value under the base distribution.
+        Note: This does not account for the rejection sampling.
+        
+        Args:
+            value: Value to compute CDF for
+            
+        Returns:
+            cdf: CDF of the value
+        """
+        if hasattr(self.base_distribution, 'cdf'):
+            return self.base_distribution.cdf(value)
+        else:
+            raise NotImplementedError("Base distribution does not support cdf")
+
 # Example usage:
 if __name__ == '__main__':
     # dist1 = torch.distributions.Normal(loc=0.0, scale=1.0)
@@ -549,37 +669,98 @@ if __name__ == '__main__':
     #     isinstance(torch.distributions.Normal(loc=0.0, scale=1.0), torch.distributions.Distribution )
     # )
 
-    dist1,dist2 = create_hermite_samplers_from_three_points(
-        torch.ones(2) * 0,
-        torch.ones(2) * 1,
-        torch.ones(2) * 2,
-        scale1=2.0,
-        scale2=2.0,
-        alpha_dist1=torch.distributions.Beta(20, 1),
-        alpha_dist2=torch.distributions.Beta(1, 20),
-    )
+    # dist1,dist2 = create_hermite_samplers_from_three_points(
+    #     torch.ones(2) * 0,
+    #     torch.ones(2) * 1,
+    #     torch.ones(2) * 2,
+    #     scale1=2.0,
+    #     scale2=2.0,
+    #     alpha_dist1=torch.distributions.Beta(20, 1),
+    #     alpha_dist2=torch.distributions.Beta(1, 20),
+    # )
 
+    # import matplotlib.pyplot as plt
+
+    # # Sample points from both distributions
+    # samples1 = dist1.sample(sample_shape=(1000,))
+    # samples2 = dist2.sample(sample_shape=(1000,))
+
+    # # Convert to numpy for plotting
+    # samples1_np = samples1.detach().cpu().numpy()
+    # samples2_np = samples2.detach().cpu().numpy()
+
+    # # Create scatter plot
+    # plt.figure(figsize=(8, 6))
+    # plt.scatter(samples1_np[:, 0], samples1_np[:, 1], alpha=0.5, label='Distribution 1')
+    # plt.scatter(samples2_np[:, 0], samples2_np[:, 1], alpha=0.5, label='Distribution 2')
+    
+    # # Plot the control points
+    # plt.scatter([0, 1, 2], [0, 1, 2], c='red', s=100, marker='*', label='Control Points')
+    
+    # plt.xlabel('Dimension 1')
+    # plt.ylabel('Dimension 2')
+    # plt.title('Samples from Cubic Hermite Samplers')
+    # plt.legend()
+    # plt.grid(True)
+    # plt.show()
+
+    # Demo of RejectionSamplerWithClassifier
     import matplotlib.pyplot as plt
-
-    # Sample points from both distributions
-    samples1 = dist1.sample(sample_shape=(1000,))
-    samples2 = dist2.sample(sample_shape=(1000,))
-
-    # Convert to numpy for plotting
-    samples1_np = samples1.detach().cpu().numpy()
-    samples2_np = samples2.detach().cpu().numpy()
-
-    # Create scatter plot
-    plt.figure(figsize=(8, 6))
-    plt.scatter(samples1_np[:, 0], samples1_np[:, 1], alpha=0.5, label='Distribution 1')
-    plt.scatter(samples2_np[:, 0], samples2_np[:, 1], alpha=0.5, label='Distribution 2')
+    from sklearn.svm import SVC
+    from sklearn.datasets import make_moons
+    import numpy as np
     
-    # Plot the control points
-    plt.scatter([0, 1, 2], [0, 1, 2], c='red', s=100, marker='*', label='Control Points')
+    # Create a 2D dataset (two moons)
+    X, y = make_moons(n_samples=1000, noise=0.1, random_state=42)
     
-    plt.xlabel('Dimension 1')
-    plt.ylabel('Dimension 2')
-    plt.title('Samples from Cubic Hermite Samplers')
+    # Train an SVM classifier
+    classifier = SVC(kernel='rbf', probability=True)
+    classifier.fit(X, y)
+    
+    # Create a base distribution (2D Gaussian)
+    base_dist = D.MultivariateNormal(
+        loc=torch.zeros(2),
+        covariance_matrix=torch.eye(2) * 2.0
+    )
+    
+    # Create rejection sampler for class 1
+    sampler = RejectionSamplerWithClassifier(
+        base_distribution=base_dist,
+        classifier=classifier,
+        target_class=1,
+        max_attempts=10000
+    )
+    
+    # Sample points that are classified as class 1
+    samples = sampler.sample((1000,))
+    samples_np = samples.detach().cpu().numpy()
+    
+    # Plot the results
+    plt.figure(figsize=(10, 5))
+    
+    # Plot the original dataset
+    plt.subplot(121)
+    plt.scatter(X[y==0, 0], X[y==0, 1], c='blue', alpha=0.5, label='Class 0')
+    plt.scatter(X[y==1, 0], X[y==1, 1], c='red', alpha=0.5, label='Class 1')
+    plt.title('Original Dataset')
     plt.legend()
-    plt.grid(True)
+    
+    # Plot the sampled points
+    plt.subplot(122)
+    plt.scatter(samples_np[:, 0], samples_np[:, 1], c='red', alpha=0.5, label='Sampled Class 1')
+    plt.title('Rejection Sampled Points')
+    plt.legend()
+    
+    plt.tight_layout()
     plt.show()
+    
+    # Print some statistics
+    print(f"Number of samples generated: {len(samples_np)}")
+    print(f"Mean of sampled points: {np.mean(samples_np, axis=0)}")
+    print(f"Covariance of sampled points:\n{np.cov(samples_np.T)}")
+    
+    # Test the log_prob method
+    test_point = torch.tensor([0.0, 0.0])
+    print(f"Log probability of test point: {sampler.log_prob(test_point)}")
+
+    

@@ -63,8 +63,8 @@ num_kernels : 10 #0
 
 #hidden_size : 1000
 #num_layers  : 5
-hidden_size : 100
-num_layers  : 20
+hidden_size : 400
+num_layers  : 20 #20
 name: AdditiveRBFResNet_hidden${.hidden_size}_output${.output_size}_numKernels${.num_kernels}_numlayers${.num_layers}
 
 

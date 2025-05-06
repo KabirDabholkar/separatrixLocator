@@ -45,7 +45,7 @@ hermites_away_from_separatrix:
   alpha_dist1 :
     _target_: torch.distributions.Beta
     concentration1: 1 #20
-    concentration0: d2
+    concentration0: 2
   alpha_dist2 :
     _target_: torch.distributions.Beta
     concentration1: 1
@@ -112,8 +112,8 @@ isotropic_gaussians:
 
 scale_range :
   _target_  : numpy.array
-  object  : [1e-3,5e-3,1e-2] #0.1,0.5,1.0,2.0]
-#  object  : [1e-4,1e-3,5e-3,1e-2,0.1,0.5]
+#  object  : [1e-3,5e-3,1e-2] #
+  object  : [1e-4,1e-3,5e-3,1e-2,0.1,0.5,1.0,2.0]
 
 
 external_input_distribution_fit:

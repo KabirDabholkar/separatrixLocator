@@ -63,5 +63,42 @@ RNN_analysis_dataset:
   random_seed : 2
   repeats : 10
 
+lims  :
+  x : [-3,3]
+  y : [-3,3]
+
 
 name  : ${.RNN_dataset.n_bits}bitFlipFlop_long_GRU${.dim}
+
+
+static_external_input :
+  _target_: torch.tensor
+  data: [ 0.0 ]
+
+all_attractors:
+  _target_ : odeint_utils.run_odeint_to_final
+  func     : ${..function}
+  y0       : ${..hidden_full}
+  inputs   : ${..static_external_input}
+  T       : 30
+
+spectral_norm :
+  _target_  : rnn.get_spectral_norm
+  hidden   : ${..hidden_full}
+
+
+attractors:
+  _target_  : clustering.get_cluster_centroids
+  data      : ${..all_attractors}
+  k         : 2
+
+point_on_separatrix :
+  _target_          : separatrix_point_finder.find_separatrix_point_along_line
+  dynamics_function : ${..function}
+  external_input    :
+    _target_  : torch.tensor
+    data  : [0.0]
+  attractors        : ${..attractors}
+  num_iterations    : 4
+  num_points        : 20
+  final_time        : 30

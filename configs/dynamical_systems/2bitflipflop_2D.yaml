@@ -6,6 +6,10 @@ function :
 
 run_traj : true
 
+
+IC_distribution_fit:
+  - ${..IC_distribution}
+
 IC_distribution :
 #  _target_  : rnn.hidden_distribution_from_model
 #  model     : ${..loaded_RNN_model}

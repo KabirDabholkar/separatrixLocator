@@ -16,3 +16,6 @@
 [submodule "gmm_torch"]
 	path = gmm_torch
 	url = https://github.com/ldeecke/gmm-torch.git
+[submodule "ssr_module"]
+	path = ssr_module
+	url = https://github.com/erijones/ssr_module.git

@@ -7,7 +7,16 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 from dynamical_functions import affine_bistable2D
-from plotting import plot_flow_streamlines
+from plotting import (
+    plot_flow_streamlines,
+    evaluate_on_grid,
+    dynamics_to_kinetic_energy,
+    compute_kinetic_energy_grid,
+    plot_kinetic_energy_surface,
+    plot_kinetic_energy_contour,
+    compute_separatrix_grid,
+    remove_frame
+)
 import seaborn as sns
 from functools import partial
 import operator
@@ -19,82 +28,27 @@ plt.rcParams["font.family"] = "sans-serif"
 plt.rcParams["mathtext.fontset"] = "dejavuserif"
 plt.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
 
-def plot_arrows(ax, arrow_length = 0.5, arrow_start = [-1, -1.3], fontsize=12):
+def plot_arrows(ax, arrow_length = 0.5, arrow_start = [-1, -1.3], fontsize=12, zorder=5):
     # Vertical arrow
     ax.arrow(arrow_start[0], arrow_start[1], 0, arrow_length,
              head_width=0.1, head_length=0.1, fc='k', ec='k', )
     ax.text(arrow_start[0], arrow_start[1] + arrow_length + 0.13, 'input', 
-            ha='center', va='bottom', fontsize=fontsize)
+            ha='center', va='bottom', fontsize=fontsize, zorder = zorder)
 
     # Diagonal arrow
     ax.arrow(arrow_start[0], arrow_start[1], arrow_length / np.sqrt(2), arrow_length / np.sqrt(2),
              head_width=0.1, head_length=0.1, fc='k', ec='k')
     ax.text(arrow_start[0] + arrow_length / np.sqrt(2) + 0.1,
             arrow_start[1] + arrow_length / np.sqrt(2) + 0.1,
-            'optimal', fontsize=fontsize)
+            'optimal', fontsize=fontsize, zorder = zorder)
     # Horizontal arrow
     ax.arrow(arrow_start[0], arrow_start[1], arrow_length, 0,
              head_width=0.1, head_length=0.1, fc='k', ec='k')
     ax.text(arrow_start[0] + arrow_length + 0.13, arrow_start[1], 'choice', 
-            ha='left', va='center', fontsize=fontsize)
-
-def remove_frame(ax):
-    """
-    Removes the frame and ticks from a matplotlib axis.
-    
-    Parameters:
-        ax (matplotlib.axes.Axes): The axis to modify
-    """
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.spines['bottom'].set_visible(False)
-    ax.spines['left'].set_visible(False)
-    ax.set_aspect('equal')
+            ha='left', va='center', fontsize=fontsize, zorder = zorder)
 
 def bistable_affine_separatrix_function(x):
     return (x[...,0] + x[...,1])**2
-
-def evaluate_on_grid(func, x_limits=(-1.3, 1.3), y_limits=(-1.3, 1.3), resolution=50):
-    """
-    Evaluates a function on a 2D grid.
-    
-    Parameters:
-        func (callable): Function to evaluate
-        x_limits (tuple): Limits for the x-axis
-        y_limits (tuple): Limits for the y-axis
-        resolution (int): Resolution for the grid
-        
-    Returns:
-        tuple: (X, Y, Z) where X and Y are meshgrid arrays and Z contains the function values
-    """
-    # Create grid
-    x = np.linspace(x_limits[0], x_limits[1], resolution)
-    y = np.linspace(y_limits[0], y_limits[1], resolution)
-    X, Y = np.meshgrid(x, y)
-    
-    # Compute function values
-    grid = torch.tensor(np.stack([X.flatten(), Y.flatten()], axis=1), dtype=torch.float32)
-    Z = func(grid).detach().cpu().numpy()
-    Z = Z.reshape(resolution, resolution)
-    
-    return X, Y, Z
-
-def dynamics_to_kinetic_energy(F):
-    """
-    Converts a dynamics function F to a kinetic energy function.
-    
-    Parameters:
-        F (callable): Function that computes the vector field
-        
-    Returns:
-        callable: Function that computes the kinetic energy
-    """
-    def kinetic_energy(x):
-        F_val = F(x)
-        return torch.sum(F_val**2, dim=-1)
-    return kinetic_energy
 
 def compute_separatrix_grid(x_limits=(-1.3, 1.3), y_limits=(-1.3, 1.3), resolution=50):
     """
@@ -109,83 +63,6 @@ def compute_separatrix_grid(x_limits=(-1.3, 1.3), y_limits=(-1.3, 1.3), resoluti
         tuple: (X, Y, separatrix) where X and Y are meshgrid arrays and separatrix is the computed values
     """
     return evaluate_on_grid(bistable_affine_separatrix_function, x_limits, y_limits, resolution)
-
-def compute_kinetic_energy_grid(F, x_limits=(-1.3, 1.3), y_limits=(-1.3, 1.3), resolution=50):
-    """
-    Computes the kinetic energy grid for a given vector field F.
-    
-    Parameters:
-        F (callable): Function that computes the vector field
-        x_limits (tuple): Limits for the x-axis
-        y_limits (tuple): Limits for the y-axis
-        resolution (int): Resolution for the grid
-        
-    Returns:
-        tuple: (X, Y, kinetic_energy) where X and Y are meshgrid arrays and kinetic_energy is the computed energy
-    """
-    kinetic_energy_func = dynamics_to_kinetic_energy(F)
-    return evaluate_on_grid(kinetic_energy_func, x_limits, y_limits, resolution)
-
-def plot_separatrix_surface(ax, x_limits=(-1.3, 1.3), y_limits=(-1.3, 1.3), resolution=50):
-    """
-    Plots the separatrix function as a surface in 3D.
-    
-    Parameters:
-        ax (matplotlib.axes.Axes): The 3D axis object where the plot will be drawn
-        x_limits (tuple): Limits for the x-axis
-        y_limits (tuple): Limits for the y-axis
-        resolution (int): Resolution for the grid
-    """
-    # Get the grid and separatrix values
-    X, Y, separatrix = compute_separatrix_grid(x_limits, y_limits, resolution)
-    
-    # Plot surface
-    surf = ax.plot_surface(X, Y, separatrix, cmap='Blues_r', 
-                          alpha=0.1, linewidth=0, antialiased=True)
-
-def plot_kinetic_energy_surface(F, ax, x_limits=(-1.3, 1.3), y_limits=(-1.3, 1.3), resolution=50):
-    """
-    Plots the kinetic energy as a surface in 3D for a given vector field F.
-    
-    Parameters:
-        F (callable): Function that computes the vector field
-        ax (matplotlib.axes.Axes): The 3D axis object where the plot will be drawn
-        x_limits (tuple): Limits for the x-axis
-        y_limits (tuple): Limits for the y-axis
-        resolution (int): Resolution for the grid
-    """
-    # Get the grid and kinetic energy values
-    X, Y, kinetic_energy = compute_kinetic_energy_grid(F, x_limits, y_limits, resolution)
-    
-    # Plot surface
-    surf = ax.plot_surface(X, Y, kinetic_energy, cmap='plasma', 
-                          alpha=0.1, linewidth=0, antialiased=True)
-    
-    # Add colorbar
-    # fig = ax.get_figure()
-    # fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
-
-def plot_kinetic_energy_contour(F, ax, x_limits=(-1.3, 1.3), y_limits=(-1.3, 1.3), resolution=50, levels=20):
-    """
-    Plots the kinetic energy as a contour plot for a given vector field F.
-    
-    Parameters:
-        F (callable): Function that computes the vector field
-        ax (matplotlib.axes.Axes): The axis object where the plot will be drawn
-        x_limits (tuple): Limits for the x-axis
-        y_limits (tuple): Limits for the y-axis
-        resolution (int): Resolution for the grid
-        levels (int): Number of contour levels
-    """
-    # Get the grid and kinetic energy values
-    X, Y, kinetic_energy = compute_kinetic_energy_grid(F, x_limits, y_limits, resolution)
-    
-    # Plot contour
-    contour = ax.contourf(X, Y, np.log(kinetic_energy), levels=levels, cmap='Blues_r')
-    
-    # Add colorbar
-    # fig = ax.get_figure()
-    # fig.colorbar(contour, ax=ax, shrink=0.5, aspect=5)
 
 def cartoon_traj_and_inputs(dynamics_function,ax,T=20,steps=100):
     time_points = torch.linspace(0, T, steps)
@@ -216,7 +93,7 @@ def cartoon_traj_and_inputs(dynamics_function,ax,T=20,steps=100):
         color="k", linewidth=1, zorder=5,
     )
 
-def base_cartoon_plot(ax,x_limits=(-1.3,1.3),y_limits=(-1.3,1.3),fontsize=12):
+def base_cartoon_plot(ax,x_limits=(-1.3,1.3),y_limits=(-1.3,1.3),fontsize=12,show_separatrix_label=True):
     # Check if the axis is 3D
     is_3d = hasattr(ax, 'zaxis')
     
@@ -245,11 +122,10 @@ def base_cartoon_plot(ax,x_limits=(-1.3,1.3),y_limits=(-1.3,1.3),fontsize=12):
     for pointset in pointsets:
         # Convert parameters for 3D scatter if needed
         if is_3d:
-            l = len(pointset['x'])
             scatter_params = {
                 'xs': pointset.pop('x'),
                 'ys': pointset.pop('y'),
-                'zs': [0] * l,  # Add z-coordinates
+                'zs': [0] * len(pointset['xs']),  # Add z-coordinates
                 **pointset
             }
         else:
@@ -272,21 +148,24 @@ def base_cartoon_plot(ax,x_limits=(-1.3,1.3),y_limits=(-1.3,1.3),fontsize=12):
         ax.plot(x, y, z, **plot_args)
     else:
         ax.plot(x, y, **plot_args)
-    # Add text label for the separatrix
-    if is_3d:
-        # For 3D plot, position text at midpoint of line
-        mid_idx = int(len(x) * 0.65)
-        ax.text(x[mid_idx], y[mid_idx], 0, 'separatrix',
-                ha='center', va='center', rotation=-45, color=colors[1], fontsize=fontsize)
-    else:
-        # For 2D plot, position text at midpoint of line
-        mid_idx = int(len(x) * 0.65)
-        ax.text(x[mid_idx], y[mid_idx]-0.08, 'separatrix',
-                ha='center', va='bottom', rotation=-45, color=colors[1], fontsize=fontsize)
         
+    # Add text label for the separatrix if requested
+    if show_separatrix_label:
+        if is_3d:
+            # For 3D plot, position text at midpoint of line
+            mid_idx = int(len(x) * 0.75)
+            ax.text(x[mid_idx], y[mid_idx], 0, 'separatrix',
+                    ha='center', va='center', rotation=-45, color=colors[1], fontsize=fontsize)
+        else:
+            # For 2D plot, position text at midpoint of line
+            mid_idx = int(len(x) * 0.75)
+            ax.text(x[mid_idx], y[mid_idx]-0.08, 'separatrix',
+                    ha='center', va='bottom', rotation=-45, color=colors[1], fontsize=fontsize)
         
     ax.set_xlim(*x_limits)
     ax.set_ylim(*y_limits)
+    if is_3d:
+        ax.set_zlim(-1.3, 1.3)
 
 def plot_3d_cartoon(ax, x_limits=(-1.3,1.3), y_limits=(-1.3,1.3), z_limits=(0,1.3)):
 
@@ -312,16 +191,16 @@ def plot_3d_cartoon(ax, x_limits=(-1.3,1.3), y_limits=(-1.3,1.3), z_limits=(0,1.
 
 
 if __name__ == '__main__':
-    fig, ax = plt.subplots()
-    plot_flow_streamlines(affine_bistable2D, ax, x_limits=(-1.3, 1.3), y_limits=(-1.3, 1.3), resolution=50,
-                          density=0.4, color='skyblue', linewidth=0.5, alpha=0.4)
-    base_cartoon_plot(ax)
-    plot_arrows(ax,arrow_length=0.3, arrow_start=[-1.1,-1])
-    cartoon_traj_and_inputs(affine_bistable2D,ax)
-    remove_frame(ax)
-    # plt.show()
-    # fig.savefig('plots_for_publication/cartoon_plot.pdf', bbox_inches='tight', dpi=300)
-    fig.savefig('plots_for_publication/cartoon_plot.png', bbox_inches='tight', dpi=300)
+    # fig, ax = plt.subplots()
+    # plot_flow_streamlines(affine_bistable2D, ax, x_limits=(-1.3, 1.3), y_limits=(-1.3, 1.3), resolution=50,
+    #                       density=0.4, color='skyblue', linewidth=0.5, alpha=0.4)
+    # base_cartoon_plot(ax,fontsize=19)
+    # plot_arrows(ax,arrow_length=0.3, arrow_start=[-1.1,-1],fontsize=19)
+    # cartoon_traj_and_inputs(affine_bistable2D,ax)
+    # remove_frame(ax)
+    # # plt.show()
+    # # fig.savefig('plots_for_publication/cartoon_plot.pdf', bbox_inches='tight', dpi=300)
+    # fig.savefig('plots_for_publication/cartoon_plot.png', bbox_inches='tight', dpi=300)
 
     # Create 3D plot
     # fig = plt.figure(figsize=(4,4))
@@ -355,3 +234,41 @@ if __name__ == '__main__':
     #
     # # Save 2D figure
     # fig.savefig('plots_for_publication/cartoon_2d_separatrix_contour.png', bbox_inches='tight', dpi=300)
+
+    # Create subplots with 1 row and 3 columns
+    fig, axes = plt.subplots(1, 3, figsize=(12, 4))
+    titles = [r'$\dot x = f(x)$',r'$q(x):=\Vert f(x)\Vert^2$',r'$\psi(x):=\ ?$']
+    for ax,title in zip(axes,titles):
+        ax.set_title(title,fontsize=20)
+
+    # First subplot: Flow streamlines
+    ax = axes[0]
+    plot_flow_streamlines(affine_bistable2D, ax, x_limits=(-1.3, 1.3), y_limits=(-1.3, 1.3), 
+                         resolution=50, density=0.4, color='skyblue', linewidth=0.5, alpha=0.4)
+    base_cartoon_plot(ax, fontsize=19)
+    plot_arrows(ax, arrow_length=0.3, arrow_start=[-1.1,-1], fontsize=19)
+    cartoon_traj_and_inputs(affine_bistable2D, ax)
+    remove_frame(ax)
+
+    # Second subplot: Kinetic energy contours
+    ax = axes[1]
+    kinetic_energy_function = dynamics_to_kinetic_energy(affine_bistable2D)
+    X, Y, kinetic_energy_vals = evaluate_on_grid(kinetic_energy_function, 
+                                               x_limits=(-2, 2), y_limits=(-2, 2), resolution=200)
+    ax.contourf(X, Y, np.log(kinetic_energy_vals+0.5), levels=15, cmap='Blues_r')
+    base_cartoon_plot(ax, show_separatrix_label=False)
+    remove_frame(ax)
+
+    # Third subplot: Separatrix contours
+    ax = axes[2]
+    X, Y, separatrix_function = evaluate_on_grid(bistable_affine_separatrix_function, 
+                                               x_limits=(-2, 2), y_limits=(-2, 2), resolution=200)
+    ax.contourf(X, Y, np.log(separatrix_function+0.25), levels=10, cmap='Blues_r')
+    base_cartoon_plot(ax, show_separatrix_label=False)
+    remove_frame(ax)
+
+    for ax in axs.flatten():
+        ax.set_aspect('equal')
+    # Save the figure
+    fig.savefig('plots_for_publication/cartoon_subplots.png', bbox_inches='tight', dpi=300)
+    fig.savefig('plots_for_publication/cartoon_subplots.pdf', bbox_inches='tight', dpi=300)

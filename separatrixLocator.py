@@ -142,73 +142,82 @@ class SeparatrixLocator(BaseEstimator):
         self.num_models = len(self.models)
         return self
 
-    # def find_separatrix(self, distribution, dist_needs_dim=True, **kwargs):
-    #     all_trajectories = []
-    #     all_below_threshold_points = []
-    #     for model in self.models:
-    #         model_to_GD_on = compose(
-    #             torch.log,
-    #             lambda x: x + 1,
-    #             torch.exp,
-    #             partial(torch.sum, dim=-1, keepdims=True),
-    #             torch.log,
-    #             torch.abs,
-    #             model
-    #         )
-    #         samples_for_normalisation = 1000
-    #
-    #         needs_dim = dist_needs_dim
-    #
-    #         samples = distribution.sample(sample_shape=[samples_for_normalisation] + ([self.dynamics_dim] if needs_dim else []))
-    #         norm_val = float(torch.mean(torch.sum(model_to_GD_on(samples) ** 2, axis=-1)).sqrt().detach().numpy())
-    #
-    #         model_to_GD_on = compose(
-    #             lambda x: x / norm_val,
-    #             model_to_GD_on
-    #         )
-    #
-    #         trajectories, below_threshold_points = runGD(
-    #             model_to_GD_on,
-    #             distribution,
-    #             input_dim = self.dynamics_dim,
-    #             dist_needs_dim = dist_needs_dim,
-    #             **kwargs
-    #         )
-    #         all_trajectories.append(trajectories)
-    #         all_below_threshold_points.append(below_threshold_points)
-    #     return all_trajectories, all_below_threshold_points
-    def prepare_models_for_gradient_descent(self,distribution,**kwargs):
-        self.functions_for_gradient_descent = []
-        if self.verbose:
-            print('Preparing models for gradient descent...')
-        for model in self.models:
-            f = compose(
-                # lambda x: x ** 0.1,
-                torch.log, lambda x: x + 1, torch.exp,
-                partial(torch.sum, dim=-1, keepdims=True),
-                torch.log, torch.abs, model
-            )
-            # Sample initial conditions.
-            shape = [1000] #+ ([self.dynamics_dim] if self.dist_needs_dim else [])
+    def compose_model_functions(self, model, **kwargs):
+        """Compose the transformation functions for a single model without normalization.
+        
+        Args:
+            model: The model to compose functions with
+            **kwargs: Additional functions to include in the composition chain.
+                     Supported keys:
+                     - 'pre_functions': List of functions to apply before the main chain
+                     - 'post_functions': List of functions to apply after the main chain
+        """
+        # Start with pre-functions if provided
+        functions = []
+        if 'pre_functions' in kwargs:
+            functions.extend(kwargs['pre_functions'])
+            
+        # Add the main chain of functions
+        functions.extend([
+            torch.log,
+            lambda x: x + 1,
+            torch.exp,
+            partial(torch.sum, dim=-1, keepdims=True),
+            torch.log,
+            torch.abs,
+            model
+        ])
+        
+        # Add post-functions if provided
+        if 'post_functions' in kwargs:
+            functions.extend(kwargs['post_functions'])
+            
+        return compose(*functions)
+
+    def normalize_functions(self, functions, distribution, dist_needs_dim=True, **kwargs):
+        """Normalize the given functions using samples from the distribution."""
+        normalized_functions = []
+        for f in functions:
+            # Sample initial conditions
+            shape = [1000] + ([self.dynamics_dim] if dist_needs_dim else [])
             samples_ic = distribution.sample(sample_shape=shape)
-            # If an external input distribution is provided, sample external inputs.
+            
+            # Handle external inputs if provided
             if "external_input_dist" in kwargs:
                 ext_input_dist = kwargs["external_input_dist"]
                 ext_input_dim = kwargs.get("external_input_dim", 0)
-                shape_ext = [1000] #+ ([ext_input_dim] if self.dist_needs_dim else [])
+                shape_ext = [1000] + ([ext_input_dim] if dist_needs_dim else [])
                 samples_ext = ext_input_dist.sample(sample_shape=shape_ext)
             else:
-                # If not provided, use a dummy tensor (zeros) of the same shape as samples_ic.
                 samples_ext = torch.zeros_like(samples_ic)[...,0:0]
-            # Concatenate the samples along the last dimension.
+            
+            # Combine samples and calculate normalization
             combined_samples = torch.cat((samples_ic, samples_ext), dim=-1)
-
-            # Calculate the normalisation value over the combined inputs
             norm_val = float(torch.mean(torch.sum(f(combined_samples) ** 2, dim=-1)).sqrt().detach().numpy())
-            # Update f to normalize its output.
-            f = compose(lambda x: x / norm_val, f)
-            self.functions_for_gradient_descent.append(f)
-        print('Models are prepared for gradient descent.')
+            
+            # Normalize the function
+            normalized_f = compose(lambda x: x / norm_val, f)
+            normalized_functions.append(normalized_f)
+            
+        return normalized_functions
+
+    def prepare_models_for_gradient_descent(self, distribution, **kwargs):
+        """Prepare all models for gradient descent by composing and normalizing their functions."""
+        if self.verbose:
+            print('Preparing models for gradient descent...')
+            
+        # First compose the functions without normalization
+        self.functions_for_gradient_descent = [self.compose_model_functions(model, **kwargs) for model in self.models]
+        
+        # Then normalize all functions
+        self.functions_for_gradient_descent = self.normalize_functions(
+            self.functions_for_gradient_descent,
+            distribution,
+            **kwargs
+        )
+        
+        if self.verbose:
+            print('Models are prepared for gradient descent.')
         return self.functions_for_gradient_descent
 
     def find_separatrix(self, distribution, dist_needs_dim=True,

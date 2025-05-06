@@ -19,10 +19,10 @@ import matplotlib.animation as animation
 import seaborn as sns
 mpl.rcParams['agg.path.chunksize'] = 10000
 
-# mpl.rcParams['text.usetex'] = True
-# plt.rcParams["font.family"] = "sans-serif"
-# plt.rcParams["mathtext.fontset"] = "dejavuserif"
-# mpl.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
+plt.rcParams['text.usetex'] = True
+plt.rcParams["font.family"] = "sans-serif"
+plt.rcParams["mathtext.fontset"] = "dejavuserif"
+plt.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
 
 
 from separatrixLocator import SeparatrixLocator
@@ -58,8 +58,28 @@ def decorated_main(cfg):
     # check_basin_of_attraction(cfg)
     # plot_cubichermitesampler(cfg)
     # return RNN_modify_inputs(cfg)
-    plot_dynamics_2D(cfg)
+    # plot_dynamics_2D(cfg)
+    plot_task_io(cfg)
 
+def plot_task_io(cfg):
+
+    from plotting import remove_frame
+    dataset = instantiate(cfg.dynamics.RNN_dataset)
+    inputs, targets = dataset()
+    omegaconf_resolvers()
+    fig,axs = plt.subplots(2,1,figsize=np.array([3,2])*0.6,sharex=True)
+    ax = axs[0]
+    ax.plot(inputs[:,4,0],lw=2)
+    ax = axs[1]
+    ax.plot(targets[:,4,0],lw=2)
+    for ax in axs:
+        remove_frame(ax,['right','top','bottom'])
+        ax.set_ylim(-1.1,1.1)
+        ax.set_yticks([-1,1])
+        ax.set_yticklabels([])
+        ax.spines['left'].set_bounds(-1, 1)
+    fig.savefig(Path('plots_for_publication')/'flip_flop_io.pdf')
+    plt.show()
 def plot_dynamics_2D(cfg):
     omegaconf_resolvers()
     cfg.savepath = os.path.join(project_path, cfg.savepath)
@@ -70,6 +90,7 @@ def plot_dynamics_2D(cfg):
 
     ### Loading separatrix locator models
     SL = instantiate(cfg.separatrix_locator)
+    SL.to('cpu')
     # SL.init_models()
     SL.models = [instantiate(cfg.model).to(SL.device) for _ in range(cfg.separatrix_locator.num_models)]
     new_format_path = Path(cfg.savepath) / cfg.experiment_details
@@ -80,130 +101,78 @@ def plot_dynamics_2D(cfg):
         load_path = Path(cfg.savepath)
         print(new_format_path, 'does not exist, loading', load_path, 'instead.')
     SL.load_models(load_path)
+    KEF_func = SL.prepare_models_for_gradient_descent(distribution)[0]
 
+    from plotting import (
+        plot_flow_streamlines,
+        dynamics_to_kinetic_energy,
+        evaluate_on_grid,
+        remove_frame
+    )
 
-    points = distribution.sample(sample_shape=(50,))
-
-
-    # Run dynamics forward using odeint
-    time_points = torch.linspace(0, 20, 100)  # 10 seconds, 100 time points
-    # trajectories = odeint(lambda t, x: dynamics_function(x), points, time_points).detach().cpu()
-
-    # Create a grid of points
-    n_grid = 300
-    x = np.linspace(*cfg.dynamics.lims.x, n_grid)
-    y = np.linspace(*cfg.dynamics.lims.y, n_grid)
-    X, Y = np.meshgrid(x, y)
-
-    # Convert grid points to tensor and evaluate dynamics
-    grid_points = torch.tensor(np.stack([X.flatten(), Y.flatten()], axis=1), dtype=torch.float32)
-    with torch.no_grad():
-        dynamics = dynamics_function(grid_points)
-
-    # Reshape dynamics for plotting
-    U = dynamics[:, 0].reshape(X.shape)
-    V = dynamics[:, 1].reshape(X.shape)
-    # Compute norm of vector field at each point
-    norm = 0.5 * (U**2 + V**2)
-
-    # KEFvalgrid = SL.predict(grid_points)[...,0]
-    KEFvalgrid = instantiate(cfg.dynamics.cartoon_separatrix_function)(grid_points)
-    KEFvalgrid = KEFvalgrid.reshape(X.shape)
-
-    pointsets = [
-        {
-            'x':[1,-1],
-            'y':[0,0],
-            'marker':'o',
-            'label': 'stable fixed point',
-        },
-        {
-            'x':[0],
-            'y':[0],
-            'marker':'x',
-            'label': 'unstable fixed point',
-        }
-    ]
-
-
+    colors = sns.color_palette("bright")
     # Plot the trajectories
-    fig, axs = plt.subplots(1, 3, figsize=(10, 3))
+    fig, axs = plt.subplots(1, 2, figsize=(5, 3))
     # Plot initial conditions
     ax = axs[0]
-    for pointset in pointsets:
-        ax.scatter(**pointset)
-
-    xsep = np.linspace(-2,2)
-    ysep = -xsep
-    ax.plot(xsep,ysep,ls='dashed')
-
-    traj = [[-1, 0],[-1,1.2]]
-    traj = torch.tensor(traj,dtype=torch.float32)
-    traj = torch.concat([
-        traj,
-        odeint(lambda t, x: dynamics_function(x), traj[-1], time_points).detach().cpu()
-    ])
-    ax.plot(traj[...,0],traj[...,1])
-
-    traj = [[-1, 0], [-0.48, 0.52]]
-    traj = torch.tensor(traj, dtype=torch.float32)
-    traj = torch.concat([
-        traj,
-        odeint(lambda t, x: dynamics_function(x), traj[-1], time_points).detach().cpu()
-    ])
-    ax.plot(traj[..., 0], traj[..., 1])
-
-
-    # Create arrows like coordinate axes
-    arrow_length = 0.5
-    arrow_start = [-1, -1.3]  # Starting point for all arrows
-    
-    # Vertical arrow
-    ax.arrow(arrow_start[0], arrow_start[1], 0, arrow_length, 
-             head_width=0.1, head_length=0.1, fc='k', ec='k', )
-    ax.text(arrow_start[0], arrow_start[1] + arrow_length + 0.1, 'input', ha='center',va='bottom')
-    
-    # Diagonal arrow
-    ax.arrow(arrow_start[0], arrow_start[1], arrow_length/np.sqrt(2), arrow_length/np.sqrt(2),
-             head_width=0.1, head_length=0.1, fc='k', ec='k')
-    ax.text(arrow_start[0] + arrow_length/np.sqrt(2) + 0.1, 
-            arrow_start[1] + arrow_length/np.sqrt(2) + 0.1, 
-            'optimal')
-    
-    # Horizontal arrow
-    ax.arrow(arrow_start[0], arrow_start[1], arrow_length, 0,
-             head_width=0.1, head_length=0.1, fc='k', ec='k')
-    ax.text(arrow_start[0] + arrow_length + 0.1, arrow_start[1], 'choice', ha='left')
-    # ax.streamplot(X, Y, U, V, density=0.8, color='k', linewidth=0.5)
-    # ax.set_title(r'Flow vector field $\dot x = f(x)$')
-
-
-
-    # Plot vector field
-    ax = axs[1]
-    im = ax.imshow(torch.log(norm), extent=[*cfg.dynamics.lims.x, *cfg.dynamics.lims.y], origin='lower', cmap='viridis')
-    ax.set_title(r'Kinetic energy $\frac{1}{2}\Vert f(x) \Vert^2$')
-    # plt.colorbar(im, ax=ax)
-    # ax.quiver(X, Y, U, V, alpha=0.5)
-    # ax.set_title('Vector Field')
+    plot_flow_streamlines(dynamics_function, ax, x_limits=cfg.dynamics.lims.x, y_limits=cfg.dynamics.lims.y,
+                          resolution=200, density=0.5, color='red', linewidth=0.5, alpha=0.4)
+    kinetic_energy_function = dynamics_to_kinetic_energy(dynamics_function)
+    X, Y, kinetic_energy_vals = evaluate_on_grid(kinetic_energy_function,
+                                                 x_limits=cfg.dynamics.lims.x, y_limits=cfg.dynamics.lims.y, resolution=200)
+    ax.contourf(X, Y, np.log(kinetic_energy_vals), levels=15, cmap='Blues_r')
+    ax.set_title(r'$q(x)$')
+    # for pointset in pointsets:
+    #     ax.scatter(**pointset)
 
     # Plot streamlines
-    ax = axs[2]
-    line_x = np.linspace(-2,2,10)
-    # ax.plot(line_x,-line_x,ls='dashed')
+    ax = axs[1]
+
+    X, Y, log_KEF_vals = evaluate_on_grid(KEF_func,
+                                                 x_limits=cfg.dynamics.lims.x, y_limits=cfg.dynamics.lims.y,
+                                                 resolution=200)
+    X, Y, KEF_vals_raw = evaluate_on_grid(lambda x: SL.predict(x)[...,0],
+                    x_limits=cfg.dynamics.lims.x, y_limits=cfg.dynamics.lims.y,
+                    resolution=200)
+    KEF_vals_abs = np.abs(KEF_vals_raw)
+    KEF_vals_abs[KEF_vals_abs>1] = np.inf
+    ax.contourf(X, Y, KEF_vals_abs, levels=15, cmap='Blues_r')
+    CS = ax.contour(X, Y, KEF_vals_raw, levels=[0], colors='lightgreen')
+    ax.clabel(CS, CS.levels, fontsize=10)
+    plot_flow_streamlines(dynamics_function, ax, x_limits=cfg.dynamics.lims.x, y_limits=cfg.dynamics.lims.y,
+                          resolution=200, density=0.5, color='red', linewidth=0.5, alpha=0.4)
+
     ax.set_title(r'$\psi(x)$')
-    im = ax.imshow(torch.log(torch.abs(KEFvalgrid)), extent=[*cfg.dynamics.lims.x, *cfg.dynamics.lims.y], origin='lower', cmap='viridis')
+    # im = ax.imshow(torch.log(torch.abs(KEFvalgrid)), extent=[*cfg.dynamics.lims.x, *cfg.dynamics.lims.y], origin='lower', cmap='viridis')
 
 
     for ax in axs.flatten():
         ax.set_xlim(*cfg.dynamics.lims.x)
         ax.set_ylim(*cfg.dynamics.lims.y)
-        ax.set_xticks([])
-        ax.set_yticks([])
+        remove_frame(ax)
         ax.set_aspect('equal')
 
+
+        if hasattr(cfg.dynamics,'plot_fixed_points'):
+            pointsets = instantiate(cfg.dynamics.plot_fixed_points)
+            # Check if fixed point data exists and plot it
+            fixed_point_path = Path(cfg.savepath) / 'fixed_point_data.csv'
+            if fixed_point_path.exists():
+                fixed_points = pd.read_csv(fixed_point_path)
+                fixed_points = fixed_points.loc[fixed_points['q']<1e-9]
+                for pointset in pointsets:
+                    if 'unstable' in pointset['label']:
+                        stability = False
+                    else:
+                        stability = True
+                    pointset['x'] = fixed_points.loc[fixed_points['stability']==stability]['x0']
+                    pointset['y'] = fixed_points.loc[fixed_points['stability']==stability]['x1']
+            for pointset in pointsets:
+                ax.scatter(**pointset,c='lightgreen')
+
     fig.tight_layout()
-    fig.savefig('plots_for_publication/'+'fig1.pdf')
+    fig.savefig('plots_for_publication/' + f'results2D_{cfg.dynamics.name}.pdf')
+    fig.savefig('plots_for_publication/' + f'results2D_{cfg.dynamics.name}.png',dpi=300)
     plt.show()
 
 
@@ -388,10 +357,11 @@ def check_basin_of_attraction(cfg):
     # # ]
     # # xtick_labels += ['Cubic 0.1', 'Cubic 0.5', 'Cubic 1.0', 'Cubic 2.0', 'Cubic 4.0']
     finals = []
-    
+    initial_conditions_list = []
     for i, dist in enumerate(distributions):
-        initial_conditions = dist.sample(sample_shape=(200,))
-        
+        initial_conditions = dist.sample(sample_shape=(500,))
+        initial_conditions_list.append(initial_conditions)
+
         T = 50
         final = run_odeint_to_final(
             dynamics_function,
@@ -402,9 +372,10 @@ def check_basin_of_attraction(cfg):
         )
         finals.append(final)
 
-    # Stack the final states from all distributions
+    # Stack both initial conditions and final states
+    stacked_initials = torch.stack(initial_conditions_list)
     stacked_finals = torch.stack(finals)
-    
+
 
     from sklearn.cluster import KMeans
     import matplotlib.pyplot as plt
@@ -423,6 +394,112 @@ def check_basin_of_attraction(cfg):
         kmeans.fit(final_nps)
         dist_inertias.append(kmeans.inertia_)
     inertias.append(dist_inertias)
+
+    ########## KNN to predict final basin from initial conditions ##########
+    labels = kmeans.labels_.reshape(*stacked_finals.shape[:2])
+    unique_labels, counts = np.unique(labels[0], return_counts=True)
+    sorted_indices = np.argsort(counts)[::-1]  # Sort in descending order
+    top_two_labels = unique_labels[sorted_indices[:2]]
+    # other_labels = np.setdiff1d(all_unique_labels, top_two_labels)  # Get all labels except top two
+
+    is_top_two_labels = np.isin(kmeans.labels_,top_two_labels)
+
+    # Train KNN to predict final basin from initial conditions
+    from sklearn.neighbors import KNeighborsClassifier
+    from sklearn.model_selection import train_test_split
+
+    # Reshape initial conditions to 2D array for sklearn
+    initial_nps = stacked_initials.detach().cpu().numpy().reshape(-1, stacked_initials.shape[-1])
+
+    # Split data into train and test sets
+    X_train, X_test, y_train, y_test = train_test_split(
+        initial_nps, 
+        # kmeans.labels_,
+        is_top_two_labels,
+        test_size=0.2, 
+        random_state=42
+    )
+    # Try different numbers of neighbors
+    n_neighbors_range = range(1, 11, 2)  # Odd numbers from 1 to 20
+    train_accuracies = []
+    test_accuracies = []
+
+    for n_neighbors in n_neighbors_range:
+        # Train KNN classifier
+        knn = KNeighborsClassifier(n_neighbors=n_neighbors)
+        knn.fit(X_train, y_train)
+
+        # Evaluate accuracy
+        train_accuracies.append(knn.score(X_train, y_train))
+        test_accuracies.append(knn.score(X_test, y_test))
+
+    # Plot accuracies vs number of neighbors
+    plt.figure(figsize=(8, 4))
+    plt.plot(n_neighbors_range, train_accuracies, 'o-', label='Training accuracy')
+    plt.plot(n_neighbors_range, test_accuracies, 'o-', label='Test accuracy')
+    plt.xlabel('Number of neighbors')
+    plt.ylabel('Accuracy')
+    plt.title('KNN Classifier Performance vs Number of Neighbors')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+    # Print best results
+    best_k_idx = np.argmax(test_accuracies)
+    best_k = n_neighbors_range[best_k_idx]
+    print(f"\nBest KNN Results (k={best_k}):")
+    print(f"Training accuracy: {train_accuracies[best_k_idx]:.3f}")
+    print(f"Test accuracy: {test_accuracies[best_k_idx]:.3f}")
+
+    ############### SVM to predict final basin from initial conditions ##############
+    # Train SVM to predict final basin from initial conditions
+    from sklearn.svm import SVC
+    from sklearn.preprocessing import StandardScaler
+
+    # Scale the features for better SVM performance
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+
+    # Define parameter combinations
+    C_range = [0.1, 1, 10, 100, 1000]
+    kernels = ['linear', 'poly', 'rbf', 'sigmoid']
+    svm_train_accuracies = []
+    svm_test_accuracies = []
+    
+    # Create list of SVM classifiers with different parameters
+    svm_classifiers = [
+        SVC(C=C, kernel=kernel) 
+        for C in C_range 
+        for kernel in kernels
+    ]
+    
+    # Train and evaluate each classifier
+    for svm in svm_classifiers:
+        svm.fit(X_train_scaled, y_train)
+        
+        # Evaluate accuracy
+        svm_train_accuracies.append(svm.score(X_train_scaled, y_train))
+        svm_test_accuracies.append(svm.score(X_test_scaled, y_test))
+
+    # Plot accuracies vs C parameter
+    plt.figure(figsize=(8, 4))
+    plt.semilogx(range(len(svm_classifiers)), svm_train_accuracies, 'o-', label='Training accuracy')
+    plt.semilogx(range(len(svm_classifiers)), svm_test_accuracies, 'o-', label='Test accuracy')
+    plt.xlabel('C parameter')
+    plt.ylabel('Accuracy')
+    plt.title('SVM Classifier Performance vs C Parameter')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+    # Print best results
+    best_C_idx = np.argmax(svm_test_accuracies)
+    best_C = C_range[best_C_idx]
+    print(f"\nBest SVM Results (C={best_C}):")
+    print(f"Training accuracy: {svm_train_accuracies[best_C_idx]:.3f}")
+    print(f"Test accuracy: {svm_test_accuracies[best_C_idx]:.3f}")
+    ##########
 
     # Plot the elbow curves
     plt.figure(figsize=(5,4))
@@ -455,6 +532,52 @@ def check_basin_of_attraction(cfg):
         for label, count in zip(unique_labels, counts):
             label_idx = np.where(all_unique_labels == label)[0][0]
             count_matrix[i, label_idx] = count
+
+    # stacked_finals_np = stacked_finals.detach().cpu().numpy()
+    stacked_initials_np = stacked_initials.detach().cpu().numpy()
+    # Get the two most frequent labels in the first distribution
+    unique_labels, counts = np.unique(labels[0], return_counts=True)
+    sorted_indices = np.argsort(counts)[::-1]  # Sort in descending order
+    top_two_labels = unique_labels[sorted_indices[:2]]
+    other_labels = np.setdiff1d(all_unique_labels, top_two_labels)  # Get all labels except top two
+
+    from suppressed_distributions import find_lda_direction, construct_anisotropic_cov
+
+    for i,dist in enumerate(distributions):
+        if i == 6:
+            dist_label = labels[i]
+            is_top_label = np.isin(dist_label, top_two_labels)
+            points_not_in_twobasins = stacked_initials_np[i,~is_top_label]
+            # lda_dir = find_lda_direction(stacked_initials_np[i], dist_label, leaky_labels=other_labels)
+            # Sigma_aniso = construct_anisotropic_cov(1.0, lda_dir, suppression=0.1)
+            # if np.sum(~is_top_label)>0:
+            points_in_twobasins = stacked_initials_np[i, is_top_label]
+            p = PCA().fit(points_in_twobasins)
+            lam = p.explained_variance_
+            print(np.sum(lam)**2/np.sum(lam**2))
+
+    # Estimate mean and covariance from points in two basins
+    # mean = torch.tensor(np.mean(points_in_twobasins, axis=0), dtype=torch.float32)
+    # mean = distributions[0].mean
+    # cov = torch.cov(torch.tensor(points_in_twobasins.T,dtype=torch.float32))
+    # cov = cov*0.4 + 1e-3 * torch.eye(cov.shape[0])
+    # Create multivariate normal distribution
+    # dist4 = torch.distributions.MultivariateNormal(mean, cov)
+    # samples = dist4.sample(sample_shape=(500,))
+    samples = distributions[6].sample(sample_shape=(500,))
+    kmeans_pred = kmeans.predict(samples.detach().cpu().numpy())
+    print(np.unique(kmeans_pred,return_counts=True))
+    final = run_odeint_to_final(
+        dynamics_function,
+        samples,
+        inputs=instantiate(cfg.dynamics.static_external_input),
+        T=T,
+        return_last_only=True
+    )
+    # Get labels for new points using existing kmeans model
+    final_np = final.detach().cpu().numpy()
+    final_labels = kmeans.predict(final_np)
+    np.unique(final_labels,return_counts=True)
 
     # Now plot
     fig, ax = plt.subplots(figsize=(8, 6))
@@ -1290,14 +1413,14 @@ def main_multimodel(cfg):
 
     if cfg.run_fixed_point_finder:
         assert hasattr(cfg.dynamics,"loaded_RNN_model")
-        rnn_model = instantiate(cfg.dynamics.loaded_RNN_model_partial)(device=SL.device)
+        rnn_model = instantiate(cfg.dynamics.loaded_RNN_model) #(device=SL.device)
         # cfg.dynamics.RNN_dataset.batch_size = 5000
         # cfg.dynamics.RNN_dataset.n_trials = 1000
         dataset = instantiate(cfg.dynamics.RNN_dataset)
         inp, targ = dataset()
 
         torch_inp = torch.from_numpy(inp).type(torch.float)  # .to(device)
-        outputs, hidden_traj = rnn_model(torch_inp, return_hidden=True, deterministic=False)
+        outputs, hidden_traj = rnn_model(torch_inp, return_hidden=True) #, deterministic=False)
         outputs, hidden_traj = outputs.detach().cpu().numpy(), hidden_traj.detach().cpu().numpy()
 
 
@@ -1343,6 +1466,8 @@ def main_multimodel(cfg):
         fixed_point_data = {
             'stability': unique_fps.is_stable,
             'q': unique_fps.qstar,
+            'x0' : unique_fps.xstar[...,0],
+            'x1': unique_fps.xstar[...,1],
         }
         fixed_point_data.update(KEF_val_at_fp)
         # print(fixed_point_data)
@@ -1451,7 +1576,7 @@ def main_multimodel(cfg):
                         ax.set_xlim(xlim)  # Reset x limits
                         ax.set_ylim(ylim)  # Reset y limits
                     # ax.set_aspect('auto')
-                    ax.set_title(f'Model-{j},output{i}'+'\n'+f", loss:{scores[j, i]:.5f}")
+                    ax.set_title(f'Model-{j},output{i}'+'\n'+f", loss:{float(scores[j, i]):.5f}")
                     ax.set_xlabel('')
                     ax.set_ylabel('')
 

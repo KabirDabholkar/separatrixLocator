@@ -7,6 +7,23 @@ function :
     - ${eval:'lambda x:(x[...,1],-x[...,1]+x[...,0]-x[...,0]**3)'}
 #    - ${eval:'lambda x:(x[...,1],x[...,0]-x[...,0]**3)'}
 
+IC_distribution_fit: ${.isotropic_gaussians}
+#  - ${..IC_distribution}
+
+isotropic_gaussians:
+  _target_  : custom_distributions.isotropic_gaussians
+  mean      :
+    _target_  : torch.zeros
+    _args_      :
+      - 2
+  scales    : ${..scale_range}
+
+scale_range :
+  _target_  : numpy.array
+#  object  : [1e-3,5e-3,1e-2] #
+  object  : [0.1,0.5,1.0,2.0]
+
+
 IC_distribution:
   _target_  : custom_distributions.makeIIDMultiVariate
   dist  :
@@ -20,6 +37,21 @@ lims:
   x: [-3,3]
   y: [-3,3]
 run_traj: true
+
+plot_fixed_points:
+  - x : [1,-1]
+    y : [0,0]
+    marker  : o
+    label   : stable fixed point
+    s       : 50
+    zorder  : 2
+  - x : [0]
+    y : [0]
+    marker  : x
+    label   : unstable fixed point
+    s       : 100
+    linewidths : 1.5
+    zorder  : 2
 
 name            : duffing
 dim  : 2

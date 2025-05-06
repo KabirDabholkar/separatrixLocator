@@ -32,6 +32,113 @@ def plot_flow_streamlines(F, ax, x_limits=(-2, 2), y_limits=(-2, 2), resolution=
     lines = ax.streamplot(X, Y, U, V, density=density, color=color, linewidth=linewidth)
     lines.lines.set_alpha(alpha)
 
+def evaluate_on_grid(func, x_limits=(-1.3, 1.3), y_limits=(-1.3, 1.3), resolution=50):
+    """
+    Evaluates a function on a 2D grid.
+    
+    Parameters:
+        func (callable): Function to evaluate
+        x_limits (tuple): Limits for the x-axis
+        y_limits (tuple): Limits for the y-axis
+        resolution (int): Resolution for the grid
+        
+    Returns:
+        tuple: (X, Y, Z) where X and Y are meshgrid arrays and Z contains the function values
+    """
+    # Create grid
+    x = np.linspace(x_limits[0], x_limits[1], resolution)
+    y = np.linspace(y_limits[0], y_limits[1], resolution)
+    X, Y = np.meshgrid(x, y)
+    
+    # Compute function values
+    grid = torch.tensor(np.stack([X.flatten(), Y.flatten()], axis=1), dtype=torch.float32)
+    Z = func(grid).detach().cpu().numpy()
+    Z = Z.reshape(resolution, resolution)
+    
+    return X, Y, Z
+
+def dynamics_to_kinetic_energy(F):
+    """
+    Converts a dynamics function F to a kinetic energy function.
+    
+    Parameters:
+        F (callable): Function that computes the vector field
+        
+    Returns:
+        callable: Function that computes the kinetic energy
+    """
+    def kinetic_energy(x):
+        F_val = F(x)
+        return torch.sum(F_val**2, dim=-1)
+    return kinetic_energy
+
+def compute_kinetic_energy_grid(F, x_limits=(-1.3, 1.3), y_limits=(-1.3, 1.3), resolution=50):
+    """
+    Computes the kinetic energy grid for a given vector field F.
+    
+    Parameters:
+        F (callable): Function that computes the vector field
+        x_limits (tuple): Limits for the x-axis
+        y_limits (tuple): Limits for the y-axis
+        resolution (int): Resolution for the grid
+        
+    Returns:
+        tuple: (X, Y, kinetic_energy) where X and Y are meshgrid arrays and kinetic_energy is the computed energy
+    """
+    kinetic_energy_func = dynamics_to_kinetic_energy(F)
+    return evaluate_on_grid(kinetic_energy_func, x_limits, y_limits, resolution)
+
+def compute_separatrix_grid(separatrix_function, x_limits=(-1.3, 1.3), y_limits=(-1.3, 1.3), resolution=50):
+    """
+    Computes the separatrix function grid.
+    
+    Parameters:
+        separatrix_function (callable): Function that computes the separatrix value
+        x_limits (tuple): Limits for the x-axis
+        y_limits (tuple): Limits for the y-axis
+        resolution (int): Resolution for the grid
+        
+    Returns:
+        tuple: (X, Y, separatrix) where X and Y are meshgrid arrays and separatrix is the computed values
+    """
+    return evaluate_on_grid(separatrix_function, x_limits, y_limits, resolution)
+
+def plot_kinetic_energy_surface(F, ax, x_limits=(-1.3, 1.3), y_limits=(-1.3, 1.3), resolution=50):
+    """
+    Plots the kinetic energy as a surface in 3D for a given vector field F.
+    
+    Parameters:
+        F (callable): Function that computes the vector field
+        ax (matplotlib.axes.Axes): The 3D axis object where the plot will be drawn
+        x_limits (tuple): Limits for the x-axis
+        y_limits (tuple): Limits for the y-axis
+        resolution (int): Resolution for the grid
+    """
+    # Get the grid and kinetic energy values
+    X, Y, kinetic_energy = compute_kinetic_energy_grid(F, x_limits, y_limits, resolution)
+    
+    # Plot surface
+    surf = ax.plot_surface(X, Y, kinetic_energy, cmap='plasma', 
+                          alpha=0.1, linewidth=0, antialiased=True)
+
+def plot_kinetic_energy_contour(F, ax, x_limits=(-1.3, 1.3), y_limits=(-1.3, 1.3), resolution=50, levels=20):
+    """
+    Plots the kinetic energy as a contour plot for a given vector field F.
+    
+    Parameters:
+        F (callable): Function that computes the vector field
+        ax (matplotlib.axes.Axes): The axis object where the plot will be drawn
+        x_limits (tuple): Limits for the x-axis
+        y_limits (tuple): Limits for the y-axis
+        resolution (int): Resolution for the grid
+        levels (int): Number of contour levels
+    """
+    # Get the grid and kinetic energy values
+    X, Y, kinetic_energy = compute_kinetic_energy_grid(F, x_limits, y_limits, resolution)
+    
+    # Plot contour
+    contour = ax.contourf(X, Y, np.log(kinetic_energy), levels=levels, cmap='Blues_r')
+
 def plot_kinetic_energy(F, ax, x_limits=(-2, 2), y_limits=(-2, 2), heatmap_resolution=500, quiver_resolution=25,
                         below_threshold_points=None):
     """
@@ -133,3 +240,17 @@ def plot_model_contour(model, ax, x_limits=(-2, 2), y_limits=(-2, 2), resolution
     ax.set_ylabel('$y$')
 
     return contour
+
+
+def remove_frame(ax, spines_to_remove=['top', 'right', 'bottom', 'left']):
+    """
+    Removes the frame and ticks from a matplotlib axis.
+
+    Parameters:
+        ax (matplotlib.axes.Axes): The axis to modify
+        spines_to_remove (list): List of spines to remove. Default removes all spines.
+    """
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for spine in spines_to_remove:
+        ax.spines[spine].set_visible(False)
