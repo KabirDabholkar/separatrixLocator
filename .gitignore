@@ -7,7 +7,6 @@ test_plots
 test_outputs
 logs
 results
-plots_for_publication
 results_old
 test_outputs
 gmm_torch
