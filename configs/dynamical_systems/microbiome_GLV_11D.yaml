@@ -1,10 +1,5 @@
-function  :
-  _target_  : dynamical_functions.change_speed
-  func    : ${..original_function}
-  factor  : 13.003 #1/Re(lambda) where lambda is the unstable eigenvalue of the saddle point
-
-original_function :
-  _target_  : ssr_module.steady_state_reduction_example_torch.get_ssr_dynamics_function
+function :
+  _target_  : ssr_module.steady_state_reduction_example_torch.get_dynamics_function
   device    : cpu
 run_traj : true
 
@@ -27,7 +22,7 @@ iid_betas:
 
 scale_range :
   _target_  : numpy.array
-  object  : [5e-3,1e-2,5e-2,0.1] #0.2
+  object  : [1e-2,0.1,0.3]
 
 IC_distribution_uniform_list:
   - ${..IC_distribution_uniform}
@@ -68,7 +63,7 @@ RNN_model:
   act_size  : ${..k_bit}
   num_h     : ${..dim}
 
-dim  : 2
+dim  : 11
 
 lims  :
   x : [0.0,1.0]
@@ -77,9 +72,25 @@ lims  :
 
 
 
-attractors:
-  _target_  : ssr_module.steady_state_reduction_example_torch.get_attractors_ssr
+attractors_from_authors:
+  _target_  : ssr_module.steady_state_reduction_example_torch.get_attractors
   device    : cpu
+
+random_points :
+  _target_  : custom_distributions.sample
+  shape     : [30,]
+
+attractors_unclustered:
+  _target_ : odeint_utils.run_odeint_to_final
+  func     : ${..function}
+  y0       : ${..random_points} #${..attractors_from_authors}
+  T       : 1000
+
+attractors:
+  _target_  : clustering.get_cluster_centroids
+  data      : ${..attractors_unclustered}
+  k         : 2
+
 
 point_on_separatrix :
   _target_          : separatrix_point_finder.find_separatrix_point_along_line
@@ -88,7 +99,7 @@ point_on_separatrix :
   external_input    : null
   num_iterations    : 2
   num_points        : 20
-  final_time        : 20 #200
+  final_time        : 200
 
 plot_fixed_points:
   - x : null
@@ -107,4 +118,4 @@ plot_fixed_points:
 
 
 
-name  : microbiome_SSR_GLV_${.dim}D
+name  : microbiome_GLV_${.dim}D

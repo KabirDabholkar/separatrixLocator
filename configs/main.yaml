@@ -46,6 +46,7 @@ defaults:
   - dynamical_systems@finkelstein_fontolan_RNN_multiscale_on_separatrix_speed40 : finkelstein_fontolan_RNN_multiscale_on_separatrix_speed40
   - dynamical_systems@finkelstein_fontolan_RNN_hermitecurvesampler_speed40 : finkelstein_fontolan_RNN_hermitecurvesampler_speed40
   - dynamical_systems@microbiome_SSR_GLV_2D : microbiome_SSR_GLV_2D
+  - dynamical_systems@microbiome_GLV_11D : microbiome_GLV_11D
 ####### Models #########
 #  - models@DNN_model  : DNN_layers6
 
@@ -75,7 +76,7 @@ defaults:
 #  - models@model : ResNet_layers25_bottleneck
 #  - models@model : DeepResNet
 #  - models@model : DNN_layers2
-#  - models@model : ResRBF
+  - models@model : ResRBF
 
   - _self_
 
@@ -85,14 +86,16 @@ defaults:
 ##### End defaults ######
 
 
-save_KEF_model    : true
-load_KEF_model    : false
+save_KEF_model    : false
+load_KEF_model    : true
 plot_KEF_of_traj  : false
 save_results      : false
-run_analysis      : false
+run_analysis      : true
 runGD_analytical  : false
 runGD             : false
 run_fixed_point_finder  : false
+
+device  : cuda:1
 
 #model_choice  : s4
 model_choice  : DNN_layers6
@@ -129,6 +132,7 @@ model_choice  : DNN_layers6
 #dynamics_choice : finkelstein_fontolan_RNN_multiscale_on_separatrix_speed40
 #dynamics_choice : finkelstein_fontolan_RNN_hermitecurvesampler_speed40
 dynamics_choice  : microbiome_SSR_GLV_2D
+#dynamics_choice  : microbiome_GLV_11D
 #dynamics_choice : hypercube
 #dynamics_choice : hypercube
 #dynamics_choice : bistableND
@@ -188,20 +192,20 @@ separatrix_locator :
   use_multiprocessing : false
   verbose : true
   model_class: null
-  device  : cuda
+  device  : ${device}
 
 experiment_details : experiment_${model.name}_lr${separatrix_locator_fit_kwargs.optimizer.lr}_l2${separatrix_locator_fit_kwargs.optimizer.weight_decay}_batch${separatrix_locator_fit_kwargs.batch_size}_${separatrix_locator_fit_kwargs.normaliser._target_}_gmmratio${separatrix_locator_fit_kwargs.gmm_mix_ratio}_eigenvalue${eigenvalue}
 
-eigenvalue  : 1 #25e-3
+eigenvalue  : 1.0 #25e-3
 
 separatrix_locator_fit_kwargs:
-  num_epochs: 1000 #1000 #500 #1000 #1000 #2000 #200 #500 #5000 #1000 #1000 #10000 #1000 #500 #500 #1000 #500 #1000 #500 #100 #500 #500 #500 # 1000 #1000 #2000 #500 #500 #1000 #400 #1000 #5000 #5000 #3000 #5000 #10000 #5000 #20000 #2000 #500 #2000 #2000 #2000 #1000 #2000 #500 #500 #500 #1000 #1500 #400 #200 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
+  num_epochs: 0 #1000 #5000 #1000 #500 #1000 #1000 #2000 #200 #500 #5000 #1000 #1000 #10000 #1000 #500 #500 #1000 #500 #1000 #500 #100 #500 #500 #500 # 1000 #1000 #2000 #500 #500 #1000 #400 #1000 #5000 #5000 #3000 #5000 #10000 #5000 #20000 #2000 #500 #2000 #2000 #2000 #1000 #2000 #500 #500 #500 #1000 #1500 #400 #200 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
   optimizer :
     _target_  : torch.optim.Adam
     _partial_ : true
     lr: 0.1e-3 #1e-4  #0.5e-3 #3e-3 #3e-3 #1e-3 #45e-3 #5e-3 1e-2
     weight_decay  : 1e-4 #0.0 #1e-3  #5e-3
-  batch_size: 1500 #5000 #1500 #3000 #20000 #7000 #5000 #5000 #1000
+  batch_size: 5000 #5000 #1500 #3000 #20000 #7000 #5000 #5000 #1000
   ext_inp_batch_size  : 500
   ext_inp_reg_coeff   : 0.0 #0.1
   logger:
@@ -354,10 +358,11 @@ dynamics_options:
   finkelstein_fontolan_RNN_hermitecurvesampler_speed40  : ${finkelstein_fontolan_RNN_hermitecurvesampler_speed40}
   hypercube  : ${hypercube}
   microbiome_SSR_GLV_2D : ${microbiome_SSR_GLV_2D}
+  microbiome_GLV_11D  : ${microbiome_GLV_11D}
 
 
 #model: ${dynamics.analytical_eigenfunction}
-model :  ${model_options.${model_choice}}
+#model :  ${model_options.${model_choice}}
 dynamics  : ${dynamics_options.${dynamics_choice}}
 
 

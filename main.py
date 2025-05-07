@@ -47,7 +47,7 @@ project_path = os.getenv("PROJECT_PATH")
 @hydra.main(version_base='1.3', config_path=CONFIG_PATH, config_name=CONFIG_NAME)
 def decorated_main(cfg):
     # return main(cfg)
-    return main_multimodel(cfg)
+    # return main_multimodel(cfg)
     # return finkelstein_fontolan(cfg)
     # return finkelstein_fontolan_point_finder_test(cfg)
     # return finkelstein_fontolan_analysis_test(cfg)
@@ -58,9 +58,163 @@ def decorated_main(cfg):
     # check_basin_of_attraction(cfg)
     # plot_cubichermitesampler(cfg)
     # return RNN_modify_inputs(cfg)
-    # plot_dynamics_2D(cfg)
+    plot_dynamics_2D(cfg)
     # plot_dynamics(cfg)
     # plot_task_io(cfg)
+    # plot_hermite_polynomials_2d(cfg)
+    # plot_KEF_residuals(cfg)
+    # plot_KEF_residual_heatmap(cfg)
+    # fixed_point_analysis(cfg)
+
+def fixed_point_analysis(cfg):
+    omegaconf_resolvers()
+    dynamics_function = instantiate(cfg.dynamics.function)
+    distribution = instantiate(cfg.dynamics.IC_distribution)
+    from plotting import dynamics_to_kinetic_energy
+    kinetic_energy_function = dynamics_to_kinetic_energy(dynamics_function)
+
+    # Sample points from distribution
+    num_samples = 1000
+    samples = distribution.sample((num_samples,))
+    samples.requires_grad_(True)
+
+    # Setup optimizer
+    optimizer = torch.optim.Adam([samples], lr=0.05)
+
+    # Optimize to find minima
+    num_steps = 5000
+    for step in range(num_steps):
+        optimizer.zero_grad()
+        
+        # Calculate kinetic energy at current points
+        ke = kinetic_energy_function(samples)
+        
+        # Loss is just the kinetic energy (we want to minimize it)
+        loss = ke.mean()
+        
+        # Backprop and optimize
+        loss.backward()
+        optimizer.step()
+        
+        if step % 100 == 0:
+            print(f'Step {step}, Average KE: {loss.item():.6f}')
+
+    # Get final optimized points
+    with torch.no_grad():
+        final_points = samples.detach()
+        final_ke = kinetic_energy_function(final_points)
+        
+    # Use KMeans to cluster the points with lowest kinetic energy
+    from sklearn.cluster import KMeans
+    
+    # Convert to numpy for KMeans
+    points_np = final_points.detach().cpu().numpy()
+    ke_np = final_ke.detach().cpu().numpy()
+    
+    # Take points with lowest kinetic energy for clustering
+    n_lowest = 1000 # Take more points initially to cluster
+    lowest_indices, = np.where(final_ke.squeeze()<1e-10) #torch.argsort(final_ke.squeeze())[:n_lowest]
+    points_for_clustering = points_np[lowest_indices]
+    
+    # Perform KMeans clustering
+    n_clusters = 4 # Adjust based on expected number of fixed points
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    cluster_labels = kmeans.fit_predict(points_for_clustering)
+    
+    # Get cluster centers as the unique minima
+    minima = torch.tensor(kmeans.cluster_centers_, dtype=torch.float32)
+    
+    # Calculate kinetic energy at minima points
+    with torch.no_grad():
+        minima_ke = kinetic_energy_function(minima)
+    
+    print("\nUnique minima found via clustering:")
+    print(minima)
+    print("\nKinetic energy at minima:")
+    print(minima_ke)
+
+    # Linearize dynamics around fixed points (minima)
+    def compute_jacobian(dynamics_function, point):
+        point.requires_grad_(True)
+        dynamics = dynamics_function(point)
+        jacobian = torch.autograd.functional.jacobian(dynamics_function, point)
+        point.requires_grad_(False)
+        return jacobian.squeeze()
+
+    # First compute and store all jacobian info in a dictionary
+    fixed_point_info = {}
+    for i, fixed_point in enumerate(minima):
+        info = {}
+        info['point'] = fixed_point
+        
+        # Compute jacobian and eigenvalues
+        J = compute_jacobian(dynamics_function, fixed_point)
+        eigenvalues = torch.linalg.eigvals(J)
+        real_parts = eigenvalues.real
+        
+        info['jacobian'] = J
+        info['eigenvalues'] = eigenvalues
+        
+        # Classify stability
+        if torch.all(real_parts < 0):
+            info['stability'] = 'Stable'
+            info['marker'] = '*'
+            info['color'] = 'green'
+        elif torch.all(real_parts > 0):
+            info['stability'] = 'Unstable' 
+            info['marker'] = 'X'
+            info['color'] = 'red'
+        else:
+            info['stability'] = 'Saddle'
+            info['marker'] = 'D'
+            info['color'] = 'orange'
+            
+        fixed_point_info[i] = info
+        
+        # Print analysis
+        print(f"\nFixed point {i}:")
+        print(f"Point: {fixed_point.numpy()}")
+        print(f"Jacobian:\n{J.numpy()}")
+        print(f"Eigenvalues: {eigenvalues.numpy()}")
+        print(f"Classification: {info['stability']}")
+
+    # Save fixed point analysis results
+    import pickle
+    
+    # Save to pickle file in the same directory as other outputs
+    pickle_path = Path(cfg.savepath) / "fixed_point_info.pkl"
+    with open(pickle_path, 'wb') as f:
+        pickle.dump(fixed_point_info, f)
+
+    # Plot results
+    plt.figure(figsize=(8, 6))
+    
+    # Plot all sampled points colored by kinetic energy
+    plt.scatter(points_np[lowest_indices, 0],
+                points_np[lowest_indices, 1],
+                c=final_ke[lowest_indices].detach().cpu().numpy(),
+                cmap='viridis', alpha=0.3, label='Sampled Points')
+    
+    # Plot fixed points with markers based on stability
+    for i, info in fixed_point_info.items():
+        point = info['point'].detach().cpu().numpy()
+        plt.scatter(point[0], point[1], 
+                   c=info['color'],
+                   marker=info['marker'], 
+                   s=200,
+                   label=f"{info['stability']} Fixed Point {i+1}",
+                   zorder=5)
+    plt.colorbar(label='Kinetic Energy')
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.title('Fixed Points and Their Stability')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.savefig(Path(cfg.savepath) / "fixed_points.png", dpi=300)
+    plt.show()
+    plt.close()
+
+
 
 def plot_task_io(cfg):
 
@@ -87,6 +241,8 @@ def plot_dynamics(cfg):
     omegaconf_resolvers()
     dynamics_function = instantiate(cfg.dynamics.function)
 
+    # attractors = instantiate(cfg.dynamics.attractors_from_authors)
+    # attractors = instantiate(cfg.dynamics.attractors)
     from plotting import (
         plot_flow_streamlines,
         dynamics_to_kinetic_energy,
@@ -119,6 +275,176 @@ def plot_dynamics(cfg):
     ax.set_aspect('equal')
     plt.show()
     
+def plot_KEF_residual_heatmap(cfg):
+    """Plot KEF residual as a 2D heatmap showing (LHS-RHS)/sqrt(RHS**2)."""
+    omegaconf_resolvers()
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+
+    # Load dynamics function and separatrix locator
+    dynamics_function = instantiate(cfg.dynamics.function)
+    SL = instantiate(cfg.separatrix_locator)
+    SL.to('cpu')
+    SL.models = [instantiate(cfg.model).to(SL.device) for _ in range(cfg.separatrix_locator.num_models)]
+    
+    # Set up load path
+    new_format_path = Path(cfg.savepath) / cfg.experiment_details
+    if os.path.exists(new_format_path):
+        load_path = new_format_path
+    else:
+        load_path = Path(cfg.savepath)
+        print(new_format_path, 'does not exist, loading', load_path, 'instead.')
+    SL.load_models(load_path)
+
+    # Get first model
+    model = SL.models[0]
+
+    from plotting import evaluate_on_grid
+
+    def residual_function(x):
+        x = torch.tensor(x, requires_grad=True)
+        phi_x = model(x)[...,0:1]
+        phi_x_prime = torch.autograd.grad(
+            outputs=phi_x,
+            inputs=x,
+            grad_outputs=torch.ones_like(phi_x),
+            create_graph=True
+        )[0]
+        dynamics_vals = dynamics_function(x)
+        dot_prod = torch.sum(phi_x_prime * dynamics_vals, dim=1, keepdim=True)
+        residual = (dot_prod - phi_x) / torch.sqrt(phi_x**2)
+        return residual.detach()
+
+    # Evaluate residual on grid
+    X, Y, residual = evaluate_on_grid(residual_function,
+                                     x_limits=cfg.dynamics.lims.x,
+                                     y_limits=cfg.dynamics.lims.y,
+                                     resolution=100)
+
+    # Plot heatmap
+    fig, ax = plt.subplots(figsize=(8, 6))
+    im = ax.imshow(residual,
+                   extent=[cfg.dynamics.lims.x[0], cfg.dynamics.lims.x[1],
+                          cfg.dynamics.lims.y[0], cfg.dynamics.lims.y[1]],
+                   origin='lower',
+                   aspect='equal',
+                   cmap='RdBu',
+                   vmin=-1, vmax=1)
+    
+    # Add colorbar
+    plt.colorbar(im, ax=ax, label=r'$\frac{\nabla \psi(x) \cdot f(x) - \lambda\psi(x)}{\sqrt{\psi(x)^2}}$')
+    
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.set_title('KEF Residual')
+    
+    # Save figure
+    fig.savefig(Path(cfg.savepath) / cfg.experiment_details / "KEF_residual_heatmap.png", dpi=200)
+    plt.close(fig)
+
+
+    
+def plot_KEF_residuals(cfg):
+    """Plot KEF values vs residuals, standard deviation vs residuals, and LHS vs RHS."""
+    omegaconf_resolvers()
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+
+    # Load dynamics function
+    dynamics_function = instantiate(cfg.dynamics.function)
+
+    # Load distribution
+    distribution = instantiate(cfg.dynamics.IC_distribution)
+    if hasattr(cfg.dynamics, 'IC_distribution_fit'):
+        distribution_fit = instantiate(cfg.dynamics.IC_distribution_fit)
+    else:
+        distribution_fit = distribution
+
+    # Load separatrix locator model
+    SL = instantiate(cfg.separatrix_locator)
+    SL.to('cpu')
+    SL.models = [instantiate(cfg.model).to(SL.device) for _ in range(cfg.separatrix_locator.num_models)]
+    
+    # Set up load path
+    new_format_path = Path(cfg.savepath) / cfg.experiment_details
+    if os.path.exists(new_format_path):
+        load_path = new_format_path
+    else:
+        load_path = Path(cfg.savepath)
+        print(new_format_path, 'does not exist, loading', load_path, 'instead.')
+    SL.load_models(load_path)
+    
+    # Get first model for testing
+    model = SL.models[0]
+
+    # Define distributions to test
+    distributions = distribution_fit
+    dist_names = range(len(distribution_fit))
+    batch_size = 1000
+
+    for dist, name in zip(distributions, dist_names):
+        # Sample input_tensor from the distribution
+        input_tensor = dist.sample(sample_shape=(batch_size,))
+        input_tensor.requires_grad_(True)
+
+        # Compute phi(x)
+        phi_x = model(input_tensor)[...,0:1]
+
+        # Compute phi'(x) using autograd
+        phi_x_prime = torch.autograd.grad(
+            outputs=phi_x,
+            inputs=input_tensor,
+            grad_outputs=torch.ones_like(phi_x),
+            create_graph=True
+        )[0]
+
+        F_x = dynamics_function(input_tensor)
+
+        # Compute the dot product
+        dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True) * 7
+
+        residual = torch.abs(phi_x - dot_prod)
+
+        # Plot KEF values vs residuals
+        fig, ax = plt.subplots()
+        ax.scatter(torch.abs(phi_x).detach().cpu().numpy(), residual.detach().cpu().numpy(),
+                   label=name, alpha=0.5)
+        ax.set_xlabel(r'$\psi(x)$')
+        ax.set_ylabel(r'$|\nabla \psi(x) \cdot f(x) - \lambda\psi(x)|$')
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"KEFvals_vs_residuals_{name}.png", dpi=200)
+        plt.show()
+        plt.close(fig)
+
+        # Plot standard deviation vs residuals
+        std_i = torch.std(input_tensor.detach(), axis=-1, keepdims=True)
+        fig, ax = plt.subplots()
+        ax.scatter(std_i.cpu().numpy(), residual.detach().cpu().numpy(),
+                  label=name, s=5, alpha=0.5)
+        ax.set_xlabel(r'$std(x_i)$')
+        ax.set_ylabel(r'$|\nabla \psi(x) \cdot f(x) - \lambda\psi(x)|$')
+        ax.legend()
+        fig.tight_layout()
+        plt.show()
+        fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"Stdi_vs_residuals_{name}.png", dpi=200)
+        plt.close(fig)
+
+        # Plot LHS vs RHS
+        fig, ax = plt.subplots()
+        ax.scatter(phi_x.detach().cpu().numpy(), dot_prod.detach().cpu().numpy(),
+                     label=name, alpha=0.5)
+        ax.set_xlabel(r'$\lambda\psi(x)$')
+        ax.set_ylabel(r'$\nabla \psi(x) \cdot f(x)$')
+        ax.legend()
+
+        # Add a dashed line for x=y
+        xlim = ax.get_xlim()
+        ylim = ax.get_ylim()
+        ax.plot([xlim[0], xlim[1]], [xlim[0], xlim[1]], color='black', linestyle='dashed', linewidth=1)
+
+        fig.tight_layout()
+        fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"KEF_LHS_RHS_{name}.png", dpi=200)
+        plt.show()
+        plt.close(fig)
 
     
 def plot_dynamics_2D(cfg):
@@ -128,6 +454,8 @@ def plot_dynamics_2D(cfg):
     dynamics_function = instantiate(cfg.dynamics.function)
 
     distribution = instantiate(cfg.dynamics.IC_distribution)
+
+    separatrix_point = instantiate(cfg.dynamics.point_on_separatrix)
 
     ### Loading separatrix locator models
     SL = instantiate(cfg.separatrix_locator)
@@ -176,7 +504,7 @@ def plot_dynamics_2D(cfg):
                     x_limits=cfg.dynamics.lims.x, y_limits=cfg.dynamics.lims.y,
                     resolution=200)
     KEF_vals_abs = np.abs(KEF_vals_raw)
-    KEF_vals_abs[KEF_vals_abs>1] = np.inf
+    # KEF_vals_abs[KEF_vals_abs>1] = np.inf
     ax.contourf(X, Y, KEF_vals_abs, levels=15, cmap='Blues_r')
     CS = ax.contour(X, Y, KEF_vals_raw, levels=[0], colors='lightgreen')
     ax.clabel(CS, CS.levels, fontsize=10)
@@ -186,6 +514,8 @@ def plot_dynamics_2D(cfg):
     ax.set_title(r'$\psi(x)$')
     # im = ax.imshow(torch.log(torch.abs(KEFvalgrid)), extent=[*cfg.dynamics.lims.x, *cfg.dynamics.lims.y], origin='lower', cmap='viridis')
 
+    for ax in axs:
+        ax.scatter(separatrix_point[0],separatrix_point[1])
 
     for ax in axs.flatten():
         ax.set_xlim(*cfg.dynamics.lims.x)
@@ -212,8 +542,8 @@ def plot_dynamics_2D(cfg):
                 ax.scatter(**pointset,c='lightgreen')
 
     fig.tight_layout()
-    fig.savefig('plots_for_publication/' + f'results2D_{cfg.dynamics.name}.pdf')
-    fig.savefig('plots_for_publication/' + f'results2D_{cfg.dynamics.name}.png',dpi=300)
+    fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f'results2D_{cfg.dynamics.name}.pdf')
+    fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f'results2D_{cfg.dynamics.name}.png',dpi=300)
     plt.show()
 
 
@@ -325,6 +655,68 @@ def RNN_modify_inputs(cfg):
     plt.show()
 
     plt.savefig(os.path.join(cfg.savepath, 'RNN_permuted_input_weights.png'))
+
+
+def plot_hermite_polynomials_2d(cfg):
+    """
+    Plot 2D visualization of cubic Hermite polynomial interpolations between attractors
+    
+    Args:
+        cfg: Config object containing dynamics and plotting parameters
+    """
+    from interpolation import cubic_hermite
+
+    omegaconf_resolvers()
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+    
+    # Get attractors from config
+    attractors = instantiate(cfg.dynamics.attractors)
+    x, y = attractors.detach().cpu().numpy()
+    
+    # Set up tangent vectors at endpoints
+    m_x = -x + y  # Tangent at x
+    m_y = -x + y  # Tangent at y
+    
+    # Generate multiple curves with random perturbations
+    num_curves = 100
+    num_points = 100
+    rand_scale = 3.0
+
+
+    
+    plt.figure(figsize=(10, 10))
+    
+    for _ in range(num_curves):
+        # Random perturbations to tangent vectors
+        # m_x_perturbed = m_x * 1.4 + np.random.randn(m_x.shape[0]) * rand_scale
+        # m_y_perturbed = m_y * 1.4 + np.random.randn(m_x.shape[0]) * rand_scale
+
+        m_x_perturbed = m_x * np.random.uniform(size=m_x.shape) * rand_scale
+        m_y_perturbed = m_y * np.random.uniform(size=m_x.shape) * rand_scale
+        
+        # Generate points using cubic Hermite interpolation
+        points = cubic_hermite(x, y, m_x_perturbed, m_y_perturbed, num_points)
+        
+        # Plot the curve
+        plt.plot(points[:, 0], points[:, 1], alpha=0.2, c='blue')
+        assert np.all(points >= 0) and np.all(points <= 1), "Points must lie in the [0,1] x [0,1] box"
+    
+    # Plot attractors
+    plt.scatter(x[0], x[1], c='red', s=100, label='Attractor 1')
+    plt.scatter(y[0], y[1], c='red', s=100, label='Attractor 2')
+    
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.title('Cubic Hermite Polynomial Interpolations')
+    plt.legend()
+    plt.grid(True)
+    
+    # Save figure
+    plt.savefig(Path(cfg.savepath) / "hermite_polynomials_2d.png", dpi=300)
+    plt.show()
+    plt.close()
+
+
 
 def plot_cubichermitesampler(cfg):
     omegaconf_resolvers()
@@ -1579,74 +1971,75 @@ def main_multimodel(cfg):
         if cfg.model.input_size == 1:
             pass
         elif cfg.model.input_size == 2:
-            fig,axs = plt.subplots(7,4,figsize=np.array([4,7])*2.3,sharey=True,sharex=True)
-            for j in range(SL.num_models):
-                for i in range(cfg.model.output_size):
-                    mod_model = compose(
-                        lambda x: x**0.01,
-                        torch.log,
-                        lambda x: x + 1,
-                        torch.exp,
-                        # partial(torch.sum, dim=-1, keepdims=True),
-                        lambda x: x[...,i:i+1],
-                        torch.log,
-                        torch.abs,
-                        SL.models[j]
-                    )
-                    ax = axs[i,j]
-
-                    x_limits = (-2, 2)  # Limits for x-axis
-                    y_limits = (-2, 2)  # Limits for y-axis
-                    if hasattr(cfg.dynamics, 'lims'):
-                        x_limits = cfg.dynamics.lims.x
-                        y_limits = cfg.dynamics.lims.y
-                    plot_model_contour(
-                        mod_model,
-                        ax,
-                        x_limits=x_limits,
-                        y_limits=y_limits,
-                    )
-                    below_threshold_points = all_below_threshold_points[j] if all_below_threshold_points is not None else None
-                    # print(below_threshold_points.shape)
-                    if below_threshold_points is not None:
-                        xlim = ax.get_xlim()  # Store current x limits
-                        ylim = ax.get_ylim()  # Store current y limits
-
-                        ax.scatter(below_threshold_points[:, 0], below_threshold_points[:, 1], c='red', s=10)
-
-                        ax.set_xlim(xlim)  # Reset x limits
-                        ax.set_ylim(ylim)  # Reset y limits
-                    # ax.set_aspect('auto')
-                    ax.set_title(f'Model-{j},output{i}'+'\n'+f", loss:{float(scores[j, i]):.5f}")
-                    ax.set_xlabel('')
-                    ax.set_ylabel('')
-
-                    # ax.scatter(*unique_fps.xstar[unique_fps.is_stable, :].T, c='blue',marker='x',s=100,zorder=1001)
-                    # ax.scatter(*unique_fps.xstar[~unique_fps.is_stable, :].T, c='red',marker='x',s=100,zorder=1000)
-            fig.tight_layout()
-            fig.savefig(Path(cfg.savepath)/"all_KEF_contours.png",dpi=300)
-            plt.close(fig)
-
-            x_limits = (-2, 2)  # Limits for x-axis
-            y_limits = (-2, 2)  # Limits for y-axis
-            if hasattr(cfg.dynamics, 'lims'):
-                x_limits = cfg.dynamics.lims.x
-                y_limits = cfg.dynamics.lims.y
-
-            fig,ax = plt.subplots(1,1, figsize=(5,5))
-            plot_kinetic_energy(
-                dynamics_function,
-                ax,
-                x_limits=x_limits,
-                y_limits=y_limits,
-                below_threshold_points = np.concatenate(all_below_threshold_points,axis=0) if all_below_threshold_points is not None else None,
-            )
-            if cfg.run_fixed_point_finder:
-                ax.scatter(*unique_fps.xstar[unique_fps.is_stable, :].T, c='blue', marker='x', s=100, zorder=1001)
-                ax.scatter(*unique_fps.xstar[~unique_fps.is_stable, :].T, c='red', marker='x', s=100, zorder=1000)
-            fig.tight_layout()
-            fig.savefig(Path(cfg.savepath) / "kinetic_energy.png",dpi=300)
-            plt.close(fig)
+            pass
+            # fig,axs = plt.subplots(7,4,figsize=np.array([4,7])*2.3,sharey=True,sharex=True)
+            # for j in range(SL.num_models):
+            #     for i in range(cfg.model.output_size):
+            #         mod_model = compose(
+            #             lambda x: x**0.01,
+            #             torch.log,
+            #             lambda x: x + 1,
+            #             torch.exp,
+            #             # partial(torch.sum, dim=-1, keepdims=True),
+            #             lambda x: x[...,i:i+1],
+            #             torch.log,
+            #             torch.abs,
+            #             SL.models[j]
+            #         )
+            #         ax = axs[i,j]
+            #
+            #         x_limits = (-2, 2)  # Limits for x-axis
+            #         y_limits = (-2, 2)  # Limits for y-axis
+            #         if hasattr(cfg.dynamics, 'lims'):
+            #             x_limits = cfg.dynamics.lims.x
+            #             y_limits = cfg.dynamics.lims.y
+            #         plot_model_contour(
+            #             mod_model,
+            #             ax,
+            #             x_limits=x_limits,
+            #             y_limits=y_limits,
+            #         )
+            #         below_threshold_points = all_below_threshold_points[j] if all_below_threshold_points is not None else None
+            #         # print(below_threshold_points.shape)
+            #         if below_threshold_points is not None:
+            #             xlim = ax.get_xlim()  # Store current x limits
+            #             ylim = ax.get_ylim()  # Store current y limits
+            #
+            #             ax.scatter(below_threshold_points[:, 0], below_threshold_points[:, 1], c='red', s=10)
+            #
+            #             ax.set_xlim(xlim)  # Reset x limits
+            #             ax.set_ylim(ylim)  # Reset y limits
+            #         # ax.set_aspect('auto')
+            #         ax.set_title(f'Model-{j},output{i}'+'\n'+f", loss:{float(scores[j, i]):.5f}")
+            #         ax.set_xlabel('')
+            #         ax.set_ylabel('')
+            #
+            #         # ax.scatter(*unique_fps.xstar[unique_fps.is_stable, :].T, c='blue',marker='x',s=100,zorder=1001)
+            #         # ax.scatter(*unique_fps.xstar[~unique_fps.is_stable, :].T, c='red',marker='x',s=100,zorder=1000)
+            # fig.tight_layout()
+            # fig.savefig(Path(cfg.savepath)/"all_KEF_contours.png",dpi=300)
+            # plt.close(fig)
+            #
+            # x_limits = (-2, 2)  # Limits for x-axis
+            # y_limits = (-2, 2)  # Limits for y-axis
+            # if hasattr(cfg.dynamics, 'lims'):
+            #     x_limits = cfg.dynamics.lims.x
+            #     y_limits = cfg.dynamics.lims.y
+            #
+            # fig,ax = plt.subplots(1,1, figsize=(5,5))
+            # plot_kinetic_energy(
+            #     dynamics_function,
+            #     ax,
+            #     x_limits=x_limits,
+            #     y_limits=y_limits,
+            #     below_threshold_points = np.concatenate(all_below_threshold_points,axis=0) if all_below_threshold_points is not None else None,
+            # )
+            # if cfg.run_fixed_point_finder:
+            #     ax.scatter(*unique_fps.xstar[unique_fps.is_stable, :].T, c='blue', marker='x', s=100, zorder=1001)
+            #     ax.scatter(*unique_fps.xstar[~unique_fps.is_stable, :].T, c='red', marker='x', s=100, zorder=1000)
+            # fig.tight_layout()
+            # fig.savefig(Path(cfg.savepath) / "kinetic_energy.png",dpi=300)
+            # plt.close(fig)
 
         if 'hypercube' in cfg.dynamics.name or 'bistable' in cfg.dynamics.name:
             # Number of models and number of random vectors
@@ -1898,12 +2291,16 @@ def main_multimodel(cfg):
             all_points = []
             for _ in range(num_curves):
                 # Generate random perturbations for tangents
-                m_x_perturbed = m_x * 1.4 + np.random.randn(m_x.shape[0]) * rand_scale
-                m_y_perturbed = m_y * 1.4 + np.random.randn(m_x.shape[0]) * rand_scale
+                # m_x_perturbed = m_x * 1.4 + np.random.randn(m_x.shape[0]) * rand_scale
+                # m_y_perturbed = m_y * 1.4 + np.random.randn(m_x.shape[0]) * rand_scale
+                m_x_perturbed = m_x * np.random.uniform(size=m_x.shape[0]) * rand_scale
+                m_y_perturbed = m_y * np.random.uniform(size=m_x.shape[0]) * rand_scale
 
                 # Generate points on the cubic Hermite curve
                 points = cubic_hermite(x, y, m_x_perturbed, m_y_perturbed, num_points)
+                assert np.all(points >= 0) and np.all(points <= 1), "Points must lie in the [0,1] x [0,1] box"
                 all_points.append(points)
+
 
             # Stack all points into a single array
             all_points = np.vstack(all_points)
@@ -1917,14 +2314,18 @@ def main_multimodel(cfg):
             points_tensor = torch.tensor(all_points, dtype=torch.float32)
             time_points = torch.linspace(0, 30, 2)  # Adjust time range and steps as needed
 
-            # inp = [0.0, 0.0, 0.91]
-            ext_input = instantiate(cfg.dynamics.static_external_input) #torch.tensor(inp).type_as(points_tensor)
-            ext_input = ext_input[None]
-            ext_input = ext_input.repeat(all_points.shape[0], 1)
-
-            # Run ODE integration for all points
-            with torch.no_grad():
-                trajectories = odeint(lambda t, x: dynamics_function(x, ext_input), points_tensor, time_points)
+            # Only instantiate external input if it exists in config
+            if hasattr(cfg.dynamics, 'static_external_input'):
+                ext_input = instantiate(cfg.dynamics.static_external_input)
+                ext_input = ext_input[None]
+                ext_input = ext_input.repeat(all_points.shape[0], 1)
+                # Run ODE integration for all points with external input
+                with torch.no_grad():
+                    trajectories = odeint(lambda t, x: dynamics_function(x, ext_input), points_tensor, time_points)
+            else:
+                # Run ODE integration without external input
+                with torch.no_grad():
+                    trajectories = odeint(lambda t, x: dynamics_function(x), points_tensor, time_points)
 
             # Convert trajectories to numpy and reshape for PCA
             trajectories_np = trajectories.detach().cpu().numpy()
@@ -1990,6 +2391,11 @@ def main_multimodel(cfg):
 
             fig = plt.figure()
             plt.scatter(change_points, max_below_threshold_position)
+            xlim = plt.xlim()
+            ylim = plt.ylim()
+            plt.plot([0, 1], [0, 1], 'k--', alpha=0.5)
+            plt.xlim(xlim)
+            plt.ylim(ylim)
             plt.xlabel('true separatrix point')
             plt.ylabel('KEF foot point')
             plt.show()

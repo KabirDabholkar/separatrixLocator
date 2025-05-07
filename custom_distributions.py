@@ -8,6 +8,8 @@ from typing import Union, Callable, Optional
 from sklearn.base import BaseEstimator, ClassifierMixin
 import numpy as np
 
+def sample(dist,shape):
+    return dist.sample(sample_shape=shape)
 
 class CubicHermiteSampler:
     """
@@ -135,6 +137,48 @@ def isotropic_gaussian(mean, scale=1.0):
     dim = len(mean)
     cov = torch.eye(dim) * scale
     return D.MultivariateNormal(mean, cov)
+
+def beta_from_mean_var(mean: float, var: float) -> D.Beta:
+    """
+    Create a Beta distribution with specified mean and variance.
+    
+    Args:
+        mean: Mean of the Beta distribution (between 0 and 1)
+        var: Variance of the Beta distribution (must be less than mean*(1-mean))
+        
+    Returns:
+        dist: torch.distributions.Beta with the specified mean and variance
+        
+    Raises:
+        ValueError: If mean is not between 0 and 1, or if variance is invalid
+    """
+    if not 0 < mean < 1:
+        raise ValueError("Mean must be between 0 and 1")
+    if not 0 < var < mean * (1 - mean):
+        raise ValueError("Variance must be between 0 and mean*(1-mean)")
+        
+    # Solve for alpha and beta parameters
+    # mean = alpha/(alpha + beta)
+    # var = (alpha*beta)/((alpha + beta)^2 * (alpha + beta + 1))
+    
+    alpha = mean * (mean * (1 - mean) / var - 1)
+    beta = (1 - mean) * (mean * (1 - mean) / var - 1)
+    
+    return D.Beta(alpha, beta)
+
+
+def iid_beta(mean, scale) -> D.Beta:
+    """
+    Create a Beta distribution with specified mean and variance.
+    
+    Args:
+        mean: Mean vector of the distribution
+        scale: Std of the Beta distribution (must be less than sqrt(mean*(1-mean)))
+    """
+    return ConcatIIDDistribution([beta_from_mean_var(mean[i], scale**2) for i in range(len(mean))])
+
+def list_of_iid_betas(mean, scales):
+    return [iid_beta(mean, scale) for scale in scales]
 
 def isotropic_gaussians(mean, scales):
     """
@@ -582,6 +626,77 @@ class RejectionSamplerWithClassifier:
 
 # Example usage:
 if __name__ == '__main__':
+
+    # Demo locally_isotropic_beta with histograms
+    import matplotlib.pyplot as plt
+    #
+    # # Define mean vector and scale
+    # mean = torch.tensor([0.1, 0.1])
+    # scale = np.sqrt(0.089)
+    # dist = iid_beta(mean, scale)
+    # samples = dist.sample((5000,))
+    #
+    # # Create 2D histogram plot
+    # plt.figure(figsize=(8, 8))
+    # plt.hist2d(samples[:, 0].numpy(), samples[:, 1].numpy(), bins=30, density=True)
+    # plt.colorbar(label='Density')
+    #
+    # # Add mean point
+    # plt.plot(mean[0], mean[1], 'r*', markersize=15, label='Mean')
+    #
+    # plt.title(f'2D Histogram of Locally Isotropic Beta\nμ={mean.numpy()}, σ={scale}')
+    # plt.xlabel(r'$x_1$')
+    # plt.ylabel(r'$x_2$')
+    # plt.legend()
+    # plt.grid(True)
+    # plt.show()
+
+
+
+
+    # Demo beta_from_mean_var with histograms
+    import matplotlib.pyplot as plt
+    
+    print("Demonstrating beta_from_mean_var distribution:")
+    
+    # Create beta distributions with different means and variances
+    beta1 = beta_from_mean_var(mean=0.1, var=np.sqrt(0.01)**2)
+    beta2 = beta_from_mean_var(mean=0.7, var=0.01**2)
+    
+    # Sample from distributions
+    samples1 = beta1.sample((1000,))
+    samples2 = beta2.sample((1000,))
+    
+    # Print distribution parameters and sample statistics
+    print("\nBeta Distribution 1:")
+    print(f"Target mean: 0.3, Empirical mean: {samples1.mean():.3f}")
+    print(f"Target var: 0.05, Empirical var: {samples1.var():.3f}")
+    print(f"Alpha: {beta1.concentration1:.3f}, Beta: {beta1.concentration0:.3f}")
+    
+    print("\nBeta Distribution 2:")
+    print(f"Target mean: 0.7, Empirical mean: {samples2.mean():.3f}")
+    print(f"Target var: 0.02, Empirical var: {samples2.var():.3f}")
+    print(f"Alpha: {beta2.concentration1:.3f}, Beta: {beta2.concentration0:.3f}")
+    
+    # Plot histograms
+    plt.figure(figsize=(10, 5))
+    
+    plt.subplot(1, 2, 1)
+    plt.hist(samples1.numpy(), bins=30, density=True, alpha=0.7)
+    plt.title(f'Beta(μ=0.3, σ=0.1)\nα={beta1.concentration1:.1f}, β={beta1.concentration0:.1f}')
+    plt.xlabel('x')
+    plt.ylabel('Density')
+    
+    plt.subplot(1, 2, 2)
+    plt.hist(samples2.numpy(), bins=30, density=True, alpha=0.7)
+    plt.title(f'Beta(μ=0.7, σ=0.5)\nα={beta2.concentration1:.1f}, β={beta2.concentration0:.1f}')
+    plt.xlabel('x')
+    plt.ylabel('Density')
+    
+    plt.tight_layout()
+    plt.show()
+    
+
     # dist1 = torch.distributions.Normal(loc=0.0, scale=1.0)
     # dist2 = torch.distributions.Normal(loc=5.0, scale=1.0)
     # mixture_dist = MixtureDistribution([dist1, dist2], weights=[0.3, 0.7])
@@ -704,63 +819,63 @@ if __name__ == '__main__':
     # plt.grid(True)
     # plt.show()
 
-    # Demo of RejectionSamplerWithClassifier
-    import matplotlib.pyplot as plt
-    from sklearn.svm import SVC
-    from sklearn.datasets import make_moons
-    import numpy as np
-    
-    # Create a 2D dataset (two moons)
-    X, y = make_moons(n_samples=1000, noise=0.1, random_state=42)
-    
-    # Train an SVM classifier
-    classifier = SVC(kernel='rbf', probability=True)
-    classifier.fit(X, y)
-    
-    # Create a base distribution (2D Gaussian)
-    base_dist = D.MultivariateNormal(
-        loc=torch.zeros(2),
-        covariance_matrix=torch.eye(2) * 2.0
-    )
-    
-    # Create rejection sampler for class 1
-    sampler = RejectionSamplerWithClassifier(
-        base_distribution=base_dist,
-        classifier=classifier,
-        target_class=1,
-        max_attempts=10000
-    )
-    
-    # Sample points that are classified as class 1
-    samples = sampler.sample((1000,))
-    samples_np = samples.detach().cpu().numpy()
-    
-    # Plot the results
-    plt.figure(figsize=(10, 5))
-    
-    # Plot the original dataset
-    plt.subplot(121)
-    plt.scatter(X[y==0, 0], X[y==0, 1], c='blue', alpha=0.5, label='Class 0')
-    plt.scatter(X[y==1, 0], X[y==1, 1], c='red', alpha=0.5, label='Class 1')
-    plt.title('Original Dataset')
-    plt.legend()
-    
-    # Plot the sampled points
-    plt.subplot(122)
-    plt.scatter(samples_np[:, 0], samples_np[:, 1], c='red', alpha=0.5, label='Sampled Class 1')
-    plt.title('Rejection Sampled Points')
-    plt.legend()
-    
-    plt.tight_layout()
-    plt.show()
-    
-    # Print some statistics
-    print(f"Number of samples generated: {len(samples_np)}")
-    print(f"Mean of sampled points: {np.mean(samples_np, axis=0)}")
-    print(f"Covariance of sampled points:\n{np.cov(samples_np.T)}")
-    
-    # Test the log_prob method
-    test_point = torch.tensor([0.0, 0.0])
-    print(f"Log probability of test point: {sampler.log_prob(test_point)}")
-
-    
+    # # Demo of RejectionSamplerWithClassifier
+    # import matplotlib.pyplot as plt
+    # from sklearn.svm import SVC
+    # from sklearn.datasets import make_moons
+    # import numpy as np
+    #
+    # # Create a 2D dataset (two moons)
+    # X, y = make_moons(n_samples=1000, noise=0.1, random_state=42)
+    #
+    # # Train an SVM classifier
+    # classifier = SVC(kernel='rbf', probability=True)
+    # classifier.fit(X, y)
+    #
+    # # Create a base distribution (2D Gaussian)
+    # base_dist = D.MultivariateNormal(
+    #     loc=torch.zeros(2),
+    #     covariance_matrix=torch.eye(2) * 2.0
+    # )
+    #
+    # # Create rejection sampler for class 1
+    # sampler = RejectionSamplerWithClassifier(
+    #     base_distribution=base_dist,
+    #     classifier=classifier,
+    #     target_class=1,
+    #     max_attempts=10000
+    # )
+    #
+    # # Sample points that are classified as class 1
+    # samples = sampler.sample((1000,))
+    # samples_np = samples.detach().cpu().numpy()
+    #
+    # # Plot the results
+    # plt.figure(figsize=(10, 5))
+    #
+    # # Plot the original dataset
+    # plt.subplot(121)
+    # plt.scatter(X[y==0, 0], X[y==0, 1], c='blue', alpha=0.5, label='Class 0')
+    # plt.scatter(X[y==1, 0], X[y==1, 1], c='red', alpha=0.5, label='Class 1')
+    # plt.title('Original Dataset')
+    # plt.legend()
+    #
+    # # Plot the sampled points
+    # plt.subplot(122)
+    # plt.scatter(samples_np[:, 0], samples_np[:, 1], c='red', alpha=0.5, label='Sampled Class 1')
+    # plt.title('Rejection Sampled Points')
+    # plt.legend()
+    #
+    # plt.tight_layout()
+    # plt.show()
+    #
+    # # Print some statistics
+    # print(f"Number of samples generated: {len(samples_np)}")
+    # print(f"Mean of sampled points: {np.mean(samples_np, axis=0)}")
+    # print(f"Covariance of sampled points:\n{np.cov(samples_np.T)}")
+    #
+    # # Test the log_prob method
+    # test_point = torch.tensor([0.0, 0.0])
+    # print(f"Log probability of test point: {sampler.log_prob(test_point)}")
+    #
+    #
