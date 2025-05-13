@@ -63,19 +63,36 @@ input_size  : ${dynamics.dim}
 #hidden_sizes : [2048,1024,1024,512,512,256,256,128,128,64,64,32,32,16,16,8,8,4,4,2,2]
 #hidden_sizes : [2048,1024,512,256,128,64,32,16,8,4,2] #1200 #80 #0 #1000 #1000 #2000 #2
 #num_layers  : 5 #20 #20 #25 #5 #40 #25
-output_size : 1
+output_size : 1 #7
 num_kernels : 10 #0
 
-#hidden_size : 1000
-#num_layers  : 5
+#hidden_size : 50
+#num_layers  : 70
+
+#hidden_size : 200
+#num_layers  : 50
 
 #hidden_size : 400
-#num_layers  : 20
+#num_layers  : 50
 
+#hidden_size : 300
+#num_layers  : 70
+
+### For 2bit flip flop 3D
 hidden_size : 400 #400
-num_layers  : 6
+num_layers  : 20
+
+#hidden_size : 400 #400
+#num_layers  : 6
 #hidden_size : 800 #400
 #num_layers  : 10
+
+### best for microbiome 11D
+#hidden_size : 1000 #400
+#num_layers  : 25
+
+#hidden_size : 1000 #400
+#num_layers  : 40
 name: AdditiveRBFResNet_hidden${.hidden_size}_output${.output_size}_numKernels${.num_kernels}_numlayers${.num_layers}
 #name: AdditiveRBFLinearResNet_hidden${.hidden_size}_output${.output_size}_numKernels${.num_kernels}_numlayers${.num_layers}
 

@@ -101,4 +101,61 @@ def plot_separatrix_trajectories(trajectories, labels, points, attractors, num_p
     plt.ylabel('Y-axis')
     plt.title('Trajectories from Points along Line between Attractors')
     plt.legend()
-    plt.show() 
+    plt.show()
+
+def find_saddle_point(dynamics_function, point_on_separatrix, T=1, steps=100, return_all=False):
+    """
+    Find a saddle point by following a trajectory from a point on the separatrix and finding the point with minimum kinetic energy.
+    
+    Args:
+        dynamics_function: Function that defines the system dynamics
+        point_on_separatrix: Starting point on the separatrix
+        T: Integration time (default: 1)
+        steps: Number of integration steps (default: 100)
+        
+    Returns:
+        saddle_point: The point with minimum kinetic energy along the trajectory
+        eigenvalues: Eigenvalues of the Jacobian at the saddle point
+        trajectory: The full trajectory
+        ke_traj: Kinetic energy along the trajectory
+    """
+    # Define kinetic energy function
+    def kinetic_energy(x):
+        return torch.sum(dynamics_function(x)**2) / 2
+    
+    # Run trajectory starting from point on separatrix
+    time_points = torch.linspace(0, T, steps)
+    with torch.no_grad():
+        trajectory = odeint(lambda t,x: dynamics_function(x), point_on_separatrix, time_points)
+    
+    # Calculate kinetic energy along trajectory
+    ke_traj = torch.tensor([kinetic_energy(x) for x in trajectory])
+    
+    # Find point with minimum kinetic energy along trajectory
+    min_ke_idx = torch.argmin(ke_traj)
+    saddle_point = trajectory[min_ke_idx]
+
+    # Refine saddle point using Adam optimizer to minimize kinetic energy
+    x = saddle_point.clone().detach().requires_grad_(True)
+    optimizer = torch.optim.Adam([x], lr=0.005)
+    
+    for i in range(500):
+        optimizer.zero_grad()
+        ke = kinetic_energy(x)
+        ke.backward()
+        optimizer.step()
+        if i % 100 == 0:
+            print('iteration',i,'kinetic energy',ke)
+        if ke < 1e-10:  # Early stopping if kinetic energy is very small
+            break
+            
+    saddle_point = x.detach()
+
+    if return_all:
+        # Compute Jacobian at saddle point using autograd
+        x = saddle_point.clone().detach().requires_grad_(True)
+        jacobian = torch.autograd.functional.jacobian(dynamics_function, x)
+        eigenvalues = torch.linalg.eigvals(jacobian)
+        return saddle_point, eigenvalues, trajectory, ke_traj 
+    else:
+        return saddle_point

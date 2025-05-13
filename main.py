@@ -15,6 +15,7 @@ from copy import deepcopy
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+# mpl.use('MacOSX') #'Qt5Agg')
 import matplotlib.animation as animation
 import seaborn as sns
 mpl.rcParams['agg.path.chunksize'] = 10000
@@ -39,7 +40,8 @@ from fixed_point_finder.FixedPointFinderTorch import FixedPointFinderTorch
 
 CONFIG_PATH = "configs"
 # CONFIG_NAME = "test"
-CONFIG_NAME = "main"
+# CONFIG_NAME = "main"
+CONFIG_NAME = "main_2bitflipflop3D"
 
 project_path = os.getenv("PROJECT_PATH")
 
@@ -47,7 +49,7 @@ project_path = os.getenv("PROJECT_PATH")
 @hydra.main(version_base='1.3', config_path=CONFIG_PATH, config_name=CONFIG_NAME)
 def decorated_main(cfg):
     # return main(cfg)
-    # return main_multimodel(cfg)
+    # main_multimodel(cfg)
     # return finkelstein_fontolan(cfg)
     # return finkelstein_fontolan_point_finder_test(cfg)
     # return finkelstein_fontolan_analysis_test(cfg)
@@ -58,44 +60,846 @@ def decorated_main(cfg):
     # check_basin_of_attraction(cfg)
     # plot_cubichermitesampler(cfg)
     # return RNN_modify_inputs(cfg)
-    plot_dynamics_2D(cfg)
+    # plot_dynamics_2D(cfg)
     # plot_dynamics(cfg)
     # plot_task_io(cfg)
     # plot_hermite_polynomials_2d(cfg)
     # plot_KEF_residuals(cfg)
     # plot_KEF_residual_heatmap(cfg)
     # fixed_point_analysis(cfg)
+    # check_distribution(cfg)
+    # plot_2D_dynamics_reduced(cfg)
+    # find_saddle_point(cfg)
+    plot_dynamics_3D(cfg)
+    # RNN_fixedpoints(cfg)
+    # flipflop_separatrix_points(cfg)
+    
+
+def flipflop_separatrix_points(cfg):
+    omegaconf_resolvers()
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+    dynamics_function = instantiate(cfg.dynamics.function)
+    distribution = instantiate(cfg.dynamics.IC_distribution)
+
+    # Sample random initial conditions
+    num_trajectories = 100
+    dim = cfg.dynamics.dim
+    ic_range = torch.tensor([0.0, 1.0])  # Range for initial conditions
+    initial_conditions = distribution.sample(sample_shape=(num_trajectories,))
+
+    # Time settings for integration
+    t_span = torch.linspace(0, 1000, 2) #500)
+
+    # Run trajectories
+    trajectories = odeint(
+        lambda t, x: dynamics_function(x),
+        initial_conditions,
+        t_span,
+        # method='r'
+    )
+
+    # Convert trajectories to numpy for PCA
+    trajectories_np = trajectories.detach().cpu().numpy()
+
+    from sklearn.cluster import KMeans
+
+    # Cluster the final points (shape: num_trajectories x dim)
+    kmeans4 = KMeans(n_clusters=4, random_state=42)
+    cluster_labels4 = kmeans4.fit_predict(trajectories_np[-1])
+    cluster_centers = kmeans4.cluster_centers_  # shape: (4, dim)
+
+    # Get the ordered centers
+    from square import order_square_nd
+    ordered_centers = order_square_nd(cluster_centers[np.random.permutation(len(cluster_centers))])
+    
+    # Convert edge points from numpy to torch tensors
+    edge_points = {
+        'vertical1': (torch.tensor(ordered_centers[0], dtype=torch.float32),
+                     torch.tensor(ordered_centers[1], dtype=torch.float32)),
+        'vertical2': (torch.tensor(ordered_centers[2], dtype=torch.float32),
+                     torch.tensor(ordered_centers[3], dtype=torch.float32)),
+        'horizontal1': (torch.tensor(ordered_centers[0], dtype=torch.float32),
+                       torch.tensor(ordered_centers[3], dtype=torch.float32)),
+        'horizontal2': (torch.tensor(ordered_centers[1], dtype=torch.float32),
+                       torch.tensor(ordered_centers[2], dtype=torch.float32))
+    }
+
+    from separatrix_point_finder import find_separatrix_point_along_line
+    # Find separatrix points along each edge
+    separatrix_points = {}
+    for edge_name, edge_endpoints in edge_points.items():
+        separatrix_points[edge_name] = find_separatrix_point_along_line(
+            dynamics_function=dynamics_function,
+            external_input=None,
+            attractors=edge_endpoints,
+            num_points=20,
+            num_iterations=2,
+            time_points=t_span,
+            final_time=1000
+        )
+    print(separatrix_points)
+    print(edge_points)
+
+    # Create a 3D scatter plot of separatrix points
+
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Plot separatrix points for each edge in different colors
+    colors = ['r', 'g', 'b', 'y']
+    for (edge_name, sep_point), color in zip(separatrix_points.items(), colors):
+        # Convert separatrix point to numpy array
+        point = sep_point.detach().cpu().numpy()
+        ax.scatter(point[0], point[1], point[2], c=color, label=edge_name, s=100)
+
+    # Plot edge endpoints and connecting lines
+    for (edge_name, (point1, point2)), color in zip(edge_points.items(), colors):
+        p1 = point1.detach().cpu().numpy()
+        p2 = point2.detach().cpu().numpy()
+        ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]], c=color, linewidth=2)
+        ax.scatter(p1[0], p1[1], p1[2], c=color, marker='*', s=200)
+        ax.scatter(p2[0], p2[1], p2[2], c=color, marker='*', s=200)
+
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    ax.legend()
+    ax.view_init(elev=40, azim=150)
+
+    # Save the figure
+    plt.savefig(Path(cfg.savepath) / 'separatrix_points_3d.png', dpi=300, bbox_inches='tight')
+    plt.show()
+
+    # Create directory for saving points
+    save_dir = Path(cfg.savepath) / 'saved_points'
+    save_dir.mkdir(exist_ok=True)
+
+    # Save each separatrix point as a .pt file
+    for edge_name, sep_point in separatrix_points.items():
+        torch.save(sep_point, save_dir / f'{edge_name}.pt')
+
+
+def plot_dynamics_3D(cfg):
+    omegaconf_resolvers()
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+    dynamics_function = instantiate(cfg.dynamics.function)
+    distribution = instantiate(cfg.dynamics.IC_distribution)
+
+    # Sample random initial conditions
+    num_trajectories = 100
+    dim = cfg.dynamics.dim
+    ic_range = torch.tensor([0.0, 1.0])  # Range for initial conditions
+    initial_conditions = distribution.sample(sample_shape=(num_trajectories,))
+
+    # Time settings for integration
+    t_span = torch.linspace(0, 1000, 500)
+
+    # Run trajectories
+    trajectories = odeint(
+        lambda t, x: dynamics_function(x),
+        initial_conditions,
+        t_span,
+        # method='rk'
+    )
+
+    # Convert trajectories to numpy for PCA
+    trajectories_np = trajectories.detach().cpu().numpy()
+
+    # Reshape for PCA: combine all trajectories and time points
+    traj_shape = trajectories_np.shape
+    reshaped_data_end = trajectories_np[-100:].reshape(-1, traj_shape[-1])
+    reshaped_data = trajectories_np.reshape(-1, traj_shape[-1])
+    # Apply PCA to find principal components
+    from sklearn.decomposition import PCA
+    pca = PCA(n_components=3)
+    pca.fit(reshaped_data_end)
+
+    # Transform the data
+    transformed_data = pca.transform(reshaped_data)
+
+    # Reshape back to original shape but with reduced dimensions
+    transformed_trajectories = transformed_data.reshape(traj_shape[0], traj_shape[1], 3)
+
+    #####
+
+    # Load separatrix locator model
+    SL = instantiate(cfg.separatrix_locator)
+    SL.to('cpu')
+    SL.models = [instantiate(cfg.model).to(SL.device) for _ in range(cfg.separatrix_locator.num_models)]
+
+    # Set up load path
+    new_format_path = Path(cfg.savepath) / cfg.experiment_details
+    if os.path.exists(new_format_path):
+        load_path = new_format_path
+    else:
+        load_path = Path(cfg.savepath)
+        print(new_format_path, 'does not exist, loading', load_path, 'instead.')
+    # SL.load_models(load_path)
+    state_dict = torch.load(new_format_path / 'models' / 'trained_on_vertical_edges.pt', map_location='cpu')
+    SL.models[0].load_state_dict(state_dict)
+    state_dict = torch.load(new_format_path / 'models' / 'trained_on_horizontal_edges.pt', map_location='cpu')
+    # state_dict = torch.load(new_format_path / 'models' / 'AdditiveModel_5.pt', map_location='cpu')
+    SL.models[1].load_state_dict(state_dict)
+
+    scores = SL.score(
+        dynamics_function,
+        distribution,
+        external_input_dist = None,
+        ** instantiate(cfg.separatrix_locator_score_kwargs)
+    )
+    print(scores)
+    # SL.models = SL.models[:9]
+    # SL.num_models = 9
+    #####
+
+    # Create a 2D grid in the first two principal components, centered at the mean
+    n_grid = 200  # Grid resolution
+    
+    # Calculate the mean of the transformed trajectories
+    mean_pc1 = transformed_trajectories[..., 0].mean()
+    mean_pc2 = transformed_trajectories[..., 1].mean()
+    
+    # Calculate the range to determine grid size
+    pc1_range = transformed_trajectories[..., 0].max() - transformed_trajectories[..., 0].min()
+    pc2_range = transformed_trajectories[..., 1].max() - transformed_trajectories[..., 1].min()
+    
+    # Add padding and center around mean
+    padding = 0.1
+    half_width1 = (1 + padding) * pc1_range / 2
+    half_width2 = (1 + padding) * pc2_range / 2
+    # Create grid centered at mean and save limits
+    xlims = (mean_pc1 - half_width1, mean_pc1 + half_width1)
+    ylims = (mean_pc2 - half_width2, mean_pc2 + half_width2)
+    pc1 = np.linspace(xlims[0], xlims[1], n_grid)
+    pc2 = np.linspace(ylims[0], ylims[1], n_grid)
+    PC1, PC2 = np.meshgrid(pc1, pc2)
+
+    # Flatten the grid and add zeros for the third PC
+    grid_points_pca = np.stack([PC1.ravel(), PC2.ravel(), np.zeros_like(PC1.ravel())], axis=-1)
+
+    # Inverse transform from PCA space back to original coordinates
+    grid_points_orig = pca.inverse_transform(grid_points_pca)  # shape (n_grid*n_grid, dim)
+
+    # Convert to torch tensor for model prediction
+    grid_points_torch = torch.from_numpy(grid_points_orig).float().to(SL.device)
+
+    KEFvalues_on_grid = SL.predict(grid_points_torch)[:,0::cfg.model.output_size]
+    print('KEFvalues_on_grid.shape',KEFvalues_on_grid.shape)
+
+    fig,axs = plt.subplots(1,2,sharex=True,sharey=True)
+    for i,ax in enumerate(axs.flatten()):
+        if i<20:
+            ax.contourf(PC1.reshape(n_grid,n_grid),
+                       PC2.reshape(n_grid,n_grid),
+                       np.abs(KEFvalues_on_grid[:,i]).reshape(n_grid,n_grid),levels=15,cmap='Blues_r')
+            ax.contour(PC1.reshape(n_grid,n_grid),
+                      PC2.reshape(n_grid,n_grid),
+                      KEFvalues_on_grid[:,i].reshape(n_grid,n_grid),
+                      levels=[0], colors='lightgreen')
+            # Plot PCA of the 4 points
+            ax.scatter(transformed_trajectories[-1,:,0], transformed_trajectories[-1,:,1],
+                      c='red', s=10, alpha=0.1)
+            ax.set_aspect('equal')
+    
+    # Load and plot saved points
+    saved_points_dir = Path(cfg.savepath) / "saved_points"
+    saved_points = []
+    filenames = []
+    
+    # Load all saved points
+    for file in saved_points_dir.glob("*"):
+        point = torch.load(file)
+        saved_points.append(point.cpu().numpy())
+        filenames.append(file.stem)
+    
+    if saved_points:  # Only process if points were found
+        # Convert to array and transform to PCA space
+        saved_points_array = np.array(saved_points)
+        transformed_points = pca.transform(saved_points_array)
+        
+        # Plot on both axes
+        for ax in axs:
+            # Scatter plot the transformed points
+            ax.scatter(transformed_points[:, 0], transformed_points[:, 1], 
+                      c='orange', marker='x', s=100)
+            
+            # Add labels for each point
+            for i, filename in enumerate(filenames):
+                ax.annotate(filename, 
+                          (transformed_points[i, 0], transformed_points[i, 1]),
+                          xytext=(5, 5), textcoords='offset points',
+                          fontsize=8, color='orange')
+    def dynamics2D(x,full_dim=3):
+        # Pad input with zeros to match full dimension
+        padded_x = torch.zeros(*x.shape[:-1], full_dim, device=x.device)
+        padded_x[..., :2] = x  # Copy the 2D input into first 2 dimensions
+        padded_x = padded_x.detach().numpy()
+        x = torch.tensor(pca.inverse_transform(padded_x))
+        dyn_vals = dynamics_function(x)
+        dyn_vals = dyn_vals.detach().numpy()
+        return pca.transform(dyn_vals)[:,:2]
+
+    from plotting import plot_flow_streamlines
+    for ax in axs.flatten():
+        plot_flow_streamlines(dynamics2D,ax,x_limits=xlims,y_limits=ylims,resolution=100,density=0.4,alpha=0.5)
+    fig.tight_layout()
+    fig.savefig(Path(cfg.savepath) / cfg.experiment_details / 'KEFs_2Dslice.png',dpi=300)
+    fig.savefig(Path(cfg.savepath) / cfg.experiment_details / 'KEFs_2Dslice.pdf')
+    plt.show()
+
+    #####
+
+    # Create a grid in PCA space and evaluate SL.predict at the inverse-PCA-mapped points
+    # We'll plot the surface where SL.predict(X) == 0
+
+    # # Define the grid in PCA space
+    # n_grid = 60  # You can adjust this for resolution
+    # pc1_min, pc1_max = transformed_trajectories[..., 0].min(), transformed_trajectories[..., 0].max()
+    # pc2_min, pc2_max = transformed_trajectories[..., 1].min(), transformed_trajectories[..., 1].max()
+    # pc3_min, pc3_max = transformed_trajectories[..., 2].min(), transformed_trajectories[..., 2].max()
+    #
+    # pc1 = np.linspace(pc1_min, pc1_max, n_grid)
+    # pc2 = np.linspace(pc2_min, pc2_max, n_grid)
+    # pc3 = np.linspace(pc3_min, pc3_max, n_grid)
+    # PC1, PC2, PC3 = np.meshgrid(pc1, pc2, pc3, indexing='ij')
+    #
+    # # Flatten the meshgrid to a list of points (N, 3)
+    # grid_points_pca = np.stack([PC1.ravel(), PC2.ravel(), PC3.ravel()], axis=-1)  # shape (n_grid**3, 3)
+    #
+    # # Inverse transform to original state space
+    # grid_points_orig = pca.inverse_transform(grid_points_pca)  # shape (n_grid**3, dim)
+    #
+    # # Convert to torch tensor for SL.predict
+    # grid_points_orig_torch = torch.from_numpy(grid_points_orig).float().to(SL.device)
+    #
+    # # Evaluate SL.predict in batches to avoid memory issues
+    # batch_size = 4096
+    # preds = []
+    # with torch.no_grad():
+    #     for i in range(0, grid_points_orig_torch.shape[0], batch_size):
+    #         batch = grid_points_orig_torch[i:i+batch_size]
+    #         pred = SL.predict(batch)
+    #         preds.append(pred.cpu().numpy())
+    # preds = np.concatenate(preds, axis=0)  # shape (n_grid**3,)
+    #
+    # # Reshape predictions to grid shape
+    # preds_grid = preds.reshape(PC1.shape)
+    #
+    # # Plot the zero level set using matplotlib's contour3D
+    # from skimage import measure
+    #
+    # # The marching cubes algorithm expects the grid in (z, y, x) order, so we transpose
+    # verts, faces, normals, values = measure.marching_cubes(preds_grid, level=0, spacing=(
+    #     pc1[1] - pc1[0], pc2[1] - pc2[0], pc3[1] - pc3[0]
+    # ))
+    #
+    # # # The verts are in PCA space, so we can plot them directly in the 3D PCA plot
+    # # # Add the surface to the existing 3D plot
+    # from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+    #
+    # mesh = Poly3DCollection(verts[faces], alpha=0.2, facecolor='cyan', edgecolor='none')
+
+    #####
+
+    SL.prepare_models_for_gradient_descent(distribution)
+
+    separatrix_data = SL.find_separatrix(distribution,**instantiate(cfg.separatrix_find_separatrix_kwargs))
+    all_points = np.concatenate(separatrix_data[1])
+    all_points_pca = pca.transform(all_points)
+
+    #####
+
+
+    # Plot in 3D using PCA-transformed data
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(111, projection='3d')
+
+    t = -450
+    for traj in transformed_trajectories.transpose(1, 0, 2):  # Each trajectory
+        # ax.plot(
+        #     traj[t:, 0],
+        #     traj[t:, 1],
+        #     traj[t:, 2],
+        #     alpha=0.6
+        # )
+        # Plot final points
+        ax.scatter(
+            traj[-1, 0],
+            traj[-1, 1],
+            traj[-1, 2],
+            c='red',
+            s=50
+        )
+    # ax.add_collection3d(mesh)
+    ax.scatter(*all_points_pca.T,c='blue')
+    ax.set_xlabel(f'PC1 ({pca.explained_variance_ratio_[0]:.2f})')
+    ax.set_ylabel(f'PC2 ({pca.explained_variance_ratio_[1]:.2f})')
+    ax.set_zlabel(f'PC3 ({pca.explained_variance_ratio_[2]:.2f})')
+
+    # Change the 3D view angle to be more from above (e.g., elev=30, azim=60)
+    ax.view_init(elev=90, azim=60)
+
+    # plt.title('PCA-transformed Trajectories')
+    fig.savefig(Path(cfg.savepath) / cfg.experiment_details / "3d_trajectories_pca.png")
+    fig.savefig(Path(cfg.savepath) / cfg.experiment_details / "3d_trajectories_pca.pdf")
+
+    plt.show()
+    ##### Function to rotate the plot ######
+    def rotate(angle):
+        ax.view_init(elev=30, azim=angle)
+
+    # Create animation
+    num_frames = 360  # Number of frames for a full rotation
+    rotation_animation = animation.FuncAnimation(fig, rotate, frames=num_frames, interval=1000 / 30)
+
+    # Save the animation to a file
+    rotation_animation.save(Path(cfg.savepath) / 'PCA_3d_rotation.mp4', writer='ffmpeg', fps=30, dpi=100)
+
+def RNN_fixedpoints(cfg):
+    omegaconf_resolvers()
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+    dynamics_function = instantiate(cfg.dynamics.function)
+
+    rnn_model = instantiate(cfg.dynamics.loaded_RNN_model)  # (device=SL.device)
+    # cfg.dynamics.RNN_dataset.batch_size = 5000
+    # cfg.dynamics.RNN_dataset.n_trials = 1000
+    dataset = instantiate(cfg.dynamics.RNN_dataset)
+    inp, targ = dataset()
+
+    torch_inp = torch.from_numpy(inp).type(torch.float)  # .to(device)
+    outputs, hidden_traj = rnn_model(torch_inp, return_hidden=True)  # , deterministic=False)
+    outputs, hidden_traj = outputs.detach().cpu().numpy(), hidden_traj.detach().cpu().numpy()
+
+    cfg.fpf_hps['max_iters'] = 20000
+
+    FPF = FixedPointFinderTorch(
+        rnn_model.rnn if hasattr(rnn_model, "rnn") else rnn_model,
+        **instantiate(cfg.fpf_hps)
+    )
+    num_trials = 500
+    # initial_conditions = dist.sample(sample_shape=(num_trials,)).detach().cpu().numpy()
+    # inputs = np.zeros((1, cfg.dynamics.RNN_model.act_size))
+    # inputs[...,2] = 1.0
+    # torch_inp[..., :2] = 0.0
+    torch_inp = torch_inp * 0
+    fp_inputs = torch_inp.reshape(-1, torch_inp.shape[-1]).detach().cpu().numpy()
+
+    # inputs[...,0] = 1
+    initial_conditions = hidden_traj.reshape(-1, hidden_traj.shape[-1])
+    select = np.random.choice(initial_conditions.shape[0], size=num_trials, replace=False)
+    initial_conditions = initial_conditions[select]
+    fp_inputs = fp_inputs[select]
+    # fp_inputs[:,:2] = 0
+    initial_conditions += np.random.normal(size=initial_conditions.shape) * 2.0  # 0.5 #2.0
+    # print('initial_conditions', initial_conditions.shape)
+    unique_fps, all_fps = FPF.find_fixed_points(
+        deepcopy(initial_conditions),
+        fp_inputs
+    )
+
+
+    fixed_point_data = {
+        'stability': unique_fps.is_stable,
+        'q': unique_fps.qstar,
+        'x0': unique_fps.xstar[..., 0],
+        'x1': unique_fps.xstar[..., 1],
+        'x2': unique_fps.xstar[..., 2],
+    }
+    # print(fixed_point_data)
+    fixed_point_data = pd.DataFrame(fixed_point_data)
+    fixed_point_data.to_csv(Path(cfg.savepath) / 'fixed_point_data.csv', index=False)
+
+
+def find_saddle_point(cfg):
+    omegaconf_resolvers()
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+    dynamics_function = instantiate(cfg.dynamics.function)
+    point_on_separatrix = instantiate(cfg.dynamics.point_on_separatrix)
+    saddle_point = instantiate(cfg.dynamics.saddle_point)
+    from odeint_utils import run_odeint_to_final
+    from plotting import dynamics_to_kinetic_energy
+
+    # iid_gammas = instantiate(cfg.dynamics.iid_gammas)
+
+    from separatrix_point_finder import find_saddle_point
+    saddle_point, eigenvalues, trajectory, ke_traj = find_saddle_point(dynamics_function, point_on_separatrix, T=1, return_all=True)
+    saddle_point[saddle_point<0] = 0
+    #
+    # Save saddle point to file
+    # save_path = Path(cfg.savepath) / 'saddle_point.pt'
+    # torch.save(saddle_point, save_path)
+    #
+    # save_path = Path(cfg.savepath) / 'point_on_separatrix.pt'
+    # torch.save(point_on_separatrix, save_path)
+    #
+    kinetic_energy_function = dynamics_to_kinetic_energy(dynamics_function)
+    kinetic_energy_function(saddle_point)
+    #
+    # # Run trajectory starting from point on separatrix
+    # T = 1.0
+    # trajectory = run_odeint_to_final(dynamics_function, point_on_separatrix, T=T,steps=100, return_last_only=False)
+    # ke_traj = kinetic_energy_function(trajectory)
+    #
+    plt.figure()
+    plt.plot(ke_traj)
+    plt.yscale('log')
+    plt.show()
+
+    # # Find point with minimum kinetic energy along trajectory
+    # min_ke_idx = torch.argmin(ke_traj)
+    # saddle_point = trajectory[min_ke_idx]
+    #
+    # Compute Jacobian at saddle point using autograd
+    x = saddle_point.clone().detach().requires_grad_(True)
+    y = dynamics_function(x)
+    jacobian = torch.autograd.functional.jacobian(dynamics_function, x)
+    #
+    # Compute eigenvalues
+    eigenvalues = torch.linalg.eigvals(jacobian)
+
+    print("Saddle point:", saddle_point)
+    print("Eigenvalues at saddle point:", eigenvalues)
+
+    # # The final point should be near a saddle point
+    # # saddle_point = trajectory[-1]
+    # # return saddle_point
+    #
+
+    from ssr_module.steady_state_reduction_example import get_all_stein_steady_states, ssrParams, Params
+    p = Params()
+    ssr_steady_states = get_all_stein_steady_states(p)
+    s = ssrParams(p, ssr_steady_states['E'], ssr_steady_states['C'])
+
+    # Sample initial conditions around saddle point with Gaussian noise
+    num_samples = 100
+    noise_std = 0.1
+    noise = torch.randn(num_samples, saddle_point.shape[0]) * noise_std
+    initial_conditions = point_on_separatrix + noise[:,:2] @ torch.tensor(np.stack([s.ssa, s.ssb]),dtype=torch.float32)
+
+    # Ensure all values are non-negative
+    initial_conditions = torch.clamp(initial_conditions, min=0.0)
+
+    # Run trajectories from these initial conditions
+    T = 10.0
+    trajectories = run_odeint_to_final(dynamics_function, initial_conditions, T=T, steps=1000, return_last_only=False)
+
+    # Reshape trajectories for PCA
+    traj_shape = trajectories.shape
+    X = trajectories.reshape(-1, traj_shape[-1])
+
+    # Perform k-means clustering on final points of trajectories
+    from sklearn.cluster import KMeans
+    kmeans = KMeans(n_clusters=2, random_state=0)
+    final_points = trajectories[-1]
+    cluster_labels = kmeans.fit_predict(final_points)
+
+    # Perform PCA
+    from sklearn.decomposition import PCA
+    pca = PCA(n_components=2)
+    # X_pca = pca.fit_transform(X.detach().numpy())
+    X_pca = p.project_to_2D(X,ssa=s.ssa,ssb=s.ssb)
+
+    # Reshape back to trajectory form
+    X_pca = X_pca.reshape(traj_shape[0], traj_shape[1], 2)
+
+    # Plot trajectories in PCA space
+    plt.figure(figsize=(5, 4))
+    for i in range(num_samples):
+        plt.plot(X_pca[:, i, 0], X_pca[:, i, 1], alpha=0.3, c=f'C{cluster_labels[i]}')
+
+    # Plot saddle point in PCA space
+    # saddle_pca = pca.transform(saddle_point.detach().numpy().reshape(1, -1))
+    saddle_pca = p.project_to_2D(saddle_point[None].detach(),ssa=s.ssa,ssb=s.ssb)
+    plt.scatter(saddle_pca[0, 0], saddle_pca[0, 1], c='red', marker='x', s=100, label='Saddle Point')
+
+    # Plot attractors in PCA space
+    # attractors_pca = pca.transform(attractors.detach().numpy())
+    # plt.scatter(attractors_pca[:, 0], attractors_pca[:, 1], c='black', marker='o', s=100, label='Attractors')
+
+    plt.xlabel('First Principal Component')
+    plt.ylabel('Second Principal Component')
+    plt.title('Trajectories from Saddle Point (PCA)')
+    plt.legend()
+    plt.savefig(Path(cfg.savepath)/'trajectories2D.png')
+    plt.show()
+
+
+def run_one_training_step_and_compute_grad(cfg):
+    omegaconf_resolvers()
+    dynamics_function = instantiate(cfg.dynamics.function)
+    distribution_fit = instantiate(cfg.dynamics.IC_distribution_fit)
+
+def plot_2D_dynamics_reduced(cfg):
+    omegaconf_resolvers()
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+    from ssr_module.steady_state_reduction_example import Params
+    dynamics_function = instantiate(cfg.dynamics.function)
+    point_on_separatrix = instantiate(cfg.dynamics.point_on_separatrix)
+    attractors = instantiate(cfg.dynamics.attractors)
+
+    saddle_point = instantiate(cfg.dynamics.saddle_point)
+
+    p = Params()
+    from ssr_module.steady_state_reduction_example import get_all_stein_steady_states, ssrParams, plot_ND_separatrix
+    ssr_steady_states = get_all_stein_steady_states(p)
+    s = ssrParams(p, ssr_steady_states['E'], ssr_steady_states['C'])
+
+    # Load separatrix locator model
+    SL = instantiate(cfg.separatrix_locator)
+    SL.to('cpu')
+    SL.models = [instantiate(cfg.model).to(SL.device) for _ in range(cfg.separatrix_locator.num_models)]
+
+    # Set up load path
+    new_format_path = Path(cfg.savepath) / cfg.experiment_details
+    if os.path.exists(new_format_path):
+        load_path = new_format_path
+    else:
+        load_path = Path(cfg.savepath)
+        print(new_format_path, 'does not exist, loading', load_path, 'instead.')
+    SL.load_models(load_path)
+
+    # Create a grid of points spanning the space between attractors
+    num_points = 20  # Number of points along each dimension
+
+    # Get attractors as numpy arrays
+    attractors_np = attractors.detach().cpu().numpy()
+
+    # Create basis vectors from zero to each attractor
+    v1 = attractors_np[0]  # Vector to first attractor
+    v2 = attractors_np[1]  # Vector to second attractor
+
+    # Create meshgrid of coefficients from 0 to 1
+    x = np.linspace(0, 1, num_points)
+    y = np.linspace(0, 1, num_points)
+    X, Y = np.meshgrid(x, y)
+
+    # Compute all grid points in parallel using broadcasting
+    grid_points = (X[..., None] * v1) + (Y[..., None] * v2)
+
+    # Convert to torch tensor
+    grid_points_tensor = torch.tensor(grid_points, dtype=torch.float32)
+
+    # Reshape grid points for prediction
+    original_shape = grid_points_tensor.shape
+    grid_points_flat = grid_points_tensor.reshape(-1, grid_points_tensor.shape[-1])
+
+    # Dynamics
+    dynamics_vals = dynamics_function(grid_points_flat)
+
+    # Project dynamics onto v1 and v2 basis vectors
+    dynamics_np = dynamics_vals.detach().numpy()
+    v1_norm = v1 / np.linalg.norm(v1) ** 2
+    v2_norm = v2 / np.linalg.norm(v2) ** 2
+
+    # Project dynamics onto 2D space using SSR projection
+    dynamics_2d = p.project_to_2D(dynamics_np,ssa=v1,ssb=v2)
+
+    # Reshape dynamics vectors to match grid shape
+    dynamics_v1 = dynamics_2d[:,0].reshape(X.shape)
+    dynamics_v2 = dynamics_2d[:,1].reshape(X.shape)
+    # Stack into single array and reshape back to grid
+    # dynamics_2d = np.stack([dynamics_v1, dynamics_v2], axis=-1)
+    # dynamics_2d = dynamics_2d.reshape(original_shape[:-1] + (2,))
+
+
+    # Get KEF predictions
+    KEFvals = SL.predict(grid_points_flat)
+
+    # Reshape predictions back to grid shape
+    KEFvals = KEFvals.reshape(original_shape[:-1] + (-1,))
+
+    # Plot the KEF values as a heatmap
+    fig,ax= plt.subplots(figsize=(4, 4))
+    # plt.contour(X, Y, KEFvals[..., 0], levels=20, cmap='RdBu')
+    ax.contourf(X, Y, KEFvals[...,0], levels=15, cmap='Blues_r')
+    CS = ax.contour(X, Y, KEFvals[...,0], levels=[0], colors='lightgreen')
+
+    # Plot streamlines
+    density = 0.5
+    color='red'
+    linewidth = 1
+    alpha = 0.5
+    lines = ax.streamplot(X, Y, dynamics_v1, dynamics_v2, density=density, color=color)
+    lines.lines.set_alpha(alpha)
+    # ax.colorbar(label='KEF Value')
+
+    # Plot attractors
+    # ax.scatter([0, 1], [0, 1], c='red', s=100, label='Attractors')
+    # Project point_on_separatrix onto v1 and v2 basis vectors
+    # Normalize the basis vectors v1 and v2 if they aren't already normalized
+
+    # Project onto normalized basis vectors
+    point_on_separatrix2D = p.project_to_2D(point_on_separatrix[None],ssa=v1,ssb=v2)
+    saddle_point2D = p.project_to_2D(saddle_point[None], ssa=s.ssa, ssb=s.ssb)
+
+    # Plot the projected point
+    ax.scatter(point_on_separatrix2D[:,0], point_on_separatrix2D[:,1], c='green', s=100, label='Separatrix Point')
+    ax.scatter(saddle_point2D[:, 0], saddle_point2D[:, 1], c='red', s=100, label='Separatrix Point')
+
+    plot_ND_separatrix(p,s,ax=ax,sep_filename=Path('/home/kabird/separatrixLocator/')/'ssr_module/11D_separatrix_1e-2.data')
+
+    ax.set_xlabel('Coefficient of v1')
+    ax.set_ylabel('Coefficient of v2')
+    ax.set_title('KEF Values in 2D Reduced Space')
+    ax.set_xlim(0,1)
+    ax.set_ylim(0, 1)
+    # ax.legend()
+    fig.tight_layout()
+    fig.savefig(Path(cfg.savepath) / "KEF_2D_reduced.png", dpi=300)
+    plt.show()
+
+    # np.unravel_index(np.argmin(((grid_points - point_on_separatrix.detach().numpy()) ** 2).sum(-1)), X.shape)
+    # reconstructed_point = point_projected_v1 * v1 + point_projected_v2 * v2
+    # # Calculate Euclidean distance between reconstructed point and original separatrix point
+    # distance = np.linalg.norm(reconstructed_point - point_on_separatrix.detach().numpy())
+    # print(f"Distance between reconstructed point and original separatrix point: {distance:.6f}")
+    # distance_att = np.linalg.norm(attractors[0] - attractors[1])
+
+    # After getting point_on_separatrix and before plotting
+    # Get the point and basis vectors
+    point = point_on_separatrix.detach().numpy()
+    # point = saddle_point
+
+    # Gram-Schmidt orthogonalization
+    v1_norm = v1 / np.linalg.norm(v1)
+    v2_orth = v2 - np.dot(v2, v1_norm) * v1_norm
+    v2_norm = v2_orth / np.linalg.norm(v2_orth)
+
+    # Project point onto the orthogonal basis
+    proj_v1 = np.dot(point, v1_norm) * v1_norm
+    proj_v2 = np.dot(point, v2_norm) * v2_norm
+    point_in_plane = proj_v1 + proj_v2
+
+    # Calculate distance from point to plane
+    distance_to_plane = np.linalg.norm(point - point_in_plane)
+    print(f"Distance of separatrix point from the plane: {distance_to_plane:.6f}")
+
+    # Calculate the angle between the point and the plane
+    angle = np.arcsin(distance_to_plane / np.linalg.norm(point)) * 180 / np.pi
+    print(f"Angle between separatrix point and the plane: {angle:.6f} degrees")
+
+
+def check_distribution(cfg):
+    omegaconf_resolvers()
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+    dynamics_function = instantiate(cfg.dynamics.function)
+    distribution = instantiate(cfg.dynamics.IC_distribution)
+    point_on_separatrix = instantiate(cfg.dynamics.point_on_separatrix)
+    attractors = instantiate(cfg.dynamics.attractors)
+    distributions = instantiate(cfg.dynamics.IC_distribution_fit)
+
+    # Create subplots for each dimension
+    dim = cfg.dynamics.dim
+    fig, axs = plt.subplots(dim, 1, figsize=(4, 2*dim))
+    if dim == 1:
+        axs = [axs]  # Make axs iterable when dim=1
+    # Get samples from each distribution
+    num_samples = 1000
+    alpha = 0.3  # Transparency for all distributions
+
+    for i in range(dim):
+        # Plot histogram for each distribution
+        for j, dist in enumerate(distributions):
+            samples = dist.sample((num_samples,))
+            axs[i].hist(samples[:,i].detach().numpy(), bins=50, density=True,
+                       alpha=alpha, color=f'C{j}', label=f'Distribution {j+1}')
+
+        # Plot vertical lines for attractors
+        axs[i].axvline(x=attractors[0,i].item(), color='C3', linestyle='--', label='Attractor 1')
+        axs[i].axvline(x=attractors[1,i].item(), color='C4', linestyle='--', label='Attractor 2')
+
+        # Plot vertical line for separatrix point
+        axs[i].axvline(x=point_on_separatrix[i].item(), color='C5', linestyle=':', label='Separatrix')
+
+        axs[i].set_xlabel(f'Dimension {i+1}')
+        axs[i].set_ylabel('Density')
+        axs[i].legend()
+
+    plt.tight_layout()
+    plt.savefig(Path(cfg.savepath) / "distribution_check.png", dpi=300)
+    plt.show()
 
 def fixed_point_analysis(cfg):
     omegaconf_resolvers()
+
+    from custom_distributions import gamma_from_mean_var
+
     dynamics_function = instantiate(cfg.dynamics.function)
     distribution = instantiate(cfg.dynamics.IC_distribution)
+    point_on_separatrix = instantiate(cfg.dynamics.point_on_separatrix)
+    attractors = instantiate(cfg.dynamics.attractors)
     from plotting import dynamics_to_kinetic_energy
     kinetic_energy_function = dynamics_to_kinetic_energy(dynamics_function)
+
+    from odeint_utils import run_odeint_to_final
+
+    distributions = instantiate(cfg.dynamics.IC_distribution_fit)
 
     # Sample points from distribution
     num_samples = 1000
     samples = distribution.sample((num_samples,))
+
+    # Generate trajectories using odeint in batch
+    total_time = 100
+    initial_points = distribution.sample((200,))
+
+    trajectories = run_odeint_to_final(dynamics_function, initial_points, total_time, return_last_only=False, steps = 100)
+
+    # Do PCA on trajectories
+    from sklearn.decomposition import PCA
+
+    # Reshape trajectories to 2D array (time*batch_size, features)
+    traj_reshaped = trajectories.reshape(-1, trajectories.shape[-1])
+
+    # Fit PCA and transform data
+    pca = PCA(n_components=2)
+    traj_pca = pca.fit_transform(traj_reshaped.detach().numpy())
+
+    # Reshape back to original dimensions (time, batch_size, 2)
+    traj_pca = traj_pca.reshape(trajectories.shape[0], trajectories.shape[1], 2)
+
+    # Plot PCA results
+    plt.figure(figsize=(8,6))
+    plt.plot(traj_pca[..., 0], traj_pca[..., 1], alpha=0.5)
+    plt.scatter(traj_pca[-1,:,0], traj_pca[-1,:,1], alpha=0.5)
+    plt.xlabel('PC1')
+    plt.ylabel('PC2')
+    plt.title('PCA of Final Trajectory Points')
+    plt.show()
+
+    # times = np.linspace(0,total_time,traj_pca.shape[0])
+    # plt.figure()
+    # plt.plot(times,traj_pca[:, :, 0], alpha=0.5)
+    # plt.show()
+
+    # Collect points from trajectories and add noise
+    trajectory_points = trajectories.reshape(-1, trajectories.shape[-1])
+    trajectory_points = trajectory_points[np.random.choice(trajectory_points.shape[0],size=num_samples)]
+    noise = torch.randn_like(trajectory_points) * 0.1
+    samples = trajectory_points + noise
+
     samples.requires_grad_(True)
+
+
 
     # Setup optimizer
     optimizer = torch.optim.Adam([samples], lr=0.05)
 
     # Optimize to find minima
-    num_steps = 5000
+    num_steps = 2000
     for step in range(num_steps):
         optimizer.zero_grad()
-        
+
         # Calculate kinetic energy at current points
         ke = kinetic_energy_function(samples)
-        
+
         # Loss is just the kinetic energy (we want to minimize it)
         loss = ke.mean()
-        
+
         # Backprop and optimize
         loss.backward()
         optimizer.step()
-        
+
         if step % 100 == 0:
             print(f'Step {step}, Average KE: {loss.item():.6f}')
 
@@ -103,31 +907,32 @@ def fixed_point_analysis(cfg):
     with torch.no_grad():
         final_points = samples.detach()
         final_ke = kinetic_energy_function(final_points)
-        
+
     # Use KMeans to cluster the points with lowest kinetic energy
     from sklearn.cluster import KMeans
-    
+
     # Convert to numpy for KMeans
     points_np = final_points.detach().cpu().numpy()
     ke_np = final_ke.detach().cpu().numpy()
-    
+
     # Take points with lowest kinetic energy for clustering
-    n_lowest = 1000 # Take more points initially to cluster
-    lowest_indices, = np.where(final_ke.squeeze()<1e-10) #torch.argsort(final_ke.squeeze())[:n_lowest]
+    # n_lowest = 1000 # Take more points initially to cluster
+    lowest_indices, = np.where(final_ke.squeeze()<1e-5) #torch.argsort(final_ke.squeeze())[:n_lowest]
+    print('len(lowest_indices)',len(lowest_indices))
     points_for_clustering = points_np[lowest_indices]
-    
+
     # Perform KMeans clustering
     n_clusters = 4 # Adjust based on expected number of fixed points
     kmeans = KMeans(n_clusters=n_clusters, random_state=42)
     cluster_labels = kmeans.fit_predict(points_for_clustering)
-    
+
     # Get cluster centers as the unique minima
     minima = torch.tensor(kmeans.cluster_centers_, dtype=torch.float32)
-    
+
     # Calculate kinetic energy at minima points
     with torch.no_grad():
         minima_ke = kinetic_energy_function(minima)
-    
+
     print("\nUnique minima found via clustering:")
     print(minima)
     print("\nKinetic energy at minima:")
@@ -146,31 +951,31 @@ def fixed_point_analysis(cfg):
     for i, fixed_point in enumerate(minima):
         info = {}
         info['point'] = fixed_point
-        
+
         # Compute jacobian and eigenvalues
         J = compute_jacobian(dynamics_function, fixed_point)
         eigenvalues = torch.linalg.eigvals(J)
         real_parts = eigenvalues.real
-        
+
         info['jacobian'] = J
         info['eigenvalues'] = eigenvalues
-        
+
         # Classify stability
         if torch.all(real_parts < 0):
             info['stability'] = 'Stable'
             info['marker'] = '*'
             info['color'] = 'green'
         elif torch.all(real_parts > 0):
-            info['stability'] = 'Unstable' 
+            info['stability'] = 'Unstable'
             info['marker'] = 'X'
             info['color'] = 'red'
         else:
             info['stability'] = 'Saddle'
             info['marker'] = 'D'
             info['color'] = 'orange'
-            
+
         fixed_point_info[i] = info
-        
+
         # Print analysis
         print(f"\nFixed point {i}:")
         print(f"Point: {fixed_point.numpy()}")
@@ -180,33 +985,50 @@ def fixed_point_analysis(cfg):
 
     # Save fixed point analysis results
     import pickle
-    
+
     # Save to pickle file in the same directory as other outputs
     pickle_path = Path(cfg.savepath) / "fixed_point_info.pkl"
     with open(pickle_path, 'wb') as f:
         pickle.dump(fixed_point_info, f)
-
     # Plot results
     plt.figure(figsize=(8, 6))
-    
+
+    # Do PCA if dimension > 2
+    if points_np.shape[1] > 2:
+        from sklearn.decomposition import PCA
+        pca = PCA(n_components=2)
+        points_pca = pca.fit_transform(points_np[lowest_indices])
+        fixed_points_pca = pca.transform(np.vstack([info['point'].detach().cpu().numpy() for info in fixed_point_info.values()]))
+        plot_x = points_pca[:,0]
+        plot_y = points_pca[:,1]
+        xlabel = 'First Principal Component'
+        ylabel = 'Second Principal Component'
+    else:
+        plot_x = points_np[lowest_indices, 0]
+        plot_y = points_np[lowest_indices, 1]
+        xlabel = 'x'
+        ylabel = 'y'
+
     # Plot all sampled points colored by kinetic energy
-    plt.scatter(points_np[lowest_indices, 0],
-                points_np[lowest_indices, 1],
+    plt.scatter(plot_x, plot_y,
                 c=final_ke[lowest_indices].detach().cpu().numpy(),
                 cmap='viridis', alpha=0.3, label='Sampled Points')
-    
+
     # Plot fixed points with markers based on stability
     for i, info in fixed_point_info.items():
-        point = info['point'].detach().cpu().numpy()
-        plt.scatter(point[0], point[1], 
+        if points_np.shape[1] > 2:
+            point = fixed_points_pca[i]
+        else:
+            point = info['point'].detach().cpu().numpy()
+        plt.scatter(point[0], point[1],
                    c=info['color'],
-                   marker=info['marker'], 
+                   marker=info['marker'],
                    s=200,
                    label=f"{info['stability']} Fixed Point {i+1}",
                    zorder=5)
     plt.colorbar(label='Kinetic Energy')
-    plt.xlabel('x')
-    plt.ylabel('y')
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
     plt.title('Fixed Points and Their Stability')
     plt.legend()
     plt.grid(True, alpha=0.3)
@@ -214,6 +1036,28 @@ def fixed_point_analysis(cfg):
     plt.show()
     plt.close()
 
+    for key,point in fixed_point_info.items():
+        print(torch.max(point['eigenvalues'].real))
+
+    idx = np.argmin([torch.max(point['eigenvalues'].real)-1 for key,point in fixed_point_info.items()])
+
+    jac_saddle = fixed_point_info[1]['jacobian']
+    eigvecs = np.linalg.eig(jac_saddle)[1]
+    diff = eigvecs[:,1]
+    proj = jac_saddle @ diff
+    ratio = np.linalg.norm(proj) / np.linalg.norm(diff)
+
+    attractors = instantiate(cfg.dynamics.attractors)
+    diff = attractors[1]-attractors[0]
+    jac = compute_jacobian(dynamics_function, point_on_separatrix)
+
+    eigvals,eigvecs = np.linalg.eig(jac)
+
+    diff = np.linalg.eig(jac_saddle)[1][:, 1]
+    proj = jac @ diff
+
+    ratio = np.linalg.norm(proj)/np.linalg.norm(diff)
+    jac = compute_jacobian(dynamics_function, point_on_separatrix)
 
 
 def plot_task_io(cfg):
@@ -253,20 +1097,20 @@ def plot_dynamics(cfg):
     fig, ax = plt.subplots(1, 1, figsize=(3, 3))
     resolution = 50
     # Plot streamlines
-    plot_flow_streamlines(dynamics_function, ax, 
-                         x_limits=cfg.dynamics.lims.x, 
+    plot_flow_streamlines(dynamics_function, ax,
+                         x_limits=cfg.dynamics.lims.x,
                          y_limits=cfg.dynamics.lims.y,
                          resolution=resolution, density=0.5,
                          color='red', linewidth=0.5, alpha=0.4)
-    
+
     # Plot kinetic energy contours
     kinetic_energy_function = dynamics_to_kinetic_energy(dynamics_function)
     X, Y, kinetic_energy_vals = evaluate_on_grid(kinetic_energy_function,
-                                                x_limits=cfg.dynamics.lims.x, 
-                                                y_limits=cfg.dynamics.lims.y, 
+                                                x_limits=cfg.dynamics.lims.x,
+                                                y_limits=cfg.dynamics.lims.y,
                                                 resolution=resolution)
     ax.contourf(X, Y, np.log(kinetic_energy_vals), levels=25, cmap='Blues_r')
-    
+
     ax.set_title(r'$q(x)$')
 
     ax.set_xlim(*cfg.dynamics.lims.x)
@@ -274,7 +1118,7 @@ def plot_dynamics(cfg):
     remove_frame(ax)
     ax.set_aspect('equal')
     plt.show()
-    
+
 def plot_KEF_residual_heatmap(cfg):
     """Plot KEF residual as a 2D heatmap showing (LHS-RHS)/sqrt(RHS**2)."""
     omegaconf_resolvers()
@@ -285,7 +1129,7 @@ def plot_KEF_residual_heatmap(cfg):
     SL = instantiate(cfg.separatrix_locator)
     SL.to('cpu')
     SL.models = [instantiate(cfg.model).to(SL.device) for _ in range(cfg.separatrix_locator.num_models)]
-    
+
     # Set up load path
     new_format_path = Path(cfg.savepath) / cfg.experiment_details
     if os.path.exists(new_format_path):
@@ -329,20 +1173,20 @@ def plot_KEF_residual_heatmap(cfg):
                    aspect='equal',
                    cmap='RdBu',
                    vmin=-1, vmax=1)
-    
+
     # Add colorbar
     plt.colorbar(im, ax=ax, label=r'$\frac{\nabla \psi(x) \cdot f(x) - \lambda\psi(x)}{\sqrt{\psi(x)^2}}$')
-    
+
     ax.set_xlabel('x')
     ax.set_ylabel('y')
     ax.set_title('KEF Residual')
-    
+
     # Save figure
     fig.savefig(Path(cfg.savepath) / cfg.experiment_details / "KEF_residual_heatmap.png", dpi=200)
     plt.close(fig)
 
 
-    
+
 def plot_KEF_residuals(cfg):
     """Plot KEF values vs residuals, standard deviation vs residuals, and LHS vs RHS."""
     omegaconf_resolvers()
@@ -362,7 +1206,7 @@ def plot_KEF_residuals(cfg):
     SL = instantiate(cfg.separatrix_locator)
     SL.to('cpu')
     SL.models = [instantiate(cfg.model).to(SL.device) for _ in range(cfg.separatrix_locator.num_models)]
-    
+
     # Set up load path
     new_format_path = Path(cfg.savepath) / cfg.experiment_details
     if os.path.exists(new_format_path):
@@ -371,9 +1215,6 @@ def plot_KEF_residuals(cfg):
         load_path = Path(cfg.savepath)
         print(new_format_path, 'does not exist, loading', load_path, 'instead.')
     SL.load_models(load_path)
-    
-    # Get first model for testing
-    model = SL.models[0]
 
     # Define distributions to test
     distributions = distribution_fit
@@ -385,28 +1226,40 @@ def plot_KEF_residuals(cfg):
         input_tensor = dist.sample(sample_shape=(batch_size,))
         input_tensor.requires_grad_(True)
 
-        # Compute phi(x)
-        phi_x = model(input_tensor)[...,0:1]
+        # Lists to store values from all models
+        all_phi_x = []
+        all_dot_prod = []
+        all_residuals = []
 
-        # Compute phi'(x) using autograd
-        phi_x_prime = torch.autograd.grad(
-            outputs=phi_x,
-            inputs=input_tensor,
-            grad_outputs=torch.ones_like(phi_x),
-            create_graph=True
-        )[0]
+        # Compute values for each model
+        for model in SL.models:
+            # Compute phi(x)
+            phi_x = model(input_tensor)[...,0:1]
 
-        F_x = dynamics_function(input_tensor)
+            # Compute phi'(x) using autograd
+            phi_x_prime = torch.autograd.grad(
+                outputs=phi_x,
+                inputs=input_tensor,
+                grad_outputs=torch.ones_like(phi_x),
+                create_graph=True
+            )[0]
 
-        # Compute the dot product
-        dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True) * 7
+            F_x = dynamics_function(input_tensor)
 
-        residual = torch.abs(phi_x - dot_prod)
+            # Compute the dot product
+            dot_prod = (phi_x_prime * F_x).sum(axis=-1, keepdim=True)
+
+            residual = torch.abs(phi_x - dot_prod)
+
+            all_phi_x.append(phi_x.detach().cpu().numpy())
+            all_dot_prod.append(dot_prod.detach().cpu().numpy())
+            all_residuals.append(residual.detach().cpu().numpy())
 
         # Plot KEF values vs residuals
         fig, ax = plt.subplots()
-        ax.scatter(torch.abs(phi_x).detach().cpu().numpy(), residual.detach().cpu().numpy(),
-                   label=name, alpha=0.5)
+        for i, (phi_x, residual) in enumerate(zip(all_phi_x, all_residuals)):
+            ax.scatter(np.abs(phi_x), residual,
+                      label=f'Model {i}', alpha=0.5)
         ax.set_xlabel(r'$\psi(x)$')
         ax.set_ylabel(r'$|\nabla \psi(x) \cdot f(x) - \lambda\psi(x)|$')
         ax.legend()
@@ -418,8 +1271,9 @@ def plot_KEF_residuals(cfg):
         # Plot standard deviation vs residuals
         std_i = torch.std(input_tensor.detach(), axis=-1, keepdims=True)
         fig, ax = plt.subplots()
-        ax.scatter(std_i.cpu().numpy(), residual.detach().cpu().numpy(),
-                  label=name, s=5, alpha=0.5)
+        for i, residual in enumerate(all_residuals):
+            ax.scatter(std_i.cpu().numpy(), residual,
+                      label=f'Model {i}', s=5, alpha=0.5)
         ax.set_xlabel(r'$std(x_i)$')
         ax.set_ylabel(r'$|\nabla \psi(x) \cdot f(x) - \lambda\psi(x)|$')
         ax.legend()
@@ -430,8 +1284,9 @@ def plot_KEF_residuals(cfg):
 
         # Plot LHS vs RHS
         fig, ax = plt.subplots()
-        ax.scatter(phi_x.detach().cpu().numpy(), dot_prod.detach().cpu().numpy(),
-                     label=name, alpha=0.5)
+        for i, (phi_x, dot_prod) in enumerate(zip(all_phi_x, all_dot_prod)):
+            ax.scatter(phi_x, dot_prod,
+                      label=f'Model {i}', alpha=0.5)
         ax.set_xlabel(r'$\lambda\psi(x)$')
         ax.set_ylabel(r'$\nabla \psi(x) \cdot f(x)$')
         ax.legend()
@@ -446,7 +1301,10 @@ def plot_KEF_residuals(cfg):
         plt.show()
         plt.close(fig)
 
-    
+    # separatrix_point = instantiate(cfg.dynamics.point_on_separatrix)
+    # KEFval_at_separatrix = SL.predict(separatrix_point)
+    # KEFval_at_separatrix
+
 def plot_dynamics_2D(cfg):
     omegaconf_resolvers()
     cfg.savepath = os.path.join(project_path, cfg.savepath)
@@ -456,6 +1314,7 @@ def plot_dynamics_2D(cfg):
     distribution = instantiate(cfg.dynamics.IC_distribution)
 
     separatrix_point = instantiate(cfg.dynamics.point_on_separatrix)
+    saddle_point = instantiate(cfg.dynamics.saddle_point)
 
     ### Loading separatrix locator models
     SL = instantiate(cfg.separatrix_locator)
@@ -516,6 +1375,7 @@ def plot_dynamics_2D(cfg):
 
     for ax in axs:
         ax.scatter(separatrix_point[0],separatrix_point[1])
+        ax.scatter(saddle_point[0],saddle_point[1],marker='x',c='red')
 
     for ax in axs.flatten():
         ax.set_xlim(*cfg.dynamics.lims.x)
@@ -577,14 +1437,14 @@ def RNN_modify_inputs(cfg):
     models = []
     for _ in range(num_models):
         models.append(deepcopy(orig_model))
-    
+
     frac_to_permute = 0.25
-    
+
     for model in models:
         # Get the current input weights
         current_weights = model.rnn.weight_ih_l0
         # Create a random permutation of the input dimension
-        num_to_permute = int(current_weights.shape[0] * frac_to_permute)  
+        num_to_permute = int(current_weights.shape[0] * frac_to_permute)
         perm = torch.arange(current_weights.shape[0])
         indices_to_permute = torch.randperm(current_weights.shape[0])[:num_to_permute]
         perm[indices_to_permute] = perm[indices_to_permute[torch.randperm(num_to_permute)]]
@@ -608,7 +1468,7 @@ def RNN_modify_inputs(cfg):
     orig_output_np = orig_output.detach().numpy()
 
     KEFvals = SL.predict(torch.stack(hiddens))
-    
+
     # Convert outputs to numpy for plotting
     outputs_np = [out.detach().cpu().numpy() for out in outputs]
 
@@ -660,62 +1520,73 @@ def RNN_modify_inputs(cfg):
 def plot_hermite_polynomials_2d(cfg):
     """
     Plot 2D visualization of cubic Hermite polynomial interpolations between attractors
-    
+
     Args:
         cfg: Config object containing dynamics and plotting parameters
     """
-    from interpolation import cubic_hermite
+    from interpolation import cubic_hermite, generate_curves_between_points
 
     omegaconf_resolvers()
     cfg.savepath = os.path.join(project_path, cfg.savepath)
-    
+
     # Get attractors from config
     attractors = instantiate(cfg.dynamics.attractors)
     x, y = attractors.detach().cpu().numpy()
-    
+
+
+
     # Set up tangent vectors at endpoints
     m_x = -x + y  # Tangent at x
     m_y = -x + y  # Tangent at y
-    
+
     # Generate multiple curves with random perturbations
     num_curves = 100
     num_points = 100
-    rand_scale = 3.0
+    rand_scale = 2.0
 
-
-    
-    plt.figure(figsize=(10, 10))
-    
+    all_points = []
     for _ in range(num_curves):
-        # Random perturbations to tangent vectors
-        # m_x_perturbed = m_x * 1.4 + np.random.randn(m_x.shape[0]) * rand_scale
-        # m_y_perturbed = m_y * 1.4 + np.random.randn(m_x.shape[0]) * rand_scale
+        # Generate points until we get a valid curve with no negative points
+        num_tries = 0
+        while num_tries < 1000:
+            # Generate random perturbations for tangents
+            m_x_perturbed = m_x * np.random.uniform(size=m_x.shape[0]) * rand_scale
+            m_y_perturbed = m_y * np.random.uniform(size=m_x.shape[0]) * rand_scale
 
-        m_x_perturbed = m_x * np.random.uniform(size=m_x.shape) * rand_scale
-        m_y_perturbed = m_y * np.random.uniform(size=m_x.shape) * rand_scale
-        
-        # Generate points using cubic Hermite interpolation
-        points = cubic_hermite(x, y, m_x_perturbed, m_y_perturbed, num_points)
-        
-        # Plot the curve
-        plt.plot(points[:, 0], points[:, 1], alpha=0.2, c='blue')
-        assert np.all(points >= 0) and np.all(points <= 1), "Points must lie in the [0,1] x [0,1] box"
-    
-    # Plot attractors
-    plt.scatter(x[0], x[1], c='red', s=100, label='Attractor 1')
-    plt.scatter(y[0], y[1], c='red', s=100, label='Attractor 2')
-    
+            # Generate points on the cubic Hermite curve
+            points = cubic_hermite(x, y, m_x_perturbed, m_y_perturbed, num_points, lims=[0.05, 0.95])
+
+            # Check if any points are negative
+            if not np.any(points < 0):
+                all_points.append(points)
+                print(num_tries)
+                break
+            num_tries += 1
+
+    all_points_st = np.stack(all_points)
+    all_points_st = generate_curves_between_points(x, y, lims=[0.05, 0.95])
+    assert np.all(all_points_st>=0), "points are negative"
+    # assert np.all(points >= 0), "points are negative"
+
+    # Plot attractor
+    plt.figure(figsize=(10, 10))
+    # plt.scatter(points[...,0],points[...,2])
+    plt.scatter(all_points_st[...,0], all_points_st[...,2])
+    plt.scatter(x[0], x[2], c='red', s=100, label='Attractor 1')
+    plt.scatter(y[0], y[2], c='red', s=100, label='Attractor 2')
+
     plt.xlabel('x')
     plt.ylabel('y')
     plt.title('Cubic Hermite Polynomial Interpolations')
     plt.legend()
     plt.grid(True)
-    
+
     # Save figure
     plt.savefig(Path(cfg.savepath) / "hermite_polynomials_2d.png", dpi=300)
     plt.show()
     plt.close()
 
+    np.where(points<0)
 
 
 def plot_cubichermitesampler(cfg):
@@ -735,7 +1606,7 @@ def plot_cubichermitesampler(cfg):
     for dist in distributions:
         points = dist.sample(sample_shape=(200,))
         all_points.append(points)
-    
+
     # Concatenate all points
     points = torch.cat(all_points, dim=0)
     # points = distribution.sample(sample_shape=(200,))
@@ -846,10 +1717,10 @@ def check_basin_of_attraction(cfg):
 
     # Split data into train and test sets
     X_train, X_test, y_train, y_test = train_test_split(
-        initial_nps, 
+        initial_nps,
         # kmeans.labels_,
         is_top_two_labels,
-        test_size=0.2, 
+        test_size=0.2,
         random_state=42
     )
     # Try different numbers of neighbors
@@ -899,18 +1770,18 @@ def check_basin_of_attraction(cfg):
     kernels = ['linear', 'poly', 'rbf', 'sigmoid']
     svm_train_accuracies = []
     svm_test_accuracies = []
-    
+
     # Create list of SVM classifiers with different parameters
     svm_classifiers = [
-        SVC(C=C, kernel=kernel) 
-        for C in C_range 
+        SVC(C=C, kernel=kernel)
+        for C in C_range
         for kernel in kernels
     ]
-    
+
     # Train and evaluate each classifier
     for svm in svm_classifiers:
         svm.fit(X_train_scaled, y_train)
-        
+
         # Evaluate accuracy
         svm_train_accuracies.append(svm.score(X_train_scaled, y_train))
         svm_test_accuracies.append(svm.score(X_test_scaled, y_test))
@@ -1078,7 +1949,7 @@ def lowDapprox_test(cfg):
     compressed_dim = 20
     T = 30
     original_dim = cfg.dynamics.dim
-    
+
     encoder = nn.Linear(in_features=original_dim, out_features=compressed_dim)
     small_dynamics_func = nn.Sequential(
         nn.Linear(in_features=compressed_dim, out_features=compressed_dim),
@@ -1164,7 +2035,7 @@ def lowDapprox_test(cfg):
 
         # Encode initial conditions
         encoded_ic = encoder(initial_conditions)
-        
+
         # Run dynamics in compressed space
         compressed_traj = run_odeint_to_final(
             small_dynamics_func,
@@ -1174,17 +2045,17 @@ def lowDapprox_test(cfg):
             return_last_only=False,
             no_grad=False,
         )
-        
+
         # Decode trajectories back to original space
         decoded_traj = decoder(compressed_traj)
-        
+
         # Calculate MSE loss
         loss = torch.nn.functional.mse_loss(decoded_traj, traj)
-        
+
         # Backpropagate
         loss.backward()
         optimizer.step()
-        
+
         if epoch % 10 == 0:
             print(f"Epoch {epoch}, Loss: {loss.item()}")
 
@@ -1199,21 +2070,21 @@ def lowDapprox_test(cfg):
             return_last_only=False
         )
         decoded_traj = decoder(compressed_traj)
-        
+
         # Concatenate trajectories for PCA
         combined_traj = torch.cat([traj, decoded_traj], dim=0)
         combined_traj_reshaped = combined_traj.reshape(-1, combined_traj.shape[-1])
-        
+
         # Perform PCA
         from sklearn.decomposition import PCA
         pca = PCA(n_components=2)
         pca_result = pca.fit_transform(combined_traj_reshaped.detach().cpu().numpy())
-        
+
         # Split back into original and reconstructed
         n_points = traj.shape[0] * traj.shape[1]
         original_pca = pca_result[:n_points].reshape(traj.shape[0], traj.shape[1], 2)
         reconstructed_pca = pca_result[n_points:].reshape(traj.shape[0], traj.shape[1], 2)
-        
+
         # Plot PCA results
         plt.figure(figsize=(10, 5))
         for i in range(traj.shape[1]):
@@ -1228,7 +2099,7 @@ def lowDapprox_test(cfg):
     torch.save(encoder.state_dict(), 'encoder.pth')
     torch.save(decoder.state_dict(), 'decoder.pth')
     torch.save(small_dynamics_func.state_dict(), 'small_dynamics_func.pth')
-    
+
     # Save optimizer state separately
     torch.save(optimizer.state_dict(), 'optimizer.pth')
 
@@ -1317,7 +2188,7 @@ def finkelstein_fontolan_analysis_test(cfg):
         attractors = instantiate(cfg.dynamics.attractors2)
 
         from interpolation import cubic_hermite
-    
+
         num_points = 40
         rand_scale = 3.1 #10.0
         # Example usage
@@ -1777,6 +2648,7 @@ def main_multimodel(cfg):
         dynamics_function,
         distribution_fit,
         external_input_dist=input_distribution_fit,
+        dist_weights = cfg.dynamics.dist_weights if hasattr(cfg.dynamics,"dist_weights") else None,
         **instantiate(cfg.separatrix_locator_fit_kwargs),
         # **{
         #     **instantiate(cfg.separatrix_locator_fit_kwargs),
@@ -1785,12 +2657,11 @@ def main_multimodel(cfg):
     )
     # print('SL.models[0][0].weight',SL.models[0][0].weight)
     # x = torch.arange(-2.0, 2.0, 0.01)
-    # plt.plot(x,dynamics_function(x))
-    # plt.plot(x, SL.models[0](x[:,None])[:,0].detach())
+    # plt.plot(x,dynamics_function(x[:,None])[:,0].detach())
     # plt.show()
 
     if cfg.save_KEF_model:
-        SL.save_models(Path(cfg.savepath)/cfg.experiment_details)
+        SL.save_models(Path(cfg.savepath)/cfg.experiment_details,filename=cfg.dynamics.special_model_name if hasattr(cfg.dynamics,'special_model_name') else None)
 
     SL.to('cpu')
 
@@ -2273,10 +3144,10 @@ def main_multimodel(cfg):
             dynamics_function = instantiate(cfg.dynamics.function)
             attractors = instantiate(cfg.dynamics.attractors)
 
-            from interpolation import cubic_hermite
+            from interpolation import cubic_hermite, generate_curves_between_points
 
             num_points = 100
-            rand_scale = 3.0 #1.0 #4.0 #4.1  # 10.0
+            rand_scale = 0.02 #1.0 #4.0 #4.1  # 10.0
             # Example usage
             x, y = attractors.detach().cpu().numpy()  #
             # x = np.array([0, 0])  # Start point
@@ -2285,26 +3156,9 @@ def main_multimodel(cfg):
             m_y = -x + y  # Tangent at y
 
             num_curves = 100  # 20  # Number of random curves to generate
-            plt.figure(figsize=(10, 10))
 
-            # Accumulate all points
-            all_points = []
-            for _ in range(num_curves):
-                # Generate random perturbations for tangents
-                # m_x_perturbed = m_x * 1.4 + np.random.randn(m_x.shape[0]) * rand_scale
-                # m_y_perturbed = m_y * 1.4 + np.random.randn(m_x.shape[0]) * rand_scale
-                m_x_perturbed = m_x * np.random.uniform(size=m_x.shape[0]) * rand_scale
-                m_y_perturbed = m_y * np.random.uniform(size=m_x.shape[0]) * rand_scale
-
-                # Generate points on the cubic Hermite curve
-                points = cubic_hermite(x, y, m_x_perturbed, m_y_perturbed, num_points)
-                assert np.all(points >= 0) and np.all(points <= 1), "Points must lie in the [0,1] x [0,1] box"
-                all_points.append(points)
-
-
-            # Stack all points into a single array
-            all_points = np.vstack(all_points)
-
+            all_points,alpha_range = generate_curves_between_points(x, y, lims=[0.03, 0.2],num_points=num_points,num_curves=num_curves,rand_scale=rand_scale, return_alpha=True)
+            all_points = all_points.reshape(-1,all_points.shape[-1])
             # Perform PCA
             from sklearn.decomposition import PCA
             pca = PCA(n_components=2)
@@ -2369,7 +3223,7 @@ def main_multimodel(cfg):
             no_changes = ~np.any(changes, axis=1)
             change_points_id[no_changes] = num_points // 2
 
-            change_points = np.linspace(0, 1, num_points)[change_points_id]
+            change_points = alpha_range[change_points_id]
 
             q = 0.05
             absKEFvals = np.abs(KEFvals.numpy())[..., 0]
@@ -2403,18 +3257,18 @@ def main_multimodel(cfg):
 
             fig, axes = plt.subplots(4, 10, figsize=(20, 8))
             axes = axes.flatten()
-            
+
             for i in range(min(num_curves,len(axes.flatten()))):
                 ax = axes[i]
-                ax.plot(np.linspace(0,1,num_points), KEFvals[i,:,:])
+                ax.plot(alpha_range, KEFvals[i,:,:])
                 ax.axvline(x=change_points[i], color='r', linestyle='--', alpha=0.7)
                 ax.set_title(f'Curve {i+1}')
                 ax.grid(True)
-            
+
             # Hide any unused subplots
             for i in range(num_curves, len(axes)):
                 axes[i].set_visible(False)
-            
+
             plt.tight_layout()
             plt.show()
             fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"hermite_cubic_interpolations_KEFvals_scale{rand_scale}.png", dpi=300)
@@ -2684,21 +3538,21 @@ def main_multimodel(cfg):
 
             # Compute pairwise euclidean distances between all points in top_hidden using torch
             distances = torch.cdist(
-                torch.from_numpy(top_hidden), 
+                torch.from_numpy(top_hidden),
                 torch.from_numpy(top_hidden)
             )
-            
+
             # Get indices of points with maximum distance
             max_dist_idx = np.unravel_index(torch.argmax(distances), distances.shape)
-            
+
             # Get the actual points with maximum distance
             point1 = top_hidden[max_dist_idx[0]]
             point2 = top_hidden[max_dist_idx[1]]
             max_distance = distances[max_dist_idx[0], max_dist_idx[1]].item()
-            
+
             print(f"Maximum distance: {max_distance}")
 
-            
+
             # print(f"Point 1: {point1}")
             # print(f"Point 2: {point2}")
 
@@ -2712,9 +3566,9 @@ def main_multimodel(cfg):
             n_grid = 1000
             alpha = torch.linspace(-.5, 1.5, n_grid)
             interpolated_points = alpha[:, None] * point1[None, :] + (1 - alpha)[:, None] * point2[None, :]
-            interpolated_inputs = (inputs[top_indices[0][max_dist_idx[0]], top_indices[1][max_dist_idx[0]]] + 
+            interpolated_inputs = (inputs[top_indices[0][max_dist_idx[0]], top_indices[1][max_dist_idx[0]]] +
                                  inputs[top_indices[0][max_dist_idx[1]], top_indices[1][max_dist_idx[1]]]) / 2
-            
+
             concat_interpolated = torch.concat([interpolated_points,interpolated_inputs.repeat(n_grid,1)],dim=-1)
 
             KEFvals = []
@@ -2989,8 +3843,8 @@ def main_multimodel(cfg):
             fig.colorbar(mappable, cax=cbar_ax, label='Alpha')
             fig.savefig(Path(cfg.savepath) / "interpolated_trajectories_KEF.png", dpi=300)
             plt.close(fig)
-            
-            
+
+
             ### KEFs vs PCA
             # Create a figure with two subplots stacked vertically
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(5, 6), sharex=True)
@@ -3041,7 +3895,7 @@ def main_multimodel(cfg):
 
             # Set simulation length
             run_T = 100
-            
+
             # Expand inputs by repeating along new middle dimension
             sampled_inputs_2d = sampled_inputs_2d.unsqueeze(0).expand(run_T, -1, -1)
 
@@ -3078,13 +3932,13 @@ def main_multimodel(cfg):
 
             # Create subplots with 5 rows and 10 columns
             fig, axs = plt.subplots(5, 10, figsize=(20, 10), sharey='row',sharex='col')
-            
+
             # Plot PCA trajectories in first row
             for j in range(10):  # For each trajectory
                 axs[0,j].plot(perturbed_trajectories_pca[...,5*j,:,0])
                 if j == 0:  # Only leftmost column gets y labels
                     axs[0,j].set_ylabel('PCA 1')
-            
+
             # Plot each KEF value in remaining rows
             for i in range(4):  # For each model
                 for j in range(10):  # For each trajectory
@@ -3093,7 +3947,7 @@ def main_multimodel(cfg):
                         axs[i+1,j].set_xlabel('time')
                     if j == 0:  # Only leftmost column gets y labels
                         axs[i+1,j].set_ylabel(f'KEF {i+1}')
-            
+
             plt.tight_layout()
             plt.savefig(Path(cfg.savepath) / "KEF_evolution.png", dpi=300)
             plt.close()
@@ -4242,61 +5096,6 @@ def main(cfg):
         # # Save the plot
         # plt.savefig(path / 'trajectories_with_contour.png', dpi=300)
         # plt.savefig(path / 'trajectories_with_contour.pdf')
-
-
-
-
-
-
-
-
-
-
-        # num_trials = 100
-        # A = F.functions[0].keywords['A']
-        # # initial_conditions = 10*A.T #2 *
-        # initial_conditions = 15 * torch.randn(size=(num_trials, A.shape[-1])) @ A.T
-        # # initial_conditions = 2 * torch.randn(size=(num_trials, cfg.dynamics.dim))# @ A.T
-        # times = torch.linspace(0, 2, 500)
-        # trajectories = odeint(lambda t,x: F(x), initial_conditions, times)
-        #
-        #
-        # # Reshape the data for PCA (combine timesteps and trials into one axis)
-        # data = trajectories.reshape(-1, trajectories.shape[-1]).numpy()  # Shape: [6000, 20]
-        #
-        # # Perform PCA to reduce the dimensionality to 2 for 2D visualization
-        # pca = PCA(n_components=2)
-        # data_pca = pca.fit_transform(data)  # Shape: [6000, 2]
-        #
-        # # Reshape back to [30, 200, 2] for plotting
-        # data_pca = data_pca.reshape(times.shape[0], num_trials, 2)
-        #
-        # # Plot the trajectories in the first two principal components
-        # plt.figure(figsize=(10, 8))
-        #
-        # for trial in range(data_pca.shape[1]):  # Iterate over trials
-        #     plt.plot(
-        #         data_pca[:, trial, 0],  # PC1
-        #         data_pca[:, trial, 1],  # PC2
-        #         alpha=0.7
-        #     )
-        #     plt.scatter(
-        #         data_pca[0, trial, 0],  # PC1
-        #         data_pca[0, trial, 1],  # PC2
-        #         c='green'
-        #     )
-        #     plt.scatter(
-        #         data_pca[-1, trial, 0],  # PC1
-        #         data_pca[-1, trial, 1],  # PC2
-        #         c='red'
-        #     )
-        # # Set labels and title
-        # plt.xlabel("PC1")
-        # plt.ylabel("PC2")
-        # plt.title("Trajectories in PCA-reduced space (2D)")
-        #
-        # plt.savefig(path / 'trajectories.png', dpi=300)
-        # plt.savefig(path / 'trajectories.pdf')
 
 
 if __name__ == '__main__':

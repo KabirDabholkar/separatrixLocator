@@ -24,6 +24,7 @@ defaults:
   - dynamical_systems@duffing : duffing
   - dynamical_systems@1bitflipflop_2D  : 1bitflipflop_2D
   - dynamical_systems@2bitflipflop_2D  : 2bitflipflop_2D
+  - dynamical_systems@2bitflipflop_3D  : 2bitflipflop_3D
   - dynamical_systems@1bitflipflop_3D  : 1bitflipflop_3D
   - dynamical_systems@1bitflipflop_32D  : 1bitflipflop_32D
   - dynamical_systems@2bitflipflop_32D_long  : 2bitflipflop_32D_long
@@ -86,16 +87,16 @@ defaults:
 ##### End defaults ######
 
 
-save_KEF_model    : false
-load_KEF_model    : true
+save_KEF_model    : true
+load_KEF_model    : false
 plot_KEF_of_traj  : false
 save_results      : false
-run_analysis      : true
+run_analysis      : false
 runGD_analytical  : false
 runGD             : false
 run_fixed_point_finder  : false
 
-device  : cuda:1
+device  : cuda:0
 
 #model_choice  : s4
 model_choice  : DNN_layers6
@@ -118,6 +119,7 @@ model_choice  : DNN_layers6
 #dynamics_choice : duffing
 #dynamics_choice : radial2D_bistable_limit_cycle
 #dynamics_choice : 1bitflipflop_3D
+dynamics_choice : 2bitflipflop_3D
 #dynamics_choice : 1bitflipflop_32D_long
 #dynamics_choice : 1bitflipflop_32D_long_isotropic
 #dynamics_choice : 1bitflipflop_Vanilla64D_long_isotropic
@@ -131,7 +133,7 @@ model_choice  : DNN_layers6
 #dynamics_choice : finkelstein_fontolan_RNN_multiscale_on_separatrix
 #dynamics_choice : finkelstein_fontolan_RNN_multiscale_on_separatrix_speed40
 #dynamics_choice : finkelstein_fontolan_RNN_hermitecurvesampler_speed40
-dynamics_choice  : microbiome_SSR_GLV_2D
+#dynamics_choice  : microbiome_SSR_GLV_2D
 #dynamics_choice  : microbiome_GLV_11D
 #dynamics_choice : hypercube
 #dynamics_choice : hypercube
@@ -187,25 +189,30 @@ classifier_based_separatrix_locator_fit_kwargs  :
 
 separatrix_locator :
   _target_    : separatrixLocator.SeparatrixLocator
-  num_models  : 1 #10 #10 #4 #5 #0 #0
+  num_models  : 2 #20 #20 #0 #10 #10 #4 #5 #0 #0
   dynamics_dim : ${dynamics.dim}
   use_multiprocessing : false
   verbose : true
   model_class: null
   device  : ${device}
 
-experiment_details : experiment_${model.name}_lr${separatrix_locator_fit_kwargs.optimizer.lr}_l2${separatrix_locator_fit_kwargs.optimizer.weight_decay}_batch${separatrix_locator_fit_kwargs.batch_size}_${separatrix_locator_fit_kwargs.normaliser._target_}_gmmratio${separatrix_locator_fit_kwargs.gmm_mix_ratio}_eigenvalue${eigenvalue}
+experiment_details : experiment_${model.name}_lr${separatrix_locator_fit_kwargs.optimizer.lr}_noscheduler_l2${separatrix_locator_fit_kwargs.optimizer.weight_decay}_batch${separatrix_locator_fit_kwargs.batch_size}_epochs${separatrix_locator_fit_kwargs.num_epochs}_${separatrix_locator_fit_kwargs.normaliser._target_}_gmmratio${separatrix_locator_fit_kwargs.gmm_mix_ratio}_eigenvalue${eigenvalue}_AdamW #_resetmomentumevery50
 
 eigenvalue  : 1.0 #25e-3
 
+#### best hyperparams for microbiome 11D
+## weight_decay : 1e-4
+## num_epochs : 5000
+## batch_size : 5000
+
 separatrix_locator_fit_kwargs:
-  num_epochs: 0 #1000 #5000 #1000 #500 #1000 #1000 #2000 #200 #500 #5000 #1000 #1000 #10000 #1000 #500 #500 #1000 #500 #1000 #500 #100 #500 #500 #500 # 1000 #1000 #2000 #500 #500 #1000 #400 #1000 #5000 #5000 #3000 #5000 #10000 #5000 #20000 #2000 #500 #2000 #2000 #2000 #1000 #2000 #500 #500 #500 #1000 #1500 #400 #200 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
+  num_epochs: 1000 #10000 #5000 #1000 #500 #1000 #1000 #2000 #200 #500 #5000 #1000 #1000 #10000 #1000 #500 #500 #1000 #500 #1000 #500 #100 #500 #500 #500 # 1000 #1000 #2000 #500 #500 #1000 #400 #1000 #5000 #5000 #3000 #5000 #10000 #5000 #20000 #2000 #500 #2000 #2000 #2000 #1000 #2000 #500 #500 #500 #1000 #1500 #400 #200 #1000 #200 #2000 #400 #2000 #00 #2000 #500 #200 #2000 #0 #2000
   optimizer :
-    _target_  : torch.optim.Adam
+    _target_  : torch.optim.AdamW
     _partial_ : true
     lr: 0.1e-3 #1e-4  #0.5e-3 #3e-3 #3e-3 #1e-3 #45e-3 #5e-3 1e-2
-    weight_decay  : 1e-4 #0.0 #1e-3  #5e-3
-  batch_size: 5000 #5000 #1500 #3000 #20000 #7000 #5000 #5000 #1000
+    weight_decay  : 1e-5 #1e-4 #0.0 #1e-3  #5e-3
+  batch_size: 5000 #1000 #1500 #3000 #20000 #7000 #5000 #5000 #1000
   ext_inp_batch_size  : 500
   ext_inp_reg_coeff   : 0.0 #0.1
   logger:
@@ -234,6 +241,10 @@ separatrix_locator_fit_kwargs:
 #  gmm_mix_ratio : 0.05
 #  gmm_mix_ratio : 0.3
   gmm_mix_ratio : 0.0
+#  epoch_callbacks:
+#    - _target_  : learn_koopman_eig.reset_adam_momentum_periodically
+#      _partial_ : true
+#      reset_interval  : 100
 
 separatrix_locator_score_kwargs:
   batch_size: 2000 #0
@@ -270,20 +281,20 @@ separatrix_find_separatrix_kwargs:
     end_threshold : 1e-5
 #    start_threshold : 1.0
 #    end_threshold : 0.3
-  lr_scheduler:
-    _target_: torch.optim.lr_scheduler.StepLR
-    _partial_: true
-    step_size: 1000 #50
-    gamma: 0.9
+#  lr_scheduler:
+#    _target_: torch.optim.lr_scheduler.StepLR
+#    _partial_: true
+#    step_size: 1000 #50
+#    gamma: 0.9
   batch_size: 1000 #00 #00
   resample_above_threshold: false
 
 #### Fixed point finder params
 fpf_hps :
-  max_iters: 10000 #00  # 10000
+  max_iters: 20000 #00  # 10000
   n_iters_per_print_update: 500
   lr_init: 0.5 #1e-5 #0.5
-  lr_patience : 50
+  lr_patience : 200 #50
 #  lr_patience : 10
   lr_factor : 0.95
 #  max_iters : 1000  # 10000
@@ -340,6 +351,7 @@ dynamics_options:
   1bitflipflop_2D : ${1bitflipflop_2D}
   2bitflipflop_2D : ${2bitflipflop_2D}
   1bitflipflop_3D : ${1bitflipflop_3D}
+  2bitflipflop_3D : ${2bitflipflop_3D}
   radial2D_bistable : ${radial2D_bistable}
   radial2D_bistable_limit_cycle : ${radial2D_bistable_limit_cycle}
   1bitflipflop_32D  : ${1bitflipflop_32D}

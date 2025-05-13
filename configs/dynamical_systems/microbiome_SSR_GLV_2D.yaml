@@ -13,7 +13,7 @@ IC_distribution_fit:
   _args_:
 #    - ${...isotropic_gaussians}
     - ${...iid_betas}
-#    - ${...IC_distribution_uniform_list}
+    - ${...IC_distribution_uniform_list}
 
 isotropic_gaussians:
   _target_  : custom_distributions.isotropic_gaussians
@@ -22,7 +22,8 @@ isotropic_gaussians:
 
 iid_betas:
   _target_  : custom_distributions.list_of_iid_betas
-  mean      : ${..point_on_separatrix}
+#  mean      : ${..point_on_separatrix}
+  mean      : ${..saddle_point}
   scales    : ${..scale_range}
 
 scale_range :
@@ -75,8 +76,6 @@ lims  :
   y : [0.0,1.0]
 
 
-
-
 attractors:
   _target_  : ssr_module.steady_state_reduction_example_torch.get_attractors_ssr
   device    : cpu
@@ -89,6 +88,13 @@ point_on_separatrix :
   num_iterations    : 2
   num_points        : 20
   final_time        : 20 #200
+
+saddle_point  :
+  _target_  : separatrix_point_finder.find_saddle_point
+  dynamics_function : ${..function}
+  point_on_separatrix : ${..point_on_separatrix}
+  T : 1
+  steps : 100
 
 plot_fixed_points:
   - x : null

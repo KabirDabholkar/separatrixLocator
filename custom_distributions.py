@@ -7,7 +7,7 @@ from rnn import reshape_hidden
 from typing import Union, Callable, Optional
 from sklearn.base import BaseEstimator, ClassifierMixin
 import numpy as np
-
+import warnings
 def sample(dist,shape):
     return dist.sample(sample_shape=shape)
 
@@ -76,7 +76,6 @@ class CubicHermiteSampler:
 
         return points
 
-
 def create_hermite_samplers_from_three_points(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor,
                                               scale1: float, scale2: float,
                                               alpha_dist1: D.Distribution = None,
@@ -137,6 +136,63 @@ def isotropic_gaussian(mean, scale=1.0):
     dim = len(mean)
     cov = torch.eye(dim) * scale
     return D.MultivariateNormal(mean, cov)
+    
+def gamma_from_mean_var(mean: float, var: float) -> D.Gamma:
+    """
+    Create a Gamma distribution with specified mean and variance.
+    
+    Args:
+        mean: Mean of the Gamma distribution
+        var: Variance of the Gamma distribution
+    """
+    concentration = mean**2/var
+    rate = mean/var
+    return D.Gamma(concentration=concentration, rate=rate)
+
+def gamma_from_mode_var(mode: float, var: float) -> D.Gamma:
+    """
+    Create a Gamma distribution with specified mode and variance.
+    
+    Args:
+        mode: Mode (peak) of the Gamma distribution. Must be non-negative.
+               Note: mode is 0 when shape parameter α < 1
+        var: Variance of the Gamma distribution
+        
+    Returns:
+        dist: torch.distributions.Gamma with the specified mode and variance
+        
+    Raises:
+        ValueError: If mode is negative, or if variance is not positive
+    """
+    if mode < 0:
+        raise ValueError("Mode must be non-negative")
+    if var <= 0:
+        warnings.warn("Variance must be positive. Setting to small positive value.")
+        var = 1e-5
+        
+    if mode == 0:
+        # When mode is 0, α < 1
+        # For Gamma(α,β), var = α/β²
+        # Let's choose α = 0.5 and solve for β
+        alpha = 0.5
+        beta = np.sqrt(alpha/var)
+    else:
+        # For Gamma(α,β), mode = (α-1)/β and var = α/β²
+        # Solving these equations:
+        # β = (α-1)/mode
+        # var = α/((α-1)/mode)² = α*mode²/(α-1)²
+        
+        def f(alpha):
+            return alpha**3 - 2*alpha**2 + alpha - mode**2/var
+            
+        # Find root where α > 1
+        alpha = 2.0  # Initial guess
+        for _ in range(10):
+            alpha = alpha - f(alpha)/(3*alpha**2 - 4*alpha + 1)
+            
+        beta = (alpha - 1)/mode
+    
+    return D.Gamma(concentration=torch.tensor(alpha, dtype=torch.float32), rate=torch.tensor(beta, dtype=torch.float32))
 
 def beta_from_mean_var(mean: float, var: float) -> D.Beta:
     """
@@ -165,7 +221,39 @@ def beta_from_mean_var(mean: float, var: float) -> D.Beta:
     beta = (1 - mean) * (mean * (1 - mean) / var - 1)
     
     return D.Beta(alpha, beta)
+def iid_gamma(mode, scale, epsilon=1e-4) -> D.Gamma:
+    """
+    Create a list of Gamma distributions with specified mode and scale.
+    
+    Args:
+        mode: Mode vector of the distributions
+        scale: Scale parameter controlling spread. Can be either:
+            - A scalar value (float/int) to use for all dimensions
+            - An iterable (list, tuple, np.array, or torch.Tensor) of same length as mode
+        epsilon: Small value added to zero elements in scale (default: 1e-5)
+    """
+    # Convert scale to tensor if it's not already
+    if isinstance(scale, (list, tuple, np.ndarray)):
+        scale = torch.tensor(scale)
+    elif isinstance(scale, (int, float)):
+        scale = torch.tensor(scale)
+    
+    # Add epsilon to any zero elements
+    scale = torch.where(scale == 0, epsilon, scale)
+    
+    # Check if scale is scalar
+    if isinstance(scale, torch.Tensor) and scale.ndim == 0:
+        # Use same scale for all dimensions
+        return ConcatIIDDistribution([gamma_from_mode_var(mode[i], scale**2) for i in range(len(mode))])
+    else:
+        # Check length matches mode
+        if len(scale) != len(mode):
+            raise ValueError(f"Scale length ({len(scale)}) must match mode length ({len(mode)})")
+        # Use individual scales for each dimension
+        return ConcatIIDDistribution([gamma_from_mode_var(mode[i], scale[i]**2) for i in range(len(mode))])
 
+def list_of_iid_gammas(mode, scales):
+    return [iid_gamma(mode, scale) for scale in scales]
 
 def iid_beta(mean, scale) -> D.Beta:
     """
@@ -660,8 +748,11 @@ if __name__ == '__main__':
     print("Demonstrating beta_from_mean_var distribution:")
     
     # Create beta distributions with different means and variances
-    beta1 = beta_from_mean_var(mean=0.1, var=np.sqrt(0.01)**2)
-    beta2 = beta_from_mean_var(mean=0.7, var=0.01**2)
+    beta1 = gamma_from_mode_var(mode=0, var=0.01)
+    beta2 = gamma_from_mode_var(mode=0.7, var=0.01 ** 2)
+
+    # beta1 = gamma_from_mean_var(mean=1e-4, var=0.01)
+    # beta2 = gamma_from_mean_var(mean=0.7, var=0.01**2)
     
     # Sample from distributions
     samples1 = beta1.sample((1000,))
@@ -669,32 +760,37 @@ if __name__ == '__main__':
     
     # Print distribution parameters and sample statistics
     print("\nBeta Distribution 1:")
-    print(f"Target mean: 0.3, Empirical mean: {samples1.mean():.3f}")
-    print(f"Target var: 0.05, Empirical var: {samples1.var():.3f}")
-    print(f"Alpha: {beta1.concentration1:.3f}, Beta: {beta1.concentration0:.3f}")
+    # print(f"Target mean: 0.3, Empirical mean: {samples1.mean():.3f}")
+    # print(f"Target var: 0.05, Empirical var: {samples1.var():.3f}")
+    # print(f"Alpha: {beta1.concentration1:.3f}, Beta: {beta1.concentration0:.3f}")
     
     print("\nBeta Distribution 2:")
-    print(f"Target mean: 0.7, Empirical mean: {samples2.mean():.3f}")
-    print(f"Target var: 0.02, Empirical var: {samples2.var():.3f}")
-    print(f"Alpha: {beta2.concentration1:.3f}, Beta: {beta2.concentration0:.3f}")
+    # print(f"Target mean: 0.7, Empirical mean: {samples2.mean():.3f}")
+    # print(f"Target var: 0.02, Empirical var: {samples2.var():.3f}")
+    # print(f"Alpha: {beta2.concentration1:.3f}, Beta: {beta2.concentration0:.3f}")
     
     # Plot histograms
     plt.figure(figsize=(10, 5))
     
     plt.subplot(1, 2, 1)
     plt.hist(samples1.numpy(), bins=30, density=True, alpha=0.7)
-    plt.title(f'Beta(μ=0.3, σ=0.1)\nα={beta1.concentration1:.1f}, β={beta1.concentration0:.1f}')
+    # plt.title(f'Beta(μ=0.3, σ=0.1)\nα={beta1.concentration1:.1f}, β={beta1.concentration0:.1f}')
     plt.xlabel('x')
     plt.ylabel('Density')
     
     plt.subplot(1, 2, 2)
     plt.hist(samples2.numpy(), bins=30, density=True, alpha=0.7)
-    plt.title(f'Beta(μ=0.7, σ=0.5)\nα={beta2.concentration1:.1f}, β={beta2.concentration0:.1f}')
+    # plt.title(f'Beta(μ=0.7, σ=0.5)\nα={beta2.concentration1:.1f}, β={beta2.concentration0:.1f}')
     plt.xlabel('x')
     plt.ylabel('Density')
     
     plt.tight_layout()
     plt.show()
+    
+
+    dists = iid_gamma(
+        mode=[0.0,0.7], scale=0.1
+    )
     
 
     # dist1 = torch.distributions.Normal(loc=0.0, scale=1.0)

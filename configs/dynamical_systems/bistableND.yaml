@@ -31,7 +31,29 @@ IC_distribution_fit :
 #  - ${..IC_interpolation_line}
 
 #######
+isotropic_gaussians:
+  _target_  : custom_distributions.isotropic_gaussians
+  mean      : ${..point_on_separatrix}
+#  mean      : ${..saddle_point}
+  scales    : ${..scale_range}
 
+point_on_separatrix:
+  _target_  : torch.tensor
+  data     : [0.0, 1.0]
+
+saddle_point  :
+  _target_  : separatrix_point_finder.find_saddle_point
+  dynamics_function : ${..function}
+  point_on_separatrix : ${..point_on_separatrix}
+  T : 10
+  steps : 100
+
+
+
+scale_range :
+  _target_  : numpy.array
+  object  : [1e-2] #,0.1,0.3,1.0]
+#######
 IC_distribution:
   _target_  : custom_distributions.makeIIDMultiVariate
   dist  :

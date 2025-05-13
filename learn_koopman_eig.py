@@ -643,7 +643,7 @@ def runGD(
         end_threshold = threshold
 
     if external_input_dim is None:
-        external_input_dim = input_dim
+        external_input_dim = 0
 
     # First, sample or use provided external inputs.
     if external_input_dist is not None:
@@ -655,10 +655,10 @@ def runGD(
     external_inputs_fixed = external_inputs.detach()
 
     # Process initial conditions using the fixed external inputs.
-    # initial_conditions, batch_size, orig_indices = process_initial_conditions(
-    #     func, init_cond_dist, initial_conditions, input_dim, dist_needs_dim, batch_size, start_threshold,
-    #     resample_above_threshold, external_inputs_fixed=external_inputs_fixed
-    # )
+    initial_conditions, batch_size, orig_indices = process_initial_conditions(
+        func, init_cond_dist, initial_conditions, input_dim, dist_needs_dim, batch_size, start_threshold,
+        resample_above_threshold, external_inputs_fixed=external_inputs_fixed
+    )
 
     # Set gradient requirements based on optimization flags.
     if optimize_initial_conditions:
@@ -1991,6 +1991,17 @@ def train_with_logger_ext_inp(
 #             plt.show()
 #             plt.savefig(f"test_outputs/{epoch}.png")
 
+def reset_adam_momentum(optimizer):
+    for group in optimizer.param_groups:
+        for p in group['params']:
+            if p.grad is not None:
+                state = optimizer.state[p]
+                state['exp_avg'] = torch.zeros_like(p)
+                state['exp_avg_sq'] = torch.zeros_like(p)
+def reset_adam_momentum_periodically(optimizer, epoch, reset_interval=50):
+    if epoch % reset_interval == 0:
+        reset_adam_momentum(optimizer)
+
 
 def train_with_logger_multiple_dists(
         model, F, dists, external_input_dist=None, dist_requires_dim=True, num_epochs=1000,
@@ -2008,7 +2019,9 @@ def train_with_logger_multiple_dists(
         fixed_external_inputs=None,
         gmm_mix_ratio=0.5,
         gmm_n_components=2,
-        gmm_oversample_factor=1
+        gmm_oversample_factor=1,
+        epoch_callbacks=[],
+        dist_weights=None
 ):
     def fit_gmm(x_batch, residuals, n_components):
         residuals = residuals.squeeze(-1) if residuals.ndim > 1 else residuals
@@ -2040,7 +2053,17 @@ def train_with_logger_multiple_dists(
 
     gmm_models = [None for _ in dists]
 
+    # Set default weights to 1.0 if not provided
+    if dist_weights is None:
+        dist_weights = [1.0] * len(dists)
+    elif len(dist_weights) != len(dists):
+        raise ValueError(f"Length of dist_weights ({len(dist_weights)}) must match length of dists ({len(dists)})")
+
     for epoch in range(num_epochs):
+        # Run any epoch callbacks
+        for callback in epoch_callbacks:
+            callback(optimizer, epoch)
+            
         total_loss = 0
         normalised_losses = []
         reg_term_values = []
@@ -2096,7 +2119,7 @@ def train_with_logger_multiple_dists(
 
             normalised_loss, _, _ = normaliser(dot_prod/eigenvalue, phi_x, axis=None, return_terms=True)
             normalised_losses.append(normalised_loss.item())
-            total_loss += normalised_loss
+            total_loss += dist_weights[i] * normalised_loss
 
             if restrict_to_distribution_lambda > 0:
                 reg_loss = restrict_to_distribution_loss(x_batch, phi_x, dist, threshold=-4.0)

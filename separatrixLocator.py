@@ -124,15 +124,22 @@ class SeparatrixLocator(BaseEstimator):
                 scores.append(score)
         self.scores = scores
         return torch.stack(self.scores)
-
-    def save_models(self,savedir):
+    def save_models(self, savedir, filename=None):
         os.makedirs(Path(savedir)/"models", exist_ok=True)
         for i,model in enumerate(self.models):
-            torch.save(model.state_dict(), Path(savedir) / "models" / f"{model.__class__.__name__}_{i}.pt")
+            if filename is None:
+                save_filename = f"{model.__class__.__name__}_{i}.pt"
+            else:
+                save_filename = f"{filename}.pt"
+            torch.save(model.state_dict(), Path(savedir) / "models" / save_filename)
 
-    def load_models(self,savedir):
+    def load_models(self, savedir, filename=None):
         for i,model in enumerate(self.models):
-            state_dict = torch.load(Path(savedir) / "models" / f"{model.__class__.__name__}_{i}.pt",weights_only=True,map_location=torch.device(self.device) )
+            if filename is None:
+                load_filename = f"{model.__class__.__name__}_{i}.pt"
+            else:
+                load_filename = f"{filename}.pt"
+            state_dict = torch.load(Path(savedir) / "models" / load_filename, weights_only=True, map_location=torch.device(self.device))
             self.models[i].load_state_dict(state_dict)
 
     def filter_models(self, threshold):
@@ -220,35 +227,37 @@ class SeparatrixLocator(BaseEstimator):
             print('Models are prepared for gradient descent.')
         return self.functions_for_gradient_descent
 
-    def find_separatrix(self, distribution, dist_needs_dim=True,
+    def find_separatrix(self, distribution, dist_needs_dim=False,
                         return_indices=False, return_mask=False, **kwargs):
         all_traj, all_below, all_inds, all_masks = [], [], [], []
-        for model in self.models:
-            f = compose(
-                # lambda x: x ** 0.1,
-                torch.log, lambda x: x + 1, torch.exp,
-                partial(torch.sum, dim=-1, keepdims=True),
-                torch.log, torch.abs, model
-            )
-            # Sample initial conditions.
-            shape = [1000] + ([self.dynamics_dim] if dist_needs_dim else [])
-            samples_ic = distribution.sample(sample_shape=shape)
-            # If an external input distribution is provided, sample external inputs.
-            if "external_input_dist" in kwargs:
-                ext_input_dist = kwargs["external_input_dist"]
-                ext_input_dim = kwargs.get("external_input_dim", 0)
-                shape_ext = [1000] + ([ext_input_dim] if dist_needs_dim else [])
-                samples_ext = ext_input_dist.sample(sample_shape=shape_ext)
-            else:
-                # If not provided, use a dummy tensor (zeros) of the same shape as samples_ic.
-                samples_ext = torch.zeros_like(samples_ic)[...,0:0]
-            # Concatenate the samples along the last dimension.
-            combined_samples = torch.cat((samples_ic, samples_ext), dim=-1)
+        # for model in self.models:
+        for f in self.functions_for_gradient_descent:
+            # f = compose(
+            #     # lambda x: x ** 0.1,
+            #     torch.log, lambda x: x + 1, torch.exp,
+            #     partial(torch.sum, dim=-1, keepdims=True),
+            #     torch.log, torch.abs, model
+            # )
+            # # Sample initial conditions.
+            # shape = [1000] + ([self.dynamics_dim] if dist_needs_dim else [])
+            # samples_ic = distribution.sample(sample_shape=shape)
+            # # If an external input distribution is provided, sample external inputs.
+            # if "external_input_dist" in kwargs:
+            #     ext_input_dist = kwargs["external_input_dist"]
+            #     ext_input_dim = kwargs.get("external_input_dim", 0)
+            #     shape_ext = [1000] + ([ext_input_dim] if dist_needs_dim else [])
+            #     samples_ext = ext_input_dist.sample(sample_shape=shape_ext)
+            # else:
+            #     # If not provided, use a dummy tensor (zeros) of the same shape as samples_ic.
+            #     samples_ext = torch.zeros_like(samples_ic)[...,0:0]
+            # # Concatenate the samples along the last dimension.
+            # combined_samples = torch.cat((samples_ic, samples_ext), dim=-1)
+            #
+            # # Calculate the normalisation value over the combined inputs
+            # norm_val = float(torch.mean(torch.sum(f(combined_samples) ** 2, dim=-1)).sqrt().detach().numpy())
+            # # Update f to normalize its output.
+            # f = compose(lambda x: x / norm_val, f)
 
-            # Calculate the normalisation value over the combined inputs
-            norm_val = float(torch.mean(torch.sum(f(combined_samples) ** 2, dim=-1)).sqrt().detach().numpy())
-            # Update f to normalize its output.
-            f = compose(lambda x: x / norm_val, f)
             ret = runGD(
                 f, distribution, input_dim=self.dynamics_dim, dist_needs_dim=dist_needs_dim,
                 return_indices=return_indices, return_mask=return_mask, **kwargs
