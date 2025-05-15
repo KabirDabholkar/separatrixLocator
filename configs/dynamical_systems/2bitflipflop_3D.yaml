@@ -1,7 +1,9 @@
 function  :
   _target_  : dynamical_functions.change_speed
   func    : ${..original_function}
-  factor  : 20 #71.25 #1 #13.003 #1/Re(lambda) where lambda is the unstable eigenvalue of the saddle point
+  factor  : 5
+#  factor  : 10
+#  factor  : 20
 
 original_function :
   _target_  : rnn.discrete_to_continuous
@@ -18,12 +20,12 @@ run_traj : true
 IC_distribution_fit:
   _target_  : utils.list_concat
   _args_:
-#    - ${...isotropic_gaussians_vertical1}
-#    - ${...isotropic_gaussians_vertical2}
-    - ${...isotropic_gaussians_horizontal1}
-    - ${...isotropic_gaussians_horizontal2}
-#special_model_name  : trained_on_vertical_edges
-special_model_name  : trained_on_horizontal_edges
+    - ${...isotropic_gaussians_vertical1}
+    - ${...isotropic_gaussians_vertical2}
+#    - ${...isotropic_gaussians_horizontal1}
+#    - ${...isotropic_gaussians_horizontal2}
+special_model_name  : trained_on_vertical_edges_speed${.function.factor}
+#special_model_name  : trained_on_horizontal_edges_speed${.function.factor}
 
 # IC_distribution :
 # #  _target_  : rnn.hidden_distribution_from_model
@@ -57,7 +59,8 @@ isotropic_gaussians_horizontal2:
 scale_range :
   _target_  : numpy.array
 #  object  : [1e-2,0.1,0.3,0.5,0.8,1.0]
-  object  : [1e-2,0.1,1.0,2.0]
+#  object  : [1e-2,0.1,1.0,2.0]
+  object  : [0.2,1.0,2.0,5.0]
 
 IC_distribution:
   _target_: rnn.hidden_distribution_with_spectral_norm

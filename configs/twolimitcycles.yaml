@@ -1,0 +1,27 @@
+defaults:
+  - main
+#  - models@model: RBF
+  - _self_
+
+dynamics_choice : radial2D_bistable_limit_cycle
+model_choice  : RBF
+
+device  : cpu
+
+separatrix_locator :
+  num_models  : 1
+
+
+plot_limit_cycles:
+  stable: [1,3]
+  unstable  : [2]
+
+
+separatrix_locator_fit_kwargs:
+#  num_epochs: 1000
+  num_epochs: 1000     # switch to this later
+  batch_size: 5000      # use this for now
+#  batch_size: 5000     # better alternative?
+  balance_loss_lambda : 0 #5e-2
+  optimizer:
+    lr : 1e-3

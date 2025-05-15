@@ -29,8 +29,13 @@ def plot_flow_streamlines(F, ax, x_limits=(-2, 2), y_limits=(-2, 2), resolution=
     V = F_val[:, 1].reshape(resolution, resolution)
 
     # Plot streamlines
-    lines = ax.streamplot(X, Y, U, V, density=density, color=color, linewidth=linewidth)
-    lines.lines.set_alpha(alpha)
+    if hasattr(ax, '__iter__'):
+        for a in ax:
+            lines = a.streamplot(X, Y, U, V, density=density, color=color, linewidth=linewidth)
+            lines.lines.set_alpha(alpha)
+    else:
+        lines = ax.streamplot(X, Y, U, V, density=density, color=color, linewidth=linewidth)
+        lines.lines.set_alpha(alpha)
 
 def evaluate_on_grid(func, x_limits=(-1.3, 1.3), y_limits=(-1.3, 1.3), resolution=50):
     """
@@ -53,8 +58,10 @@ def evaluate_on_grid(func, x_limits=(-1.3, 1.3), y_limits=(-1.3, 1.3), resolutio
     # Compute function values
     grid = torch.tensor(np.stack([X.flatten(), Y.flatten()], axis=1), dtype=torch.float32)
     Z = func(grid).detach().cpu().numpy()
-    Z = Z.reshape(resolution, resolution)
-    
+    Z = Z.reshape(resolution, resolution, -1)
+    if Z.shape[-1] == 1:
+        Z = Z.reshape(resolution, resolution)
+    print(Z.shape, 'after')
     return X, Y, Z
 
 def dynamics_to_kinetic_energy(F):

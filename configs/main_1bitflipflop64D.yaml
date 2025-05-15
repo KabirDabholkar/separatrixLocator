@@ -2,9 +2,14 @@ defaults:
   - main
   - _self_
 
-dynamics_choice : 2bitflipflop_3D
 
-device  : cuda:1
+save_KEF_model    : false
+load_KEF_model    : true
+run_analysis      : true
+
+dynamics_choice : 1bitflipflop_Vanilla64D_long_isotropic
+
+device  : cpu #cuda:0
 
 separatrix_locator :
   num_models  : 1

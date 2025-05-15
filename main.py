@@ -15,7 +15,7 @@ from copy import deepcopy
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-# mpl.use('MacOSX') #'Qt5Agg')
+# mpl.use('Qt5Agg') # 'MacOSX') #)
 import matplotlib.animation as animation
 import seaborn as sns
 mpl.rcParams['agg.path.chunksize'] = 10000
@@ -31,6 +31,7 @@ from separatrixLocator import SeparatrixLocator
 import torch
 from torchdiffeq import odeint
 import numpy as np
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 PATH_TO_FIXED_POINT_FINDER = f'{os.getenv("PROJECT_PATH")}/fixed_point_finder'
 import sys
@@ -41,7 +42,12 @@ from fixed_point_finder.FixedPointFinderTorch import FixedPointFinderTorch
 CONFIG_PATH = "configs"
 # CONFIG_NAME = "test"
 # CONFIG_NAME = "main"
-CONFIG_NAME = "main_2bitflipflop3D"
+# CONFIG_NAME = "main_2bitflipflop3D"
+CONFIG_NAME = "twolimitcycles"
+# CONFIG_NAME = "bistable1D"
+# CONFIG_NAME = "microbiome_GLV_11D"
+# CONFIG_NAME = "finkelstein_fontolan"
+# CONFIG_NAME = "main_1bitflipflop64D"
 
 project_path = os.getenv("PROJECT_PATH")
 
@@ -60,7 +66,8 @@ def decorated_main(cfg):
     # check_basin_of_attraction(cfg)
     # plot_cubichermitesampler(cfg)
     # return RNN_modify_inputs(cfg)
-    # plot_dynamics_2D(cfg)
+    # plot_dynamics_1D(cfg)
+    plot_dynamics_2D(cfg)
     # plot_dynamics(cfg)
     # plot_task_io(cfg)
     # plot_hermite_polynomials_2d(cfg)
@@ -68,17 +75,123 @@ def decorated_main(cfg):
     # plot_KEF_residual_heatmap(cfg)
     # fixed_point_analysis(cfg)
     # check_distribution(cfg)
-    # plot_2D_dynamics_reduced(cfg)
+    # plot_2D_dynamics_reduced_microbiome(cfg)
     # find_saddle_point(cfg)
-    plot_dynamics_3D(cfg)
+    # plot_dynamics_3D(cfg)
     # RNN_fixedpoints(cfg)
     # flipflop_separatrix_points(cfg)
+    # flipflop2Dsliceof3D(cfg)
     
+
+def plot_dynamics_1D(cfg):
+    omegaconf_resolvers()
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+    dynamics_function = instantiate(cfg.dynamics.function)
+
+
+    # Load separatrix locator model
+    SL = instantiate(cfg.separatrix_locator)
+    SL.to('cpu')
+    SL.models = [instantiate(cfg.model).to(SL.device) for _ in range(SL.num_models)]
+
+    # Set up load path
+    new_format_path = Path(cfg.savepath) / cfg.experiment_details
+    if os.path.exists(new_format_path):
+        load_path = new_format_path
+    else:
+        load_path = Path(cfg.savepath)
+        print(new_format_path, 'does not exist, loading', load_path, 'instead.')
+    SL.load_models(load_path)
+
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3,figsize=(7,2.5))
+
+    # Create x values to evaluate dynamics over
+    x = torch.linspace(-2, 2, 200).reshape(-1, 1)
+
+    # Evaluate dynamics
+    dx = dynamics_function(x)
+
+    # Convert to numpy for plotting
+    x_np = x.detach().numpy()
+    dx_np = dx.detach().numpy()
+
+    # Plot 1: Dynamics
+    ax1.plot(x_np, dx_np, 'b-', linewidth=2)
+    ax1.axhline(y=0, color='k', linestyle='--', alpha=0.3)
+
+    ax1.set_title(r'$\frac{dx}{dt}$')
+    ax1.set_ylim(-1.1, 1.1)
+
+    # Plot 2: Kinetic Energy
+    kinetic_energy = dx**2  # Kinetic energy is velocity squared
+    ax2.plot(x_np, kinetic_energy.detach().numpy(), 'r-', linewidth=2)
+    ax2.axhline(y=0, color='k', linestyle='--', alpha=0.3)
+
+    ax2.set_title(r'$q(x)$')
+    ax2.set_ylim(-0.1,0.4)
+
+    # Plot 3: Separatrix Locator Prediction
+    sl_pred = SL.predict(x)
+    sl_pred = sl_pred/(sl_pred**2).mean()**0.5
+    ana_func = lambda x:x/((x**2-1)**2)**0.25
+    # instantiate(cfg.dynamics.analytical_eigenfunction)
+    ana_pred = ana_func(x)
+    ana_pred = ana_pred/(ana_pred**2).mean()**0.5
+    ax3.plot(x_np, sl_pred.detach().numpy(), 'g-', linewidth=2, label='DNN')
+    ax3.plot(x_np,ana_pred,c='k',ls='dashed',label='Analytical')
+
+
+    ax3.set_title(r'$\psi(x)$')
+    ax3.set_ylim(-3,3)
+    ax3.axhline(y=0, color='k', linestyle='--', alpha=0.3)
+    ax3.legend()
+
+    from plotting import remove_frame
+    for ax in (ax1,ax2,ax3):
+        remove_frame(ax,['right','bottom','top'])
+
+    for ax in (ax1,ax2,ax3):
+        if hasattr(cfg.dynamics,'plot_fixed_points'):
+            pointsets = instantiate(cfg.dynamics.plot_fixed_points)
+            # Check if fixed point data exists and plot it
+            fixed_point_path = Path(cfg.savepath) / 'fixed_point_data.csv'
+            if fixed_point_path.exists():
+                fixed_points = pd.read_csv(fixed_point_path)
+                fixed_points = fixed_points.loc[fixed_points['q']<1e-9]
+                for pointset in pointsets:
+                    if 'unstable' in pointset['label']:
+                        stability = False
+                    else:
+                        stability = True
+                    pointset['x'] = fixed_points.loc[fixed_points['stability']==stability]['x0']
+                    pointset['y'] = fixed_points.loc[fixed_points['stability']==stability]['x1']
+            for pointset in pointsets:
+                ax.scatter(**pointset,c='lightgreen')
+
+    plt.tight_layout()
+
+    # Save figure
+    fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f'dynamics1D_{cfg.dynamics.name}.pdf')
+    plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 def flipflop_separatrix_points(cfg):
     omegaconf_resolvers()
     cfg.savepath = os.path.join(project_path, cfg.savepath)
     dynamics_function = instantiate(cfg.dynamics.function)
+    # Create figure with 3 subplots
     distribution = instantiate(cfg.dynamics.IC_distribution)
 
     # Sample random initial conditions
@@ -174,16 +287,216 @@ def flipflop_separatrix_points(cfg):
     save_dir = Path(cfg.savepath) / 'saved_points'
     save_dir.mkdir(exist_ok=True)
 
-    # Save each separatrix point as a .pt file
-    for edge_name, sep_point in separatrix_points.items():
-        torch.save(sep_point, save_dir / f'{edge_name}.pt')
+    # # Save each separatrix point as a .pt file
+    # for edge_name, sep_point in separatrix_points.items():
+    #     torch.save(sep_point, save_dir / f'{edge_name}.pt')
+
+    # Save each cluster center as a .pt file
+    for i, center in enumerate(ordered_centers):
+        torch.save(torch.tensor(center,dtype=torch.float32), save_dir / f'vertex{i}.pt')
+        
+
+def load_models_with_different_speeds(SL,new_format_path):
+    # state_dict = torch.load(new_format_path / 'models' / 'trained_on_vertical_edges_speed5.pt', map_location='cpu')
+    # SL.models[0].load_state_dict(state_dict)
+    # state_dict = torch.load(new_format_path / 'models' / 'trained_on_horizontal_edges_speed5.pt', map_location='cpu')
+    # SL.models[1].load_state_dict(state_dict)
+    # state_dict = torch.load(new_format_path / 'models' / 'trained_on_vertical_edges_speed10.pt', map_location='cpu')
+    # SL.models[2].load_state_dict(state_dict)
+    # state_dict = torch.load(new_format_path / 'models' / 'trained_on_horizontal_edges_speed10.pt', map_location='cpu')
+    # SL.models[3].load_state_dict(state_dict)
+    # state_dict = torch.load(new_format_path / 'models' / 'trained_on_vertical_edges_speed20.pt', map_location='cpu')
+    # SL.models[4].load_state_dict(state_dict)
+    # state_dict = torch.load(new_format_path / 'models' / 'trained_on_horizontal_edges_speed20.pt', map_location='cpu')
+    # SL.models[5].load_state_dict(state_dict)
+
+    # state_dict = torch.load(new_format_path / 'models' / 'trained_on_vertical_edges_speed20.pt', map_location='cpu')
+    # SL.models[0].load_state_dict(state_dict)
+    # state_dict = torch.load(new_format_path / 'models' / 'trained_on_horizontal_edges_speed20.pt', map_location='cpu')
+    # SL.models[1].load_state_dict(state_dict)
+
+    state_dict = torch.load(new_format_path / 'models' / 'trained_on_vertical_edges_speed10.pt', map_location='cpu')
+    SL.models[0].load_state_dict(state_dict)
+    state_dict = torch.load(new_format_path / 'models' / 'trained_on_horizontal_edges_speed10.pt', map_location='cpu')
+    SL.models[1].load_state_dict(state_dict)
+    return SL
+
+
+def flipflop2Dsliceof3D(cfg):
+    omegaconf_resolvers()
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+    dynamics_function = instantiate(cfg.dynamics.function)
+    # distribution_fit = instantiate(cfg.dynamics.IC_distribution_fit)
+    # distribution = instantiate(cfg.dynamics.IC_distribution)
+    from plotting import remove_frame, evaluate_on_grid, plot_flow_streamlines
+
+    # Load saved points
+    save_dir = Path(cfg.savepath) / 'saved_points'
+    vertex_points = []
+    other_points = []
+    vertex_filenames = []
+    other_filenames = []
+
+    # Load all saved points
+    for file in sorted(save_dir.glob("*"), key=lambda x: int(x.stem[-1]) if x.stem[-1].isdigit() else float('inf')):
+        point = torch.load(file,weights_only=True)
+        if file.stem.startswith('vertex'):
+            vertex_points.append(point.cpu().numpy())
+            vertex_filenames.append(file.stem)
+        else:
+            other_points.append(point.cpu().numpy())
+            other_filenames.append(file.stem)
+
+    # Combine all points for PCA
+    all_points = vertex_points + other_points
+    saved_points_st = np.stack(all_points)
+    pca = PCA().fit(saved_points_st)
+
+    # Load separatrix locator model
+    SL = instantiate(cfg.separatrix_locator)
+    SL.to('cpu')
+    SL.num_models = 2
+    SL.models = [instantiate(cfg.model).to(SL.device) for _ in range(SL.num_models)]
+
+    # Set up load path
+    new_format_path = Path(cfg.savepath) / cfg.experiment_details
+    if os.path.exists(new_format_path):
+        load_path = new_format_path
+    else:
+        load_path = Path(cfg.savepath)
+        print(new_format_path, 'does not exist, loading', load_path, 'instead.')
+    # SL.load_models(load_path)
+    # state_dict = torch.load(new_format_path / 'models' / 'AdditiveModel_5.pt', map_location='cpu')
+
+    SL = load_models_with_different_speeds(SL, new_format_path)
+
+    def KEF2D(x):
+        x_padded = torch.cat([x, torch.zeros_like(x[...,:1])], dim=-1)
+        # Convert tensor to numpy for PCA inverse transform
+        x_padded_np = x_padded.detach().cpu().numpy()
+
+        # Transform back to original space using loaded PCA
+        x_orig = pca.inverse_transform(x_padded_np)
+
+        # Convert back to tensor
+        x_orig = torch.tensor(x_orig, dtype=torch.float32, device=x_padded.device)
+        pred = SL.predict(x_orig)
+        return pred
+
+    x_limits = (-1.1,1.1)
+    y_limits = (-1.1,1.1)
+
+    X,Y,KEFvalues_on_grid = evaluate_on_grid(KEF2D,x_limits=x_limits,y_limits=y_limits,resolution=100)
+
+
+    #######
+    def dynamics2D(x,full_dim=3):
+        # Pad input with zeros to match full dimension
+        padded_x = torch.zeros(*x.shape[:-1], full_dim, device=x.device)
+        padded_x[..., :2] = x  # Copy the 2D input into first 2 dimensions
+        padded_x = padded_x.detach().numpy()
+        x = torch.tensor(pca.inverse_transform(padded_x))
+        dyn_vals = dynamics_function(x)
+        dyn_vals = dyn_vals.detach().numpy()
+        return torch.tensor(pca.transform(dyn_vals)[:,:2])
+
+
+    ######
+
+
+    tspan = torch.linspace(0,10,100)
+    # base_point = np.array([-0.7,-0.4])
+    base_point = np.array([0.0, -0.3])
+
+    target = pca.transform(vertex_points[3:])[0,:2]
+    pert1 = np.array([0.0, 0.4])
+    perturbations = {
+        'pert1': pert1,
+        # 'pert2': np.array([0.5 * np.sin(np.pi/4), 0.5 * np.cos(np.pi/4)])  # 45 degree rotation
+        'pert2': np.array(np.linalg.norm(pert1) * (target - base_point) / np.linalg.norm(target - base_point))  # in direction of target
+    }
+    trajectories = {}
+    for name, perturbation in perturbations.items():
+        endpoint = base_point + perturbation
+        orig_endpoint = pca.inverse_transform(np.append(endpoint, 0))
+        traj = odeint(
+            lambda t,x: dynamics_function(x), torch.tensor(orig_endpoint,dtype=torch.float32), tspan
+        )
+        trajectories[name] = pca.transform(traj.detach().cpu().numpy())[:,:2]
+
+    ######
+
+    # Create scatter plot of PCA-transformed points
+    fig, ax = plt.subplots(figsize=(4, 4))
+
+    # Transform saved points using PCA
+    transformed_points = pca.transform(vertex_points)
+
+    # Plot first two principal components
+    scatter = ax.scatter(transformed_points[:, 0], transformed_points[:, 1])
+
+    ####
+    ax.scatter(*base_point, c='r', marker='*')
+    # Plot arrows and trajectories
+    for name, perturbation in perturbations.items():
+        ax.arrow(base_point[0], base_point[1],
+                perturbation[0], perturbation[1],
+                head_width=0.05, head_length=0.1, fc='r', ec='r', length_includes_head=True)
+        ax.plot(*trajectories[name].T, 'r-', alpha=0.7, linewidth=1)
+    # Plot dashed line from base point to target
+    ax.plot([base_point[0], target[0]], [base_point[1], target[1]], 'k--', alpha=0.5, lw=0.7)
+    # Add circle segment between perturbation endpoints
+    arc = plt.matplotlib.patches.Arc(
+        xy=base_point, 
+        width=2*np.linalg.norm(pert1), 
+        height=2*np.linalg.norm(pert1),
+        theta1=np.degrees(np.arctan2(perturbations['pert2'][1], perturbations['pert2'][0])),
+        theta2=np.degrees(np.arctan2(pert1[1], pert1[0])),
+        linestyle=':',
+        color='red',
+        alpha=0.5,
+        lw=1
+    )
+    ax.add_patch(arc)
+    ####
+    
+    # Add point labels
+    for i, txt in enumerate(vertex_filenames):
+        ax.annotate(txt, (transformed_points[i, 0], transformed_points[i, 1]), 
+                   xytext=(5, 5), textcoords='offset points', 
+                   fontsize=8, ha='left', va='bottom')
+
+
+    for i in range(KEFvalues_on_grid.shape[-1]):
+        ax.contour(X,
+               Y,
+               KEFvalues_on_grid[...,i],
+               levels=[0], colors='lightgreen')
+
+
+    # plot_flow_streamlines(dynamics2D,ax,x_limits=x_limits,y_limits=y_limits,resolution=50,density=0.3,alpha=0.3)
+
+    # Equal aspect ratio for better visualization
+    ax.set_aspect('equal')
+    remove_frame(ax)
+
+    # Save figure
+    plt.savefig(Path(cfg.savepath) / cfg.experiment_details / "perturbation_cartoon.png", dpi=200)
+    plt.savefig(Path(cfg.savepath) / cfg.experiment_details / "perturbation_cartoon.pdf", dpi=200)
+    plt.show()
+    plt.close()
+
+
+
 
 
 def plot_dynamics_3D(cfg):
     omegaconf_resolvers()
     cfg.savepath = os.path.join(project_path, cfg.savepath)
     dynamics_function = instantiate(cfg.dynamics.function)
+    distribution_fit = instantiate(cfg.dynamics.IC_distribution_fit)
     distribution = instantiate(cfg.dynamics.IC_distribution)
+    from plotting import remove_frame
 
     # Sample random initial conditions
     num_trajectories = 100
@@ -225,7 +538,8 @@ def plot_dynamics_3D(cfg):
     # Load separatrix locator model
     SL = instantiate(cfg.separatrix_locator)
     SL.to('cpu')
-    SL.models = [instantiate(cfg.model).to(SL.device) for _ in range(cfg.separatrix_locator.num_models)]
+    SL.num_models = 2
+    SL.models = [instantiate(cfg.model).to(SL.device) for _ in range(SL.num_models)]
 
     # Set up load path
     new_format_path = Path(cfg.savepath) / cfg.experiment_details
@@ -235,15 +549,14 @@ def plot_dynamics_3D(cfg):
         load_path = Path(cfg.savepath)
         print(new_format_path, 'does not exist, loading', load_path, 'instead.')
     # SL.load_models(load_path)
-    state_dict = torch.load(new_format_path / 'models' / 'trained_on_vertical_edges.pt', map_location='cpu')
-    SL.models[0].load_state_dict(state_dict)
-    state_dict = torch.load(new_format_path / 'models' / 'trained_on_horizontal_edges.pt', map_location='cpu')
     # state_dict = torch.load(new_format_path / 'models' / 'AdditiveModel_5.pt', map_location='cpu')
-    SL.models[1].load_state_dict(state_dict)
 
+
+    SL = load_models_with_different_speeds(SL, new_format_path)
+    cfg.separatrix_locator_score_kwargs['eigenvalue'] = 1 #0.5 #1.0 #0.5
     scores = SL.score(
         dynamics_function,
-        distribution,
+        distribution_fit,
         external_input_dist = None,
         ** instantiate(cfg.separatrix_locator_score_kwargs)
     )
@@ -253,7 +566,7 @@ def plot_dynamics_3D(cfg):
     #####
 
     # Create a 2D grid in the first two principal components, centered at the mean
-    n_grid = 200  # Grid resolution
+    n_grid = 100  # Grid resolution
     
     # Calculate the mean of the transformed trajectories
     mean_pc1 = transformed_trajectories[..., 0].mean()
@@ -264,7 +577,7 @@ def plot_dynamics_3D(cfg):
     pc2_range = transformed_trajectories[..., 1].max() - transformed_trajectories[..., 1].min()
     
     # Add padding and center around mean
-    padding = 0.1
+    padding = -0.2
     half_width1 = (1 + padding) * pc1_range / 2
     half_width2 = (1 + padding) * pc2_range / 2
     # Create grid centered at mean and save limits
@@ -297,20 +610,19 @@ def plot_dynamics_3D(cfg):
                       KEFvalues_on_grid[:,i].reshape(n_grid,n_grid),
                       levels=[0], colors='lightgreen')
             # Plot PCA of the 4 points
-            ax.scatter(transformed_trajectories[-1,:,0], transformed_trajectories[-1,:,1],
-                      c='red', s=10, alpha=0.1)
+            # ax.scatter(transformed_trajectories[-1,:,0], transformed_trajectories[-1,:,1],
+            #           c='red', s=10, alpha=0.1)
             ax.set_aspect('equal')
     
     # Load and plot saved points
     saved_points_dir = Path(cfg.savepath) / "saved_points"
     saved_points = []
-    filenames = []
     
-    # Load all saved points
-    for file in saved_points_dir.glob("*"):
-        point = torch.load(file)
-        saved_points.append(point.cpu().numpy())
-        filenames.append(file.stem)
+    # Load only vertex points
+    for file in saved_points_dir.glob("vertex*"):
+        if file.stem[len("vertex"):].isdigit():  # Check if suffix is an integer
+            point = torch.load(file)
+            saved_points.append(point.cpu().numpy())
     
     if saved_points:  # Only process if points were found
         # Convert to array and transform to PCA space
@@ -318,17 +630,10 @@ def plot_dynamics_3D(cfg):
         transformed_points = pca.transform(saved_points_array)
         
         # Plot on both axes
-        for ax in axs:
+        for ax in axs.flatten():
             # Scatter plot the transformed points
             ax.scatter(transformed_points[:, 0], transformed_points[:, 1], 
-                      c='orange', marker='x', s=100)
-            
-            # Add labels for each point
-            for i, filename in enumerate(filenames):
-                ax.annotate(filename, 
-                          (transformed_points[i, 0], transformed_points[i, 1]),
-                          xytext=(5, 5), textcoords='offset points',
-                          fontsize=8, color='orange')
+                      c='lightgreen', marker='o', s=100)
     def dynamics2D(x,full_dim=3):
         # Pad input with zeros to match full dimension
         padded_x = torch.zeros(*x.shape[:-1], full_dim, device=x.device)
@@ -337,11 +642,12 @@ def plot_dynamics_3D(cfg):
         x = torch.tensor(pca.inverse_transform(padded_x))
         dyn_vals = dynamics_function(x)
         dyn_vals = dyn_vals.detach().numpy()
-        return pca.transform(dyn_vals)[:,:2]
+        return torch.tensor(pca.transform(dyn_vals)[:,:2])
 
     from plotting import plot_flow_streamlines
     for ax in axs.flatten():
-        plot_flow_streamlines(dynamics2D,ax,x_limits=xlims,y_limits=ylims,resolution=100,density=0.4,alpha=0.5)
+        plot_flow_streamlines(dynamics2D,ax,x_limits=xlims,y_limits=ylims,resolution=100,density=0.4,alpha=0.5,color='red')
+        remove_frame(ax)
     fig.tight_layout()
     fig.savefig(Path(cfg.savepath) / cfg.experiment_details / 'KEFs_2Dslice.png',dpi=300)
     fig.savefig(Path(cfg.savepath) / cfg.experiment_details / 'KEFs_2Dslice.pdf')
@@ -352,70 +658,106 @@ def plot_dynamics_3D(cfg):
     # Create a grid in PCA space and evaluate SL.predict at the inverse-PCA-mapped points
     # We'll plot the surface where SL.predict(X) == 0
 
-    # # Define the grid in PCA space
-    # n_grid = 60  # You can adjust this for resolution
-    # pc1_min, pc1_max = transformed_trajectories[..., 0].min(), transformed_trajectories[..., 0].max()
-    # pc2_min, pc2_max = transformed_trajectories[..., 1].min(), transformed_trajectories[..., 1].max()
-    # pc3_min, pc3_max = transformed_trajectories[..., 2].min(), transformed_trajectories[..., 2].max()
-    #
-    # pc1 = np.linspace(pc1_min, pc1_max, n_grid)
-    # pc2 = np.linspace(pc2_min, pc2_max, n_grid)
-    # pc3 = np.linspace(pc3_min, pc3_max, n_grid)
-    # PC1, PC2, PC3 = np.meshgrid(pc1, pc2, pc3, indexing='ij')
-    #
-    # # Flatten the meshgrid to a list of points (N, 3)
-    # grid_points_pca = np.stack([PC1.ravel(), PC2.ravel(), PC3.ravel()], axis=-1)  # shape (n_grid**3, 3)
-    #
-    # # Inverse transform to original state space
-    # grid_points_orig = pca.inverse_transform(grid_points_pca)  # shape (n_grid**3, dim)
-    #
-    # # Convert to torch tensor for SL.predict
-    # grid_points_orig_torch = torch.from_numpy(grid_points_orig).float().to(SL.device)
-    #
-    # # Evaluate SL.predict in batches to avoid memory issues
-    # batch_size = 4096
-    # preds = []
-    # with torch.no_grad():
-    #     for i in range(0, grid_points_orig_torch.shape[0], batch_size):
-    #         batch = grid_points_orig_torch[i:i+batch_size]
-    #         pred = SL.predict(batch)
-    #         preds.append(pred.cpu().numpy())
-    # preds = np.concatenate(preds, axis=0)  # shape (n_grid**3,)
-    #
-    # # Reshape predictions to grid shape
-    # preds_grid = preds.reshape(PC1.shape)
-    #
-    # # Plot the zero level set using matplotlib's contour3D
-    # from skimage import measure
-    #
-    # # The marching cubes algorithm expects the grid in (z, y, x) order, so we transpose
-    # verts, faces, normals, values = measure.marching_cubes(preds_grid, level=0, spacing=(
-    #     pc1[1] - pc1[0], pc2[1] - pc2[0], pc3[1] - pc3[0]
-    # ))
-    #
-    # # # The verts are in PCA space, so we can plot them directly in the 3D PCA plot
-    # # # Add the surface to the existing 3D plot
-    # from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-    #
-    # mesh = Poly3DCollection(verts[faces], alpha=0.2, facecolor='cyan', edgecolor='none')
+    # Define the grid in PCA space
+    n_grid = 15 #60  # You can adjust this for resolution
+    # Calculate the mean from PCA object and transform it to PCA space
+    mean_original = pca.mean_
+    mean_pca = pca.transform(mean_original.reshape(1, -1))[0]
+    mean_pc1 = mean_pca[0]
+    mean_pc2 = mean_pca[1]
+    mean_pc3 = mean_pca[2]
+    
+    # Calculate the range to determine grid size
+    pc1_range = transformed_trajectories[..., 0].max() - transformed_trajectories[..., 0].min()
+    pc2_range = transformed_trajectories[..., 1].max() - transformed_trajectories[..., 1].min() 
+    pc3_range = transformed_trajectories[..., 2].max() - transformed_trajectories[..., 2].min()
+    
+    # Add padding and center around mean
+    padding = -0.2
+    half_width1 = (1 + padding) * pc1_range / 2
+    half_width2 = (1 + padding) * pc2_range / 2
+    half_width3 = (1 + padding) * pc3_range / 2
+    
+    # Create grid centered at mean
+    pc1 = np.linspace(mean_pc1 - half_width1, mean_pc1 + half_width1, n_grid)
+    pc2 = np.linspace(mean_pc2 - half_width2, mean_pc2 + half_width2, n_grid)
+    pc3 = np.linspace(mean_pc3 - half_width3, mean_pc3 + half_width3, n_grid)
+    PC1, PC2, PC3 = np.meshgrid(pc1, pc2, pc3, indexing='ij')
 
-    #####
+    # Flatten the meshgrid to a list of points (N, 3)
+    grid_points_pca = np.stack([PC1.ravel(), PC2.ravel(), PC3.ravel()], axis=-1)  # shape (n_grid**3, 3)
 
-    SL.prepare_models_for_gradient_descent(distribution)
+    # Inverse transform to original state space
+    grid_points_orig = pca.inverse_transform(grid_points_pca)  # shape (n_grid**3, dim)
 
-    separatrix_data = SL.find_separatrix(distribution,**instantiate(cfg.separatrix_find_separatrix_kwargs))
-    all_points = np.concatenate(separatrix_data[1])
-    all_points_pca = pca.transform(all_points)
+    # Convert to torch tensor for SL.predict
+    grid_points_orig_torch = torch.from_numpy(grid_points_orig).float().to(SL.device)
 
-    #####
-
+    # Evaluate SL.predict in batches to avoid memory issues
+    batch_size = 4096
+    preds = []
+    with torch.no_grad():
+        for i in range(0, grid_points_orig_torch.shape[0], batch_size):
+            batch = grid_points_orig_torch[i:i+batch_size]
+            pred = SL.predict(batch)
+            preds.append(pred.cpu().numpy())
+    preds = np.concatenate(preds, axis=0)  # shape (n_grid**3,)
 
     # Plot in 3D using PCA-transformed data
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111, projection='3d')
 
+    # Create two meshes for the two predictions
+    for pred_idx in range(2):
+        preds_reshaped = preds[...,pred_idx]
+
+        # Reshape predictions to grid shape
+        preds_grid = preds_reshaped.reshape(PC1.shape)
+
+        # Plot the zero level set using matplotlib's contour3D
+        from skimage import measure
+
+        # The marching cubes algorithm expects the grid in (z, y, x) order, so we transpose
+        verts, faces, normals, values = measure.marching_cubes(preds_grid, level=0, spacing=(
+            pc1[1] - pc1[0], pc2[1] - pc2[0], pc3[1] - pc3[0]
+        ))
+
+        # Create mesh with different colors for each prediction
+        mesh = Poly3DCollection(verts[faces], alpha=0.2, 
+                              facecolor='cyan' if pred_idx == 0 else 'magenta', 
+                              edgecolor='none')
+        ax.add_collection3d(mesh)
+
+    # SL.prepare_models_for_gradient_descent(distribution)
+    #
+    # separatrix_data = SL.find_separatrix(distribution,**instantiate(cfg.separatrix_find_separatrix_kwargs))
+    # all_points = np.concatenate(separatrix_data[1])
+    # all_points_pca = pca.transform(all_points)
+
+    #####
+
+    # Find points with lowest 3 percentile of predictions for each model
+    percentile_3 = np.percentile(np.abs(preds), 3, axis=0)
+    low_pred_mask = np.abs(preds) < percentile_3
+
+    # Get the PCA coordinates of these points
+    grid_points_pca_reshaped = grid_points_pca.reshape(-1, 3)
+
+    # Plot points for each model prediction
+    for pred_idx in range(2):
+        low_pred_points = grid_points_pca_reshaped[low_pred_mask[:, pred_idx]]
+        ax.scatter(
+            low_pred_points[:, 0],
+            low_pred_points[:, 1],
+            low_pred_points[:, 2],
+            c='blue' if pred_idx == 0 else 'green',
+            s=10,
+            alpha=0.5,
+            label=f'Model {pred_idx+1} low KEF'
+        )
+
     t = -450
-    for traj in transformed_trajectories.transpose(1, 0, 2):  # Each trajectory
+    # for traj in transformed_trajectories.transpose(1, 0, 2):  # Each trajectory
         # ax.plot(
         #     traj[t:, 0],
         #     traj[t:, 1],
@@ -423,37 +765,40 @@ def plot_dynamics_3D(cfg):
         #     alpha=0.6
         # )
         # Plot final points
-        ax.scatter(
-            traj[-1, 0],
-            traj[-1, 1],
-            traj[-1, 2],
-            c='red',
-            s=50
-        )
+    ax.scatter(
+        transformed_trajectories[-1,:, 0],
+        transformed_trajectories[-1,:, 1],
+        transformed_trajectories[-1,:, 2],
+        c='red',
+        s=50
+    )
     # ax.add_collection3d(mesh)
-    ax.scatter(*all_points_pca.T,c='blue')
+    # ax.scatter(*all_points_pca.T,c='blue')
     ax.set_xlabel(f'PC1 ({pca.explained_variance_ratio_[0]:.2f})')
     ax.set_ylabel(f'PC2 ({pca.explained_variance_ratio_[1]:.2f})')
     ax.set_zlabel(f'PC3 ({pca.explained_variance_ratio_[2]:.2f})')
 
     # Change the 3D view angle to be more from above (e.g., elev=30, azim=60)
-    ax.view_init(elev=90, azim=60)
+    # ax.view_init(elev=10, azim=60)
+    ax.view_init(elev=90, azim=90)
+    ax.legend()
 
     # plt.title('PCA-transformed Trajectories')
     fig.savefig(Path(cfg.savepath) / cfg.experiment_details / "3d_trajectories_pca.png")
     fig.savefig(Path(cfg.savepath) / cfg.experiment_details / "3d_trajectories_pca.pdf")
 
     plt.show()
-    ##### Function to rotate the plot ######
-    def rotate(angle):
-        ax.view_init(elev=30, azim=angle)
 
-    # Create animation
-    num_frames = 360  # Number of frames for a full rotation
-    rotation_animation = animation.FuncAnimation(fig, rotate, frames=num_frames, interval=1000 / 30)
-
-    # Save the animation to a file
-    rotation_animation.save(Path(cfg.savepath) / 'PCA_3d_rotation.mp4', writer='ffmpeg', fps=30, dpi=100)
+    # ##### Function to rotate the plot ######
+    # def rotate(angle):
+    #     ax.view_init(elev=30, azim=angle)
+    #
+    # # Create animation
+    # num_frames = 360  # Number of frames for a full rotation
+    # rotation_animation = animation.FuncAnimation(fig, rotate, frames=num_frames, interval=1000 / 30)
+    #
+    # # Save the animation to a file
+    # rotation_animation.save(Path(cfg.savepath) / 'PCA_3d_rotation.mp4', writer='ffmpeg', fps=30, dpi=100)
 
 def RNN_fixedpoints(cfg):
     omegaconf_resolvers()
@@ -515,15 +860,15 @@ def find_saddle_point(cfg):
     cfg.savepath = os.path.join(project_path, cfg.savepath)
     dynamics_function = instantiate(cfg.dynamics.function)
     point_on_separatrix = instantiate(cfg.dynamics.point_on_separatrix)
-    saddle_point = instantiate(cfg.dynamics.saddle_point)
+    # saddle_point = instantiate(cfg.dynamics.saddle_point)
     from odeint_utils import run_odeint_to_final
     from plotting import dynamics_to_kinetic_energy
 
     # iid_gammas = instantiate(cfg.dynamics.iid_gammas)
 
-    from separatrix_point_finder import find_saddle_point
-    saddle_point, eigenvalues, trajectory, ke_traj = find_saddle_point(dynamics_function, point_on_separatrix, T=1, return_all=True)
-    saddle_point[saddle_point<0] = 0
+    # from separatrix_point_finder import find_saddle_point
+    # saddle_point, eigenvalues, trajectory, ke_traj = find_saddle_point(dynamics_function, point_on_separatrix, T=1000, return_all=True)
+    # saddle_point[saddle_point<0] = 0
     #
     # Save saddle point to file
     # save_path = Path(cfg.savepath) / 'saddle_point.pt'
@@ -531,97 +876,102 @@ def find_saddle_point(cfg):
     #
     # save_path = Path(cfg.savepath) / 'point_on_separatrix.pt'
     # torch.save(point_on_separatrix, save_path)
+    # #
+    # kinetic_energy_function = dynamics_to_kinetic_energy(dynamics_function)
+    # with torch.no_grad():
+    #     print(kinetic_energy_function(saddle_point))
+    # #
+    # # # Run trajectory starting from point on separatrix
+    # # T = 1.0
+    # # trajectory = run_odeint_to_final(dynamics_function, point_on_separatrix, T=T,steps=100, return_last_only=False)
+    # # ke_traj = kinetic_energy_function(trajectory)
+    # #
+    # plt.figure()
+    # plt.plot(ke_traj)
+    # plt.yscale('log')
+    # plt.show()
     #
-    kinetic_energy_function = dynamics_to_kinetic_energy(dynamics_function)
-    kinetic_energy_function(saddle_point)
+    # # # Find point with minimum kinetic energy along trajectory
+    # # min_ke_idx = torch.argmin(ke_traj)
+    # # saddle_point = trajectory[min_ke_idx]
+    # #
+    # # Compute Jacobian at saddle point using autograd
+    # x = saddle_point.clone().detach().requires_grad_(True)
+    # y = dynamics_function(x)
+    # jacobian = torch.autograd.functional.jacobian(dynamics_function, x)
+    # #
+    # # Compute eigenvalues
+    # eigenvalues = torch.linalg.eigvals(jacobian)
     #
-    # # Run trajectory starting from point on separatrix
-    # T = 1.0
-    # trajectory = run_odeint_to_final(dynamics_function, point_on_separatrix, T=T,steps=100, return_last_only=False)
-    # ke_traj = kinetic_energy_function(trajectory)
+    # print("Saddle point:", saddle_point)
+    # print("Eigenvalues at saddle point:", eigenvalues)
     #
-    plt.figure()
-    plt.plot(ke_traj)
-    plt.yscale('log')
-    plt.show()
-
-    # # Find point with minimum kinetic energy along trajectory
-    # min_ke_idx = torch.argmin(ke_traj)
-    # saddle_point = trajectory[min_ke_idx]
+    # plt.figure()
+    # plt.scatter(eigenvalues.real,eigenvalues.imag)
+    # plt.show()
     #
-    # Compute Jacobian at saddle point using autograd
-    x = saddle_point.clone().detach().requires_grad_(True)
-    y = dynamics_function(x)
-    jacobian = torch.autograd.functional.jacobian(dynamics_function, x)
+    # # # The final point should be near a saddle point
+    # # # saddle_point = trajectory[-1]
+    # # # return saddle_point
+    # #
     #
-    # Compute eigenvalues
-    eigenvalues = torch.linalg.eigvals(jacobian)
-
-    print("Saddle point:", saddle_point)
-    print("Eigenvalues at saddle point:", eigenvalues)
-
-    # # The final point should be near a saddle point
-    # # saddle_point = trajectory[-1]
-    # # return saddle_point
+    # from ssr_module.steady_state_reduction_example import get_all_stein_steady_states, ssrParams, Params
+    # p = Params()
+    # ssr_steady_states = get_all_stein_steady_states(p)
+    # s = ssrParams(p, ssr_steady_states['E'], ssr_steady_states['C'])
     #
-
-    from ssr_module.steady_state_reduction_example import get_all_stein_steady_states, ssrParams, Params
-    p = Params()
-    ssr_steady_states = get_all_stein_steady_states(p)
-    s = ssrParams(p, ssr_steady_states['E'], ssr_steady_states['C'])
-
-    # Sample initial conditions around saddle point with Gaussian noise
-    num_samples = 100
-    noise_std = 0.1
-    noise = torch.randn(num_samples, saddle_point.shape[0]) * noise_std
-    initial_conditions = point_on_separatrix + noise[:,:2] @ torch.tensor(np.stack([s.ssa, s.ssb]),dtype=torch.float32)
-
-    # Ensure all values are non-negative
-    initial_conditions = torch.clamp(initial_conditions, min=0.0)
-
-    # Run trajectories from these initial conditions
-    T = 10.0
-    trajectories = run_odeint_to_final(dynamics_function, initial_conditions, T=T, steps=1000, return_last_only=False)
-
-    # Reshape trajectories for PCA
-    traj_shape = trajectories.shape
-    X = trajectories.reshape(-1, traj_shape[-1])
-
-    # Perform k-means clustering on final points of trajectories
-    from sklearn.cluster import KMeans
-    kmeans = KMeans(n_clusters=2, random_state=0)
-    final_points = trajectories[-1]
-    cluster_labels = kmeans.fit_predict(final_points)
-
-    # Perform PCA
-    from sklearn.decomposition import PCA
-    pca = PCA(n_components=2)
-    # X_pca = pca.fit_transform(X.detach().numpy())
-    X_pca = p.project_to_2D(X,ssa=s.ssa,ssb=s.ssb)
-
-    # Reshape back to trajectory form
-    X_pca = X_pca.reshape(traj_shape[0], traj_shape[1], 2)
-
-    # Plot trajectories in PCA space
-    plt.figure(figsize=(5, 4))
-    for i in range(num_samples):
-        plt.plot(X_pca[:, i, 0], X_pca[:, i, 1], alpha=0.3, c=f'C{cluster_labels[i]}')
-
-    # Plot saddle point in PCA space
-    # saddle_pca = pca.transform(saddle_point.detach().numpy().reshape(1, -1))
-    saddle_pca = p.project_to_2D(saddle_point[None].detach(),ssa=s.ssa,ssb=s.ssb)
-    plt.scatter(saddle_pca[0, 0], saddle_pca[0, 1], c='red', marker='x', s=100, label='Saddle Point')
-
-    # Plot attractors in PCA space
-    # attractors_pca = pca.transform(attractors.detach().numpy())
-    # plt.scatter(attractors_pca[:, 0], attractors_pca[:, 1], c='black', marker='o', s=100, label='Attractors')
-
-    plt.xlabel('First Principal Component')
-    plt.ylabel('Second Principal Component')
-    plt.title('Trajectories from Saddle Point (PCA)')
-    plt.legend()
-    plt.savefig(Path(cfg.savepath)/'trajectories2D.png')
-    plt.show()
+    # # Sample initial conditions around saddle point with Gaussian noise
+    # num_samples = 100
+    # noise_std = 0.1
+    # noise = torch.randn(num_samples, saddle_point.shape[0]) * noise_std
+    # initial_conditions = point_on_separatrix + noise[:,:2] @ torch.tensor(np.stack([s.ssa, s.ssb]),dtype=torch.float32)
+    #
+    # # Ensure all values are non-negative
+    # initial_conditions = torch.clamp(initial_conditions, min=0.0)
+    #
+    # # Run trajectories from these initial conditions
+    # T = 10.0
+    # trajectories = run_odeint_to_final(dynamics_function, initial_conditions, T=T, steps=1000, return_last_only=False)
+    #
+    # # Reshape trajectories for PCA
+    # traj_shape = trajectories.shape
+    # X = trajectories.reshape(-1, traj_shape[-1])
+    #
+    # # Perform k-means clustering on final points of trajectories
+    # from sklearn.cluster import KMeans
+    # kmeans = KMeans(n_clusters=2, random_state=0)
+    # final_points = trajectories[-1]
+    # cluster_labels = kmeans.fit_predict(final_points)
+    #
+    # # Perform PCA
+    # from sklearn.decomposition import PCA
+    # pca = PCA(n_components=2)
+    # # X_pca = pca.fit_transform(X.detach().numpy())
+    # X_pca = p.project_to_2D(X,ssa=s.ssa,ssb=s.ssb)
+    #
+    # # Reshape back to trajectory form
+    # X_pca = X_pca.reshape(traj_shape[0], traj_shape[1], 2)
+    #
+    # # Plot trajectories in PCA space
+    # plt.figure(figsize=(5, 4))
+    # for i in range(num_samples):
+    #     plt.plot(X_pca[:, i, 0], X_pca[:, i, 1], alpha=0.3, c=f'C{cluster_labels[i]}')
+    #
+    # # Plot saddle point in PCA space
+    # # saddle_pca = pca.transform(saddle_point.detach().numpy().reshape(1, -1))
+    # saddle_pca = p.project_to_2D(saddle_point[None].detach(),ssa=s.ssa,ssb=s.ssb)
+    # plt.scatter(saddle_pca[0, 0], saddle_pca[0, 1], c='red', marker='x', s=100, label='Saddle Point')
+    #
+    # # Plot attractors in PCA space
+    # # attractors_pca = pca.transform(attractors.detach().numpy())
+    # # plt.scatter(attractors_pca[:, 0], attractors_pca[:, 1], c='black', marker='o', s=100, label='Attractors')
+    #
+    # plt.xlabel('First Principal Component')
+    # plt.ylabel('Second Principal Component')
+    # plt.title('Trajectories from Saddle Point (PCA)')
+    # plt.legend()
+    # plt.savefig(Path(cfg.savepath)/'trajectories2D.png')
+    # plt.show()
 
 
 def run_one_training_step_and_compute_grad(cfg):
@@ -629,7 +979,7 @@ def run_one_training_step_and_compute_grad(cfg):
     dynamics_function = instantiate(cfg.dynamics.function)
     distribution_fit = instantiate(cfg.dynamics.IC_distribution_fit)
 
-def plot_2D_dynamics_reduced(cfg):
+def plot_2D_dynamics_reduced_microbiome(cfg):
     omegaconf_resolvers()
     cfg.savepath = os.path.join(project_path, cfg.savepath)
     from ssr_module.steady_state_reduction_example import Params
@@ -711,7 +1061,7 @@ def plot_2D_dynamics_reduced(cfg):
     # Plot the KEF values as a heatmap
     fig,ax= plt.subplots(figsize=(4, 4))
     # plt.contour(X, Y, KEFvals[..., 0], levels=20, cmap='RdBu')
-    ax.contourf(X, Y, KEFvals[...,0], levels=15, cmap='Blues_r')
+    ax.contourf(X, Y, np.abs(KEFvals)[...,0], levels=15, cmap='Blues_r')
     CS = ax.contour(X, Y, KEFvals[...,0], levels=[0], colors='lightgreen')
 
     # Plot streamlines
@@ -733,19 +1083,24 @@ def plot_2D_dynamics_reduced(cfg):
     saddle_point2D = p.project_to_2D(saddle_point[None], ssa=s.ssa, ssb=s.ssb)
 
     # Plot the projected point
-    ax.scatter(point_on_separatrix2D[:,0], point_on_separatrix2D[:,1], c='green', s=100, label='Separatrix Point')
-    ax.scatter(saddle_point2D[:, 0], saddle_point2D[:, 1], c='red', s=100, label='Separatrix Point')
+    # ax.scatter(point_on_separatrix2D[:,0], point_on_separatrix2D[:,1], c='green', s=100, label='Separatrix Point')
+    ax.scatter(saddle_point2D[:, 0], saddle_point2D[:, 1], c='lightgreen', s=200, marker='x')#, label='Saddle Point')
+    ax.scatter(0, 1, c='lightgreen', s=200, marker='o') #, label='Saddle Point')
+    ax.scatter(1, 0, c='lightgreen', s=200, marker='o') #, label='Saddle Point')
 
-    plot_ND_separatrix(p,s,ax=ax,sep_filename=Path('/home/kabird/separatrixLocator/')/'ssr_module/11D_separatrix_1e-2.data')
+    plot_ND_separatrix(p,s,color='orange',ax=ax,sep_filename=Path('/home/kabird/separatrixLocator/')/'ssr_module/11D_separatrix_1e-2.data',label=None)
 
-    ax.set_xlabel('Coefficient of v1')
-    ax.set_ylabel('Coefficient of v2')
+    # ax.set_xlabel('Coefficient of v1')
+    # ax.set_ylabel('Coefficient of v2')
     ax.set_title('KEF Values in 2D Reduced Space')
     ax.set_xlim(0,1)
     ax.set_ylim(0, 1)
-    # ax.legend()
+    # remove_frame(ax)
+    ax.get_legend().remove()
+
     fig.tight_layout()
     fig.savefig(Path(cfg.savepath) / "KEF_2D_reduced.png", dpi=300)
+    fig.savefig(Path(cfg.savepath) / "KEF_2D_reduced.pdf")
     plt.show()
 
     # np.unravel_index(np.argmin(((grid_points - point_on_separatrix.detach().numpy()) ** 2).sum(-1)), X.shape)
@@ -1215,6 +1570,7 @@ def plot_KEF_residuals(cfg):
         load_path = Path(cfg.savepath)
         print(new_format_path, 'does not exist, loading', load_path, 'instead.')
     SL.load_models(load_path)
+    # SL = load_models_with_different_speeds(SL,new_format_path)
 
     # Define distributions to test
     distributions = distribution_fit
@@ -1301,6 +1657,26 @@ def plot_KEF_residuals(cfg):
         plt.show()
         plt.close(fig)
 
+        # Plot violin plot of phi_x values
+        fig, ax = plt.subplots()
+        violin_data = [phi_x.flatten() for phi_x in all_phi_x]  # Flatten arrays to 1D
+        labels = [f'Model {i}' for i in range(len(all_phi_x))]
+        ax.violinplot(violin_data, showmedians=True)
+        ax.set_xticks(range(1, len(all_phi_x) + 1))
+        ax.set_xticklabels(labels)
+        ax.set_xlabel('Model')
+        ax.set_ylabel(r'$\psi(x)$')
+        fig.tight_layout()
+        fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"KEFvals_violin_{name}.png", dpi=200)
+        plt.show()
+        plt.close(fig)
+
+        # Compute and print mean/std ratio for each model's phi_x values
+        for i, phi_x in enumerate(all_phi_x):
+            mean_std_ratio = np.mean(phi_x) / np.std(phi_x)
+            print(f"Model {i} mean/std ratio: {mean_std_ratio:.3f}")
+
+
     # separatrix_point = instantiate(cfg.dynamics.point_on_separatrix)
     # KEFval_at_separatrix = SL.predict(separatrix_point)
     # KEFval_at_separatrix
@@ -1313,8 +1689,6 @@ def plot_dynamics_2D(cfg):
 
     distribution = instantiate(cfg.dynamics.IC_distribution)
 
-    separatrix_point = instantiate(cfg.dynamics.point_on_separatrix)
-    saddle_point = instantiate(cfg.dynamics.saddle_point)
 
     ### Loading separatrix locator models
     SL = instantiate(cfg.separatrix_locator)
@@ -1343,11 +1717,12 @@ def plot_dynamics_2D(cfg):
     fig, axs = plt.subplots(1, 2, figsize=(5, 3))
     # Plot initial conditions
     ax = axs[0]
-    plot_flow_streamlines(dynamics_function, ax, x_limits=cfg.dynamics.lims.x, y_limits=cfg.dynamics.lims.y,
-                          resolution=200, density=0.5, color='red', linewidth=0.5, alpha=0.4)
+    # plot_flow_streamlines(dynamics_function, ax, x_limits=cfg.dynamics.lims.x, y_limits=cfg.dynamics.lims.y,
+    #                       resolution=200, density=0.5, color='red', linewidth=0.5, alpha=0.4)
     kinetic_energy_function = dynamics_to_kinetic_energy(dynamics_function)
     X, Y, kinetic_energy_vals = evaluate_on_grid(kinetic_energy_function,
                                                  x_limits=cfg.dynamics.lims.x, y_limits=cfg.dynamics.lims.y, resolution=200)
+    print(X.shape, Y.shape, np.log(kinetic_energy_vals).shape)
     ax.contourf(X, Y, np.log(kinetic_energy_vals), levels=15, cmap='Blues_r')
     ax.set_title(r'$q(x)$')
     # for pointset in pointsets:
@@ -1367,15 +1742,41 @@ def plot_dynamics_2D(cfg):
     ax.contourf(X, Y, KEF_vals_abs, levels=15, cmap='Blues_r')
     CS = ax.contour(X, Y, KEF_vals_raw, levels=[0], colors='lightgreen')
     ax.clabel(CS, CS.levels, fontsize=10)
-    plot_flow_streamlines(dynamics_function, ax, x_limits=cfg.dynamics.lims.x, y_limits=cfg.dynamics.lims.y,
-                          resolution=200, density=0.5, color='red', linewidth=0.5, alpha=0.4)
+    plot_flow_streamlines(dynamics_function, axs.flatten(), x_limits=cfg.dynamics.lims.x, y_limits=cfg.dynamics.lims.y,
+                          resolution=200, density=0.7, color='red', linewidth=0.5, alpha=0.4)
 
     ax.set_title(r'$\psi(x)$')
     # im = ax.imshow(torch.log(torch.abs(KEFvalgrid)), extent=[*cfg.dynamics.lims.x, *cfg.dynamics.lims.y], origin='lower', cmap='viridis')
 
     for ax in axs:
-        ax.scatter(separatrix_point[0],separatrix_point[1])
-        ax.scatter(saddle_point[0],saddle_point[1],marker='x',c='red')
+        if hasattr(cfg.dynamics, 'point_on_separatrix'):
+            separatrix_point = instantiate(cfg.dynamics.point_on_separatrix)
+            ax.scatter(separatrix_point[0],separatrix_point[1])
+        if hasattr(cfg.dynamics, 'saddle_point'):
+            saddle_point = instantiate(cfg.dynamics.saddle_point)
+            ax.scatter(saddle_point[0],saddle_point[1],marker='x',c='red')
+
+    # Plot trajectories if specified in config
+    if hasattr(cfg, 'plot_trajectories_in_2D') and cfg.plot_trajectories_in_2D:
+        # Sample initial conditions uniformly
+        num_trajectories = 20
+        initial_conditions = torch.FloatTensor(num_trajectories, 2).uniform_(-4, 4)
+        
+        # Time settings for integration
+        t_span = torch.linspace(0, 10, 100)
+        
+        # Run trajectories
+        trajectories = odeint(
+            lambda t, x: dynamics_function(x),
+            initial_conditions,
+            t_span
+        )
+        
+        # Plot trajectories on both axes
+        for ax in axs:
+            trajectories_np = trajectories.detach().cpu().numpy()
+            for traj in trajectories_np.transpose(1,0,2):
+                ax.plot(traj[:,0], traj[:,1], 'k-', alpha=0.3, linewidth=0.5)
 
     for ax in axs.flatten():
         ax.set_xlim(*cfg.dynamics.lims.x)
@@ -1400,6 +1801,25 @@ def plot_dynamics_2D(cfg):
                     pointset['y'] = fixed_points.loc[fixed_points['stability']==stability]['x1']
             for pointset in pointsets:
                 ax.scatter(**pointset,c='lightgreen')
+
+    if hasattr(cfg, 'plot_limit_cycles'):
+        limit_cycles = instantiate(cfg.plot_limit_cycles)
+        for ax in axs.flatten():
+            # Plot stable limit cycles in black
+            if 'stable' in limit_cycles:
+                for radius in limit_cycles['stable']:
+                    theta = np.linspace(0, 2*np.pi, 100)
+                    x = radius * np.cos(theta)
+                    y = radius * np.sin(theta)
+                    ax.plot(x, y, 'k-', alpha=0.8, linewidth=1)
+            
+            # Plot unstable limit cycles in orange  
+            if 'unstable' in limit_cycles:
+                for radius in limit_cycles['unstable']:
+                    theta = np.linspace(0, 2*np.pi, 100)
+                    x = radius * np.cos(theta)
+                    y = radius * np.sin(theta)
+                    ax.plot(x, y, 'orange', linestyle='--', alpha=0.8, linewidth=1)
 
     fig.tight_layout()
     fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f'results2D_{cfg.dynamics.name}.pdf')
@@ -2542,6 +2962,7 @@ def main_multimodel(cfg):
     omegaconf_resolvers()
     cfg.savepath = os.path.join(project_path, cfg.savepath)
 
+
     # OmegaConf.resolve(cfg.model)
 
     # print(OmegaConf.to_yaml(cfg))
@@ -2644,17 +3065,17 @@ def main_multimodel(cfg):
     # with torch.no_grad():
     #     SL.models[0][0].weight[:] = 1.0
     # print('skipping fit')
-    SL.fit(
-        dynamics_function,
-        distribution_fit,
-        external_input_dist=input_distribution_fit,
-        dist_weights = cfg.dynamics.dist_weights if hasattr(cfg.dynamics,"dist_weights") else None,
-        **instantiate(cfg.separatrix_locator_fit_kwargs),
-        # **{
-        #     **instantiate(cfg.separatrix_locator_fit_kwargs),
-        #     "learning_rate":1e-5,
-        # },
-    )
+    # SL.fit(
+    #     dynamics_function,
+    #     distribution_fit,
+    #     external_input_dist=input_distribution_fit,
+    #     dist_weights = cfg.dynamics.dist_weights if hasattr(cfg.dynamics,"dist_weights") else None,
+    #     **instantiate(cfg.separatrix_locator_fit_kwargs),
+    #     # **{
+    #     #     **instantiate(cfg.separatrix_locator_fit_kwargs),
+    #     #     "learning_rate":1e-5,
+    #     # },
+    # )
     # print('SL.models[0][0].weight',SL.models[0][0].weight)
     # x = torch.arange(-2.0, 2.0, 0.01)
     # plt.plot(x,dynamics_function(x[:,None])[:,0].detach())
@@ -3145,9 +3566,12 @@ def main_multimodel(cfg):
             attractors = instantiate(cfg.dynamics.attractors)
 
             from interpolation import cubic_hermite, generate_curves_between_points
+            from plotting import remove_frame
+
+            torch.manual_seed(0)
 
             num_points = 100
-            rand_scale = 0.02 #1.0 #4.0 #4.1  # 10.0
+            rand_scale = 5.0 #1.0 #4.0 #4.1  # 10.0
             # Example usage
             x, y = attractors.detach().cpu().numpy()  #
             # x = np.array([0, 0])  # Start point
@@ -3157,7 +3581,7 @@ def main_multimodel(cfg):
 
             num_curves = 100  # 20  # Number of random curves to generate
 
-            all_points,alpha_range = generate_curves_between_points(x, y, lims=[0.03, 0.2],num_points=num_points,num_curves=num_curves,rand_scale=rand_scale, return_alpha=True)
+            all_points,alpha_range = generate_curves_between_points(x, y, lims=[0.0, 1.0],num_points=num_points,num_curves=num_curves,rand_scale=rand_scale, return_alpha=True)
             all_points = all_points.reshape(-1,all_points.shape[-1])
             # Perform PCA
             from sklearn.decomposition import PCA
@@ -3190,20 +3614,50 @@ def main_multimodel(cfg):
             cluster_labels = kmeans.fit_predict(trajectories_np[-1])
 
             # Plot PCA results
-            fig = plt.figure(figsize=(10, 10))
-            plt.scatter(pca_points[:, 0], pca_points[:, 1],
-                        c=['C0' if label == 0 else 'C1' for label in cluster_labels], alpha=1.0)
+            fig,ax = plt.subplots(figsize=(5, 5))
+            # plt.scatter(pca_points[:, 0], pca_points[:, 1],
+            #             c=['C0' if label == 0 else 'C1' for label in cluster_labels], alpha=1.0)
 
+            
+            pca_points = pca_points.reshape(num_curves, num_points, pca.n_components_)
+            cluster_labels = cluster_labels.reshape(num_curves, num_points)
+            # Calculate changes in cluster labels along each curve
+            changes = np.diff(cluster_labels, axis=1) != 0
+            for i in range(num_curves):
+                # Plot first segment up to change point
+                change_idx = np.where(changes[i])[0][0] if np.any(changes[i]) else num_points
+                ax.plot(pca_points[i,:change_idx+1,0], pca_points[i,:change_idx+1,1], 
+                       c='C0' if cluster_labels[i,0] == 0 else 'C1', alpha=0.5)
+                
+                # Plot second segment from change point if it exists
+                if change_idx < num_points-1:
+                    ax.plot(pca_points[i,change_idx:,0], pca_points[i,change_idx:,1],
+                           c='C1' if cluster_labels[i,0] == 0 else 'C0', alpha=0.5)
+
+                change_idx = np.where(changes[i])[0][0] if np.any(changes[i]) else num_points
+                ax.plot(pca_points[i,change_idx,0], pca_points[i,change_idx,1], 
+                       'x', color='red', markersize=10, alpha=0.8)
+
+            # Flatten back for plotting
+            pca_points = pca_points.reshape(-1, pca.n_components_)
+            cluster_labels = cluster_labels.reshape(-1)
+            
             # Plot endpoints in PCA space
             endpoints = np.array([x, y])
             pca_endpoints = pca.transform(endpoints)
-            plt.scatter(pca_endpoints[:, 0], pca_endpoints[:, 1], color='red', label="Endpoints")
+            ax.scatter(pca_endpoints[:, 0], pca_endpoints[:, 1], color='lightgreen', s=50, label="Endpoints",zorder=1)
 
-            plt.xlabel('Principal Component 1')
-            plt.ylabel('Principal Component 2')
-            plt.title('PCA of Cubic Hermite Interpolations')
-            plt.grid(True)
+            ax.set_xlabel('Principal Component 1')
+            ax.set_ylabel('Principal Component 2')
+            remove_frame(ax)
+
+            # ax.title('PCA of Cubic Hermite Interpolations')
+            # plt.grid(True)
+
             fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"hermite_cubic_interpolations_plus_clustering_scale{rand_scale}.png", dpi=300)
+            fig.savefig(Path(
+                cfg.savepath) / cfg.experiment_details / f"hermite_cubic_interpolations_plus_clustering_scale{rand_scale}.pdf",
+                        dpi=300)
             plt.show()
             plt.close(fig)
 
@@ -3218,12 +3672,12 @@ def main_multimodel(cfg):
             cluster_labels = kmeans.fit_predict(trajectories_np[-1])
             cluster_labels = cluster_labels.reshape(num_curves, num_points)
             changes = np.diff(cluster_labels, axis=1) != 0
-            change_points_id = np.argmax(changes, axis=1)
+            change_points = np.argmax(changes, axis=1)
             # Handle cases where there are no changes (all zeros or all ones)
             no_changes = ~np.any(changes, axis=1)
-            change_points_id[no_changes] = num_points // 2
+            change_points[no_changes] = num_points // 2
 
-            change_points = alpha_range[change_points_id]
+            change_points_alpha = alpha_range[change_points]
 
             q = 0.05
             absKEFvals = np.abs(KEFvals.numpy())[..., 0]
@@ -3241,20 +3695,51 @@ def main_multimodel(cfg):
             # If all values were above quantile (all -1), set to middle point
             # max_below_quantile[max_below_quantile == 0] = num_points // 2
 
-            max_below_threshold_position = np.linspace(0, 1, num_points)[max_below_threshold_id]
+            max_below_threshold_position = alpha_range[max_below_threshold_id]
 
-            fig = plt.figure()
-            plt.scatter(change_points, max_below_threshold_position)
-            xlim = plt.xlim()
-            ylim = plt.ylim()
-            plt.plot([0, 1], [0, 1], 'k--', alpha=0.5)
-            plt.xlim(xlim)
-            plt.ylim(ylim)
-            plt.xlabel('true separatrix point')
-            plt.ylabel('KEF foot point')
+            # Find position of minimum absolute KEF value for each curve
+            max_below_threshold_id = np.argmin(absKEFvals, axis=1)
+            argmin_alpha = alpha_range[max_below_threshold_id]
+
+            fig, ax = plt.subplots(1, 1, figsize=(3.2,3.2))
+            ax.scatter(change_points_alpha, argmin_alpha)
+            xlim = ax.get_xlim()
+            ylim = ax.get_ylim()
+            ax.plot([0, 1], [0, 1], 'k--', alpha=0.5)
+            ax.set_xlim(xlim)
+            ax.set_ylim(ylim)
+            ax.set_xlabel(r'true separatrix point $\alpha$')
+            ax.set_ylabel(r'$\psi=0$ point $\alpha$')
+            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False)
+            ax.set_xticks([.0, 0.5, 1.0])
+            ax.set_yticks([.0, 0.5, 1.0])
+            ax.spines['left'].set_bounds(0, 1)
+            ax.spines['bottom'].set_bounds(0, 1)
+            ax.set_xlim(-.1,1.1)
+            ax.set_ylim(-.1,1.1)
+
+            # Compute standard R^2 score between change points and argmin positions
+            from sklearn.metrics import r2_score
+            r2 = r2_score(change_points_alpha, argmin_alpha)
+            
+            # Add R^2 annotation
+            ax.text(0.3, 0.7, f'$R^2={r2:.3f}$',
+                   transform=ax.transAxes,
+                   verticalalignment='top',
+                   fontsize=12)
+
+            ax.set_aspect('equal')
+
+            fig.tight_layout()
             plt.show()
             fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"separatrix_poisition_along_curves{rand_scale}.png", dpi=300)
+            fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"separatrix_poisition_along_curves{rand_scale}.pdf",
+                dpi=300)
 
+
+
+            
             fig, axes = plt.subplots(4, 10, figsize=(20, 8))
             axes = axes.flatten()
 
@@ -3274,11 +3759,50 @@ def main_multimodel(cfg):
             fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"hermite_cubic_interpolations_KEFvals_scale{rand_scale}.png", dpi=300)
 
 
-            num_points = 500 #00 #00
-            noise_scale = 0.1
-            hidden = attractors.repeat(num_points//2,1)
-            hidden = hidden*0 + torch.randn(hidden.shape) * noise_scale
-            hidden.shape
+            ########
+            
+            # Select 3 curves based on min, max, and median change points
+            min_idx = np.argmin(change_points)
+            max_idx = np.argmax(change_points)
+            median_idx = np.argsort(change_points)[len(change_points)//2]
+            selected_indices = [min_idx, median_idx, max_idx]
+            labels = ['Curve 1', 'Curve 2', 'Curve 3']
+            colors = ['blue', 'green', 'red']
+
+            # Create single plot
+            fig, ax = plt.subplots(figsize=(4, 3))
+
+            for idx, label, color in zip(selected_indices, labels, colors):
+                ax.plot(alpha_range, KEFvals[idx,:,:], color=color,lw=1)
+                if idx == max_idx:
+                    ax.axvline(x=change_points[idx], color=color, linestyle='--', alpha=1)
+                    ax.text(change_points[idx]+0.065, 10, 'True separatrix\npoint',
+                           rotation=90, va='bottom', ha='center', color=color)
+                else:
+                    ax.axvline(x=change_points[idx], color=color, linestyle='--', alpha=1)
+            ax.axhline(0,ls='solid',c='k',alpha=0.3)
+            ax.set_xlabel(r'Curve parameter $\alpha$',fontsize=13)
+            ax.set_ylabel(r'KEF Value $\psi$',fontsize=13)
+            remove_frame(ax,['right','top'])
+            ax.set_xticks([0,0.5,1])
+            ax.spines['bottom'].set_bounds(0, 1)
+            ax.set_yticks([-80,-40,0,40,80])
+            ax.set_yticklabels([])
+            ax.spines['left'].set_bounds(-80, 80)
+
+            # ax.set_title('KEF Values Along Selected Curves')
+
+
+            fig.tight_layout()
+            plt.show()
+            fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"hermite_cubic_interpolations_KEFvals_selected_scale{rand_scale}.png", dpi=300)
+            fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"hermite_cubic_interpolations_KEFvals_selected_scale{rand_scale}.pdf", dpi=300)
+
+            ########
+
+
+
+
 
             from learn_koopman_eig import runGD_basic
 
@@ -3286,31 +3810,44 @@ def main_multimodel(cfg):
             SL.prepare_models_for_gradient_descent(distribution)
 
             anchor_point = attractors[0:1]
+            torch.manual_seed(42)
+            pert = torch.randn(anchor_point.shape)
+            anchor_point = anchor_point + pert
 
-            SL.functions_for_gradient_descent[0] = compose(
+            shifted_KEF_function = compose(
                 SL.functions_for_gradient_descent[0],
                 lambda x: x + anchor_point
             )
 
+            KEF_function = SL.functions_for_gradient_descent[0]
+
+            num_points_GD = 5  # 00 #00
+            noise_scale = 0.04
+            hidden = attractors[:1].repeat(num_points_GD, 1)
+            hidden = hidden * 0 + torch.randn(hidden.shape) * noise_scale
+            hidden.shape
+
+            print(KEF_function(attractors),KEF_function(anchor_point), shifted_KEF_function(hidden*0))
 
             traj, below_thr_points = runGD_basic(
-                SL.functions_for_gradient_descent[0],
+                shifted_KEF_function,
                 initial_conditions=hidden,
-                partial_optim=partial(torch.optim.Adam, lr=0.6e-3, weight_decay=0.1),
-                threshold=1e-2,
+                partial_optim=partial(torch.optim.Adam, lr=0.6e-3, weight_decay=0.03),
+                threshold=1e-1,
                 num_steps=2000,
                 save_trajectories_every=100,
             )
             new_traj, below_thr_points = runGD_basic(
-                SL.functions_for_gradient_descent[0],
+                shifted_KEF_function,
                 initial_conditions=hidden,
-                partial_optim=partial(torch.optim.Adam, lr=0.6e-3, weight_decay=0.1),
-                threshold=1e-2,
+                partial_optim=partial(torch.optim.Adam, lr=0.6e-3, weight_decay=0.03),
+                threshold=1e-1,
                 num_steps=2000,
                 save_trajectories_every=100,
             )
             traj = np.concatenate((traj,new_traj))
             traj_distances = np.linalg.norm(traj, axis=-1)
+            below_thr_points = below_thr_points + anchor_point
 
 
             f = SL.functions_for_gradient_descent[0]
@@ -3319,7 +3856,7 @@ def main_multimodel(cfg):
             KEFat_new_point = f(new_point)
             print("KEFat_new_point",KEFat_new_point)
             with torch.no_grad():
-                KEFtraj = f(torch.tensor(traj))
+                KEFtraj = shifted_KEF_function(torch.tensor(traj))
 
             fig,axs = plt.subplots(2,1, sharex=True)
             ax = axs[0]
@@ -3329,6 +3866,82 @@ def main_multimodel(cfg):
             ax.plot(KEFtraj[...,0])
             ax.set_ylabel('KEF value')
             ax.set_xlabel('training iterations')
+            plt.show()
+
+            from separatrix_point_finder import find_separatrix_point_along_line
+            # Stack anchor point and attractor[2] for endpoints
+            endpoints = torch.stack([
+                anchor_point[0],
+                attractors[1]
+            ])
+            line_separatrix_point = find_separatrix_point_along_line(
+                dynamics_function,
+                instantiate(cfg.dynamics.static_external_input),
+                endpoints,
+                num_points=20,
+                num_iterations=3,
+                final_time=30,
+            )
+
+
+            separatrix_points = [new_point[0],line_separatrix_point]
+
+            all_points_st = all_points.reshape(num_curves,num_points,all_points.shape[-1])
+            changes = np.diff(cluster_labels, axis=1) != 0
+            change_points = np.argmax(changes, axis=1)
+            change_point_states = all_points_st[np.arange(num_curves),change_points]
+
+            distance_to_anchor_point = lambda point: np.linalg.norm(point - anchor_point,axis=1)
+            dists = [
+                distance_to_anchor_point(point)
+                for point in separatrix_points
+            ]
+            curves_change_point_dists = distance_to_anchor_point(torch.tensor(change_point_states))
+
+            # Plot vertical lines for distances with labels and histogram
+            fig, ax = plt.subplots(figsize=(4, 3))
+            labels = [r'Optimal direction', 'Towards  target fixed point']
+            colors = ['C8', 'C5']
+            
+            # Plot histogram first so it's in background
+            ax.hist(curves_change_point_dists, bins=20, alpha=0.5, color='C6', label='Towards random points on separatrix', density=True)
+            
+            # Plot vertical lines for each distance
+            for dist, label, color in zip(dists, labels, colors):
+                ax.axvline(x=dist, color=color, lw=2, linestyle='--', label=label)
+            # Add annotations for each vertical line
+            # Add annotations for vertical lines
+            for dist, label, color in zip(dists, labels, colors):
+                ax.annotate(
+                    label,
+                    xy=(dist, ax.get_ylim()[1]),
+                    xytext=(dist-0.2, (ax.get_ylim()[0]+ax.get_ylim()[1])/2),
+                    rotation=90,
+                    ha='right',
+                    va='center',
+                    color=color,
+                    fontsize=13
+                )
+            
+            # Add annotation for histogram
+            ax.annotate(
+                'Towards random points\non separatrix',
+                xy=(curves_change_point_dists.mean(), ax.get_ylim()[1]/2),
+                xytext=(curves_change_point_dists.mean()-0.8, (ax.get_ylim()[0]+ax.get_ylim()[1])/2),
+                rotation=90,
+                ha='right',
+                va='center',
+                color='C6',
+                fontsize=13
+            )
+            ax.set_xlabel('Distance from anchor point')
+            # ax.set_ylabel('Count')
+            remove_frame(ax,spines_to_remove=['top','right','left'])
+            ax.set_xticks(np.arange(0,13,4))
+            # ax.legend(fontsize=12,framealpha=0.2)
+            fig.tight_layout()
+            fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"separatrix_points_distances_histogram_scale{rand_scale}.png", dpi=300)
+            fig.savefig(Path(cfg.savepath) / cfg.experiment_details / f"separatrix_points_distances_histogram_scale{rand_scale}.pdf")
             plt.show()
 
 
@@ -4057,8 +4670,6 @@ def main_multimodel(cfg):
             # outputs = outputs.detach().cpu().numpy()
             # pert_outputs = pert_outputs.detach().cpu().numpy()
             # random_pert_outputs = random_pert_outputs.detach().cpu().numpy()
-            #
-            #
             #
             #
             # fig, axes = plt.subplots(5, 10, sharex=True, sharey='row', figsize=(15, 12))

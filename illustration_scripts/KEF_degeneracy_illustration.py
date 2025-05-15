@@ -4,6 +4,14 @@ from functools import partial
 import matplotlib.pyplot as plt
 import torch
 
+
+plt.rcParams['text.usetex'] = True
+plt.rcParams["font.family"] = "sans-serif"
+plt.rcParams["mathtext.fontset"] = "dejavuserif"
+plt.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
+
+
+
 def dynamics(z):
     return z-z**3
 
@@ -23,7 +31,7 @@ def psi2D(z,mu=0.5):
 x_limits = (-1.5, 1.5)
 y_limits = (-1.5, 1.5)
 
-fig, axs = plt.subplots(1, 3, figsize=(12, 4))
+fig, axs = plt.subplots(1, 3, figsize=(6, 2.5))
 
 mus = [0, 0.5, 1]
 eps = 1
@@ -39,13 +47,38 @@ for ax, mu in zip(axs, mus):
         signed_psi = np.sign(X) * np.sign(Y) * psi
 
     ax.contourf(X, Y, abs_psi, levels=15, cmap='Blues_r')
-    CS = ax.contour(X, Y, signed_psi, levels=[0], colors='red', linewidths=4)
+    CS = ax.contour(X, Y, signed_psi, levels=[0], colors='lightgreen', linewidths=2)
     ax.clabel(CS, CS.levels, fontsize=10)
-    ax.set_title(f'μ = {mu}')
-    plot_flow_streamlines(dynamics,ax,x_limits=x_limits, y_limits=y_limits, resolution=25, color='green', alpha=0.5, density=0.6)
+    ax.set_title(rf'$\mu = {mu}$')
+    plot_flow_streamlines(dynamics,ax,x_limits=x_limits, y_limits=y_limits, resolution=25, color='red', alpha=0.5, density=0.4, linewidth=0.7)
     ax.set_xlim(*x_limits)
     ax.set_ylim(*y_limits)
     remove_frame(ax)
+
+    # Plot fixed points
+    fixed_points = [
+        {
+            'x': [1,-1,1,-1],
+            'y': [1,1,-1,-1], 
+            'marker': 'o',
+            'label': 'stable fixed point',
+            's': 40,
+            'zorder': 2
+        },
+        {
+            'x': [0,1,-1,0,0],
+            'y': [1,0,0,-1,0],
+            'marker': 'x', 
+            'label': 'unstable fixed point',
+            's': 70,
+            'linewidths': 1.5,
+            'zorder': 2
+        }
+    ]
+
+    for ax in axs:
+        for points in fixed_points:
+            ax.scatter(**points, c='lightgreen')
 
 fig.tight_layout()
 plt.show()

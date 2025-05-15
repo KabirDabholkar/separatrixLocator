@@ -1,7 +1,7 @@
 function  :
   _target_  : dynamical_functions.change_speed
   func    : ${..original_function}
-  factor  : 20 #71.25 #1 #13.003 #1/Re(lambda) where lambda is the unstable eigenvalue of the saddle point
+  factor  : 10 #20 #71.25 #1 #13.003 #1/Re(lambda) where lambda is the unstable eigenvalue of the saddle point
 
 original_function :
   _target_  : ssr_module.steady_state_reduction_example_torch.get_dynamics_function

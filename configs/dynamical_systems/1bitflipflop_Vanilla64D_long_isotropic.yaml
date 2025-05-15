@@ -119,15 +119,20 @@ attractors:
   data      : ${..all_attractors}
   k         : 2
 
+#point_on_separatrix :
+#  _target_          : separatrix_point_finder.find_separatrix_point_along_line
+#  dynamics_function : ${..function}
+#  external_input    :
+#    _target_  : torch.tensor
+#    data  : [0.0]
+#  attractors        : ${..attractors}
+#  num_iterations    : 4
+#  num_points        : 20
+#  final_time        : 30
+
 point_on_separatrix :
-  _target_          : separatrix_point_finder.find_separatrix_point_along_line
-  dynamics_function : ${..function}
-  external_input    :
-    _target_  : torch.tensor
-    data  : [0.0]
-  attractors        : ${..attractors}
-  num_iterations    : 4
-  num_points        : 20
-  final_time        : 30
+  _target_: torch.load
+  f: ${savepath}/point_on_separatrix.pt
+
 
 name  : ${.RNN_dataset.n_bits}bitFlipFlop_long_isotropic_Vanilla${.dim}

@@ -64,7 +64,7 @@ input_size  : ${dynamics.dim}
 #hidden_sizes : [2048,1024,512,256,128,64,32,16,8,4,2] #1200 #80 #0 #1000 #1000 #2000 #2
 #num_layers  : 5 #20 #20 #25 #5 #40 #25
 output_size : 1 #7
-num_kernels : 10 #0
+num_kernels : 10 #0 #0
 
 #hidden_size : 50
 #num_layers  : 70

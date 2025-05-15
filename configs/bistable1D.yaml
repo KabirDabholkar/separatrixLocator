@@ -1,0 +1,28 @@
+defaults:
+  - main
+#  - dynamical_systems@dynamics : bistableND
+  - _self_
+
+dynamics_choice : bistable1D
+#dynamics:
+#  dim : 1
+
+model_choice  : ResRBF
+
+device  : cuda:1
+
+separatrix_locator :
+  num_models  : 1
+
+separatrix_locator_fit_kwargs:
+#  num_epochs: 1000
+  num_epochs: 1000     # switch to this later
+#  batch_size: 1000      # use this for now
+  batch_size: 5000     # better alternative?
+  balance_loss_lambda : 5e-2
+  optimizer:
+    lr  : 1e-3
+    weight_decay: 1e-3 #1e-4 #0.0 #1e-3  #5e-3
+
+
+plot_trajectories_in_2D : true

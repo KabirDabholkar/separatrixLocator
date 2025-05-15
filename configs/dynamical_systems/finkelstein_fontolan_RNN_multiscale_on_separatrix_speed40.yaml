@@ -225,15 +225,18 @@ static_external_input :
       - 0.0
       - ${...input_range_2[0]}
 
-point_on_separatrix :
-  _target_          : separatrix_point_finder.find_separatrix_point_along_line
-  dynamics_function : ${..function} 
-  external_input    : ${..static_external_input}
-  attractors        : ${..attractors2}
-  num_iterations    : 4
-  num_points        : 20
-  final_time        : 50 #00
+#point_on_separatrix :
+#  _target_          : separatrix_point_finder.find_separatrix_point_along_line
+#  dynamics_function : ${..function}
+#  external_input    : ${..static_external_input}
+#  attractors        : ${..attractors2}
+#  num_iterations    : 4
+#  num_points        : 20
+#  final_time        : 50 #00
 
+point_on_separatrix :
+  _target_: torch.load
+  f: ${savepath}/point_on_separatrix.pt
 
 
 ###################

@@ -139,15 +139,15 @@ def find_saddle_point(dynamics_function, point_on_separatrix, T=1, steps=100, re
     x = saddle_point.clone().detach().requires_grad_(True)
     optimizer = torch.optim.Adam([x], lr=0.005)
     
-    for i in range(500):
-        optimizer.zero_grad()
-        ke = kinetic_energy(x)
-        ke.backward()
-        optimizer.step()
-        if i % 100 == 0:
-            print('iteration',i,'kinetic energy',ke)
-        if ke < 1e-10:  # Early stopping if kinetic energy is very small
-            break
+    # for i in range(500):
+    #     optimizer.zero_grad()
+    #     ke = kinetic_energy(x)
+    #     ke.backward()
+    #     optimizer.step()
+    #     if i % 100 == 0:
+    #         print('iteration',i,'kinetic energy',ke)
+    #     if ke < 1e-10:  # Early stopping if kinetic energy is very small
+    #         break
             
     saddle_point = x.detach()
 

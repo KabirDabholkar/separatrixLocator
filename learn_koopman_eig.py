@@ -2021,7 +2021,8 @@ def train_with_logger_multiple_dists(
         gmm_n_components=2,
         gmm_oversample_factor=1,
         epoch_callbacks=[],
-        dist_weights=None
+        dist_weights=None,
+        balance_loss_lambda=0.0
 ):
     def fit_gmm(x_batch, residuals, n_components):
         residuals = residuals.squeeze(-1) if residuals.ndim > 1 else residuals
@@ -2067,6 +2068,7 @@ def train_with_logger_multiple_dists(
         total_loss = 0
         normalised_losses = []
         reg_term_values = []
+        balance_losses = []
 
         for i, dist in enumerate(dists):
             external_input_dist_single = None if external_input_dist is None else external_input_dist[i]
@@ -2102,13 +2104,11 @@ def train_with_logger_multiple_dists(
                 input_to_model = torch.cat((input_to_model, external_inputs), dim=-1)
 
             phi_x = model(input_to_model)
-            # print('phi_x shape:',phi_x.shape)
             phi_x_prime = torch.autograd.grad(
                 outputs=phi_x,
                 inputs=x_batch,
                 grad_outputs=torch.ones_like(phi_x),
                 create_graph=True,
-                # retain_graph=True
             )[0]
 
             F_inputs = [x_batch] + ([] if external_input_dist_single is None else [external_inputs])
@@ -2124,6 +2124,11 @@ def train_with_logger_multiple_dists(
             if restrict_to_distribution_lambda > 0:
                 reg_loss = restrict_to_distribution_loss(x_batch, phi_x, dist, threshold=-4.0)
                 total_loss += restrict_to_distribution_lambda * reg_loss
+
+            if balance_loss_lambda > 0:
+                balance_loss = torch.abs( torch.mean(phi_x) / torch.std(phi_x) )
+                balance_losses.append(balance_loss.item())
+                total_loss += balance_loss_lambda * balance_loss
 
             if external_input_dist_single is not None and ext_inp_reg_coeff > 0:
                 group_counts = [batch_size // ext_inp_batch_size + (1 if i < (batch_size % ext_inp_batch_size) else 0)
@@ -2161,7 +2166,8 @@ def train_with_logger_multiple_dists(
         for i, (n_loss, reg_term_value) in enumerate(zip(normalised_losses, reg_term_values)):
             metrics[f"Loss/NormalisedLoss_Dist_{i}"] = n_loss
             metrics[f"Loss/RegTermValue_Dist_{i}"] = reg_term_value
-
+            if balance_loss_lambda > 0:
+                metrics[f"Loss/BalanceLoss_Dist_{i}"] = balance_losses[i]
 
         # Add metadata to metrics if provided
         if metadata is not None:
@@ -2186,9 +2192,9 @@ def train_with_logger_multiple_dists(
             print(
                 f"Epoch {epoch}, Loss: {total_loss.item()}, Normalised losses: {[n_loss for n_loss in normalised_losses]}, "
                 f"Regularisation term values: {[reg_term_value for reg_term_value in reg_term_values]}, "
+                + (f"Balance losses: {balance_losses}, " if balance_loss_lambda > 0 else "") +
                 f"param norm: {param_norm}, Learning Rate: {optimizer.param_groups[0]['lr']}, "
                 f"len(model.parameters()): {len(list(model.parameters()))}, "
-                # +("" if reg_term_value is None else f"External input regularisation term: {reg_term_value.item()},")
             )
             # if x_batch.shape[-1] == 1:
             #
@@ -2502,11 +2508,12 @@ def train(model, F, dist, num_epochs=1000, learning_rate=1e-3, batch_size=64, dy
 class MultiBatchRBFLayer(RBFLayer):
     def __init__(self, reset_params, **kwargs):
         super().__init__(
-            radial_function=rbf_laplacian,
+            radial_function=rbf_gaussian, #rbf_laplacian,
             norm_function=partial(l_norm, p=2),
             **kwargs
         )
-        self.reset(**reset_params)
+        if reset_params is not None:
+            self.reset(**reset_params)
         
     def forward(self, x):
         # Save original shape

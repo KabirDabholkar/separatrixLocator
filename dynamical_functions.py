@@ -74,12 +74,12 @@ def radial_monostable(z):
     dydt = y * (1 - r) + x
     return torch.stack([dxdt, dydt],dim=-1)
 
-def radial_bistable(z):
-    x, y = z[...,0], z[...,1]
-    r = torch.sqrt(x**2 + y**2)
-    dxdt = -x * (r - 1) * (r - 2) - y
-    dydt = -y * (r - 1) * (r - 2) + x
-    return torch.stack([dxdt, dydt],dim=-1)
+# def radial_bistable(z):
+#     x, y = z[...,0], z[...,1]
+#     r = torch.sqrt(x**2 + y**2)
+#     dxdt = -x * (r - 1) * (r - 2) - y
+#     dydt = -y * (r - 1) * (r - 2) + x
+#     return torch.stack([dxdt, dydt],dim=-1)
 
 
 def radial_to_cartesian(radial_dynamics):

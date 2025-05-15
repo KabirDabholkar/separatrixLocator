@@ -4,15 +4,45 @@ function :
     _target_  : dynamical_functions.radial_bistable_limit_cycle
     _partial_ : true
 
+#IC_distribution_fit: ${.isotropic_gaussians}
+IC_distribution_fit:
+  - ${..IC_distribution}
+
 run_traj  : true
 lims:
   x: [-4,4]
   y: [-4,4]
+
+isotropic_gaussians:
+  _target_  : custom_distributions.isotropic_gaussians
+  mean      :
+    _target_  : torch.zeros
+    _args_      :
+      - 2
+  scales    : ${..scale_range}
+
+scale_range :
+  _target_  : numpy.array
+  object  : [4.0]
+
+
 IC_distribution:
-  _target_  : torch.distributions.Normal
-  loc       : 0
-#  scale     : 1
-  scale     : 4
+  _target_  : custom_distributions.makeIIDMultiVariate
+  dist  :
+    _target_  : torch.distributions.Uniform
+    low       : -4
+    high      : 4
+  dim : ${..dim}
+dist_requires_dim : false
+
+#IC_distribution:
+#  _target_  : custom_distributions.makeIIDMultiVariate
+#  dist  :
+#    _target_  : torch.distributions.Normal
+#    loc       : 0
+#    scale     : 4
+#  dim : ${..dim}
+#dist_requires_dim : false
 
 name            : radial2D_bistable_limitcycle
 dim  : 2

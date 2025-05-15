@@ -10,6 +10,9 @@ function :
 #        dim: -1
 #      - ${eval:'lambda x:((x[...,0]-2) - (x[...,0]-2)**3, -x[...,1])'}
 
+IC_distribution_fit:
+  - ${..IC_distribution}
+
 run_traj  : true
 lims:
   x: [-4,4]

@@ -1,30 +1,57 @@
-function :
-  _target_  : compose.compose
-  _args_    :
-    - ${eval:'lambda x:x-x**3'}
-IC_distribution:
-  _target_  : custom_distributions.makeIIDMultiVariate
-  dist  :
-    _target_  : torch.distributions.Normal
-    loc       : 0
-    scale     : 2
-  dim : ${..dim}
+defaults:
+  - bistableND
+  - _self_
 
-#  _target_  : custom_distributions.MultiGapNormal
-#  gap_points  : [-1.0,1.0]
-#  epsilon :  1e-3
-#  loc : 0
-#  scale : 2
-#  _target_  : torch.distributions.Uniform
-#  low       : -1
-#  high      : 1
+dim : 1
 
-dist_requires_dim : false
-name : bistable1D
-dim  : 1
-equation_latex  : x-x^3
+IC_distribution_fit :
+  - ${..IC_distribution1}
+  - ${..IC_distribution2}
+
+#function :
+#  _target_  : compose.compose
+#  _args_    :
+#    - ${eval:'lambda x:x-x**3'}
+#IC_distribution:
+#  _target_  : custom_distributions.makeIIDMultiVariate
+#  dist  :
+#    _target_  : torch.distributions.Normal
+#    loc       : 0
+#    scale     : 2
+#  dim : ${..dim}
+#
+##  _target_  : custom_distributions.MultiGapNormal
+##  gap_points  : [-1.0,1.0]
+##  epsilon :  1e-3
+##  loc : 0
+##  scale : 2
+##  _target_  : torch.distributions.Uniform
+##  low       : -1
+##  high      : 1
+#
+#dist_requires_dim : false
+#name : bistable1D
+#dim  : 1
+#equation_latex  : x-x^3
+
+
+plot_fixed_points:
+  - x : [1,-1]
+    y : [0,0]
+    marker  : o
+    label   : stable fixed point
+    s       : 50
+    zorder  : 2
+  - x : [0]
+    y : [0]
+    marker  : x
+    label   : unstable fixed point
+    s       : 100
+    linewidths : 1.5
+    zorder  : 2
+
+
 analytical_eigenfunction:
   _target_  : compose.compose
   _args_    :
-    - ${eval:'lambda x: x[...,0:1]/((1-x[...,0:1]**2)**2)**0.5 * (-x[...,1:2])'}
-#    - - ${eval:'lambda x:x/((x**2-1)**2)**0.25'}
+    - ${eval:'lambda x:x/((x**2-1)**2)**0.25'}

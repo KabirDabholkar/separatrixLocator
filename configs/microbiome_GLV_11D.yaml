@@ -1,0 +1,30 @@
+defaults:
+  - main
+  - models@model : ResRBF
+  - _self_
+
+dynamics_choice : microbiome_GLV_11D
+#model_choice  : ResRBF
+
+model:
+  hidden_size : 1000
+  num_layers  : 25
+  num_kernels : 10
+
+device  : cuda:1
+
+separatrix_locator :
+  num_models  : 1
+
+separatrix_locator_fit_kwargs:
+#  num_epochs: 1000
+  num_epochs: 10000     # switch to this later
+#  batch_size: 5000
+#  batch_size: 1000      # use this for now
+#  num_epochs: 5000
+  batch_size: 5000     # better alternative?
+  balance_loss_lambda : 0 #5e-2
+  optimizer:
+    lr            : 1e-4
+    weight_decay  : 1e-4 #0.0 #1e-3  #5e-3
+experiment_details : experiment_${model.name}_lr${separatrix_locator_fit_kwargs.optimizer.lr}_noscheduler_l2${separatrix_locator_fit_kwargs.optimizer.weight_decay}_batch${separatrix_locator_fit_kwargs.batch_size}_epochs${separatrix_locator_fit_kwargs.num_epochs}_${separatrix_locator_fit_kwargs.normaliser._target_}_gmmratio${separatrix_locator_fit_kwargs.gmm_mix_ratio}_eigenvalue${eigenvalue}_AdamW #_balanceloss${separatrix_locator_fit_kwargs.balance_loss_lambda} #_resetmomentumevery50
