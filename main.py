@@ -43,8 +43,8 @@ CONFIG_PATH = "configs"
 # CONFIG_NAME = "test"
 # CONFIG_NAME = "main"
 # CONFIG_NAME = "main_2bitflipflop3D"
-CONFIG_NAME = "twolimitcycles"
-# CONFIG_NAME = "bistable1D"
+# CONFIG_NAME = "twolimitcycles"
+CONFIG_NAME = "bistable1D"
 # CONFIG_NAME = "microbiome_GLV_11D"
 # CONFIG_NAME = "finkelstein_fontolan"
 # CONFIG_NAME = "main_1bitflipflop64D"
@@ -66,8 +66,8 @@ def decorated_main(cfg):
     # check_basin_of_attraction(cfg)
     # plot_cubichermitesampler(cfg)
     # return RNN_modify_inputs(cfg)
-    # plot_dynamics_1D(cfg)
-    plot_dynamics_2D(cfg)
+    plot_dynamics_1D(cfg)
+    # plot_dynamics_2D(cfg)
     # plot_dynamics(cfg)
     # plot_task_io(cfg)
     # plot_hermite_polynomials_2d(cfg)
