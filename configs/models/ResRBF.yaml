@@ -78,8 +78,12 @@ num_kernels : 10 #0 #0
 #hidden_size : 300
 #num_layers  : 70
 
-### For 2bit flip flop 3D
-hidden_size : 400 #400
+### For 2bit flip flop 3D and for 1bit flip flops <400D
+#hidden_size : 400 #400
+#num_layers  : 20
+
+### For 1bit flip flop 512D
+hidden_size : 550
 num_layers  : 20
 
 #hidden_size : 400 #400

@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 # from s4.models.s4.s4 import S4Block
 from s4torch import S4Model
+
 class PadLayer(nn.Module):
     def __init__(self, target_dim):
         super().__init__()

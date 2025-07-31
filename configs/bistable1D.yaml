@@ -2,6 +2,7 @@ defaults:
   - main
 #  - dynamical_systems@dynamics : bistableND
   - _self_
+  - hydra: multirun_sweepeigenvalue
 
 dynamics_choice : bistable1D
 #dynamics:

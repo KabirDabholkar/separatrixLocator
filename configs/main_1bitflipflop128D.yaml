@@ -1,18 +1,22 @@
 defaults:
   - main
   - _self_
-  - hydra: multirun_sweepeigenvalue
 
-dynamics_choice : 2bitflipflop_3D
 
-device  : cuda:2
+save_KEF_model    : false
+load_KEF_model    : false
+run_analysis      : false
+
+dynamics_choice : 1bitflipflop_Vanilla128D_long_isotropic
+
+device  : cuda:0 #cuda:0
 
 separatrix_locator :
   num_models  : 1
 
 separatrix_locator_fit_kwargs:
 #  num_epochs: 1000
-  num_epochs: 1000     # switch to this later
+  num_epochs: 10 #00     # switch to this later
   batch_size: 1000      # use this for now
 #  batch_size: 5000     # better alternative?
   balance_loss_lambda : 5e-2

@@ -19,3 +19,6 @@
 [submodule "ssr_module"]
 	path = ssr_module
 	url = https://github.com/KabirDabholkar/ssr_module.git
+[submodule "gp-sde"]
+	path = gp-sde
+	url = https://github.com/gatsby-sahani/gp-sde.git

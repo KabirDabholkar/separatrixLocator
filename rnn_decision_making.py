@@ -11,12 +11,14 @@ from pathlib import Path
 import numpy as np
 from torch import nn
 import torch
+from sklearn.decomposition import PCA
 # print(info.all_tasks())
 
 
 CONFIG_PATH = "configs"
 # CONFIG_NAME = "test"
-CONFIG_NAME = "main"
+# CONFIG_NAME = "main"
+CONFIG_NAME = "main_1bitflipflop32D"
 project_path = os.getenv("PROJECT_PATH")
 
 # Environment
@@ -71,8 +73,9 @@ def main(cfg):
     optimizer = torch.optim.Adam(
         net.parameters(),
         # lr=1e-2,
-        lr=2e-3,
-        weight_decay=1e-3
+        # lr=2e-3,
+        lr=5e-4,
+        weight_decay=1e-1
     )
 
     running_loss = 0.0
@@ -132,6 +135,51 @@ def main(cfg):
     plt.savefig(path / "RNN_task.png")
     torch.save(net.state_dict(), os.path.join(cfg.savepath,'RNNmodel.torch'))
 
+    # PCA analysis of hidden trajectories
+    print("Computing PCA of hidden trajectories...")
+    
+    # Get hidden states from the trained model
+    with torch.no_grad():
+        # Forward pass with return_hidden=True to get hidden states
+        outputs, hidden_states = net(torch_inp, return_hidden=True)
+        hidden_states = hidden_states.detach().cpu().numpy()
+    
+    # Reshape hidden states for PCA: (seq_len, batch, hidden_dim) -> (seq_len * batch, hidden_dim)
+    hidden_reshaped = hidden_states.reshape(-1, hidden_states.shape[-1])
+    
+    # Fit PCA
+    pca = PCA(n_components=2)
+    hidden_pca = pca.fit_transform(hidden_reshaped)
+    
+    # Reshape back to original dimensions for plotting
+    hidden_pca_reshaped = hidden_pca.reshape(hidden_states.shape[0], hidden_states.shape[1], 2)
+    
+    # Plot PCA results
+    plt.figure(figsize=(12, 8))
+    
+    # Plot PC1 vs PC2 for all trajectories
+    for i in range(hidden_pca_reshaped.shape[1]):  # For each trial
+        plt.plot(hidden_pca_reshaped[:, i, 0], hidden_pca_reshaped[:, i, 1], 
+                alpha=0.6, linewidth=1, label=f'Trial {i+1}' if i < 5 else "")
+    
+    plt.xlabel('PC1')
+    plt.ylabel('PC2')
+    plt.title('PCA of Hidden Trajectories: PC1 vs PC2')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # Add explained variance ratio
+    explained_var = pca.explained_variance_ratio_
+    plt.text(0.02, 0.98, f'Explained variance:\nPC1: {explained_var[0]:.3f}\nPC2: {explained_var[1]:.3f}', 
+             transform=plt.gca().transAxes, verticalalignment='top',
+             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+    
+    plt.tight_layout()
+    plt.savefig(path / "RNN_hidden_PCA.png", dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    print(f"PCA plot saved to {path / 'RNN_hidden_PCA.png'}")
+    print(f"Explained variance ratio - PC1: {explained_var[0]:.3f}, PC2: {explained_var[1]:.3f}")
 
 
 if __name__ == '__main__':

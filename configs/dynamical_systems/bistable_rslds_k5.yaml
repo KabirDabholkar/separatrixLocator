@@ -1,0 +1,37 @@
+function_original :
+  _target_ : minimal_rslds.torchify
+  func: ${..dynamics_fn}
+  model_file: ${savepath}/rslds_best_model.pkl
+
+function:
+  _target_  : dynamical_functions.change_speed
+  func      : ${..function_original}
+  factor    : 40.0
+
+dynamics_fn:
+  _target_  : minimal_rslds.dynamics_fn
+  _partial_ : true
+  use_weighted_average: true
+  beta: 2.0
+IC_distribution_fit:
+  - ${..uniform_distribution}
+
+IC_distribution: ${.uniform_distribution}
+
+uniform_distribution:
+  _target_  : custom_distributions.makeIIDMultiVariate
+  dist  :
+    _target_  : torch.distributions.Uniform
+    low       : -4
+    high      : 4
+  dim : ${..dim}
+dist_requires_dim : false
+
+lims:
+  x: [-5,5]
+  y: [-5,5]
+run_traj: true
+
+name            : bistable_rslds_k5
+dim  : 2
+equation_latex  : rSLDS dynamics (K=5) 

@@ -44,10 +44,15 @@ CONFIG_PATH = "configs"
 # CONFIG_NAME = "main"
 # CONFIG_NAME = "main_2bitflipflop3D"
 # CONFIG_NAME = "twolimitcycles"
-CONFIG_NAME = "bistable1D"
+# CONFIG_NAME = "bistable1D"
 # CONFIG_NAME = "microbiome_GLV_11D"
 # CONFIG_NAME = "finkelstein_fontolan"
+# CONFIG_NAME = "main_1bitflipflop32D"
 # CONFIG_NAME = "main_1bitflipflop64D"
+# CONFIG_NAME = "main_1bitflipflop128D"
+# CONFIG_NAME = "main_1bitflipflop256D"
+# CONFIG_NAME = "main_1bitflipflop512D"
+CONFIG_NAME = "rslds.yaml"
 
 project_path = os.getenv("PROJECT_PATH")
 
@@ -66,8 +71,8 @@ def decorated_main(cfg):
     # check_basin_of_attraction(cfg)
     # plot_cubichermitesampler(cfg)
     # return RNN_modify_inputs(cfg)
-    plot_dynamics_1D(cfg)
-    # plot_dynamics_2D(cfg)
+    # plot_dynamics_1D(cfg)
+    plot_dynamics_2D(cfg)
     # plot_dynamics(cfg)
     # plot_task_io(cfg)
     # plot_hermite_polynomials_2d(cfg)
@@ -1438,6 +1443,7 @@ def plot_task_io(cfg):
 def plot_dynamics(cfg):
     """Plot dynamics streamlines and kinetic energy contours."""
     omegaconf_resolvers()
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
     dynamics_function = instantiate(cfg.dynamics.function)
 
     # attractors = instantiate(cfg.dynamics.attractors_from_authors)
@@ -1450,7 +1456,7 @@ def plot_dynamics(cfg):
     )
 
     fig, ax = plt.subplots(1, 1, figsize=(3, 3))
-    resolution = 50
+    resolution = 75
     # Plot streamlines
     plot_flow_streamlines(dynamics_function, ax,
                          x_limits=cfg.dynamics.lims.x,
@@ -1472,7 +1478,37 @@ def plot_dynamics(cfg):
     ax.set_ylim(*cfg.dynamics.lims.y)
     remove_frame(ax)
     ax.set_aspect('equal')
-    plt.show()
+    # plt.show()
+    plt.savefig(Path(cfg.savepath) / cfg.experiment_details / "dynamics.png", dpi=200)
+
+    # Plot trajectories from random initial conditions
+    distribution = instantiate(cfg.dynamics.IC_distribution)
+    num_trajectories = 10
+    total_time = 5
+    times = torch.linspace(0, total_time, 200)
+    initial_conditions = distribution.sample((num_trajectories,))
+
+    # Run trajectories
+    trajectories = odeint(lambda t,x: dynamics_function(x), initial_conditions, times)
+
+    # Plot trajectories
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(6, 6), sharex=True)
+    
+    # Plot x1 component
+    for traj in trajectories.transpose(0,1):
+        ax1.plot(times, traj[:,0], alpha=0.5)
+    ax1.set_ylabel('$x_1$')
+    
+    # Plot x2 component  
+    for traj in trajectories.transpose(0,1):
+        ax2.plot(times, traj[:,1], alpha=0.5)
+    ax2.set_ylabel('$x_2$')
+    ax2.set_xlabel('Time')
+
+    plt.tight_layout()
+    plt.savefig(Path(cfg.savepath) / cfg.experiment_details / "trajectories.png", dpi=200)
+    plt.close()
+    
 
 def plot_KEF_residual_heatmap(cfg):
     """Plot KEF residual as a 2D heatmap showing (LHS-RHS)/sqrt(RHS**2)."""
@@ -2965,7 +3001,7 @@ def main_multimodel(cfg):
 
     # OmegaConf.resolve(cfg.model)
 
-    # print(OmegaConf.to_yaml(cfg))
+    print(OmegaConf.to_yaml(cfg))
 
     dynamics_function = instantiate(cfg.dynamics.function)
     input_distribution = instantiate(cfg.dynamics.external_input_distribution) if hasattr(cfg.dynamics, 'external_input_distribution') else None
@@ -3062,24 +3098,18 @@ def main_multimodel(cfg):
             print(new_format_path, 'does not exist, loading', load_path, 'instead.')
         SL.load_models(load_path)
 
-    # with torch.no_grad():
-    #     SL.models[0][0].weight[:] = 1.0
-    # print('skipping fit')
-    # SL.fit(
-    #     dynamics_function,
-    #     distribution_fit,
-    #     external_input_dist=input_distribution_fit,
-    #     dist_weights = cfg.dynamics.dist_weights if hasattr(cfg.dynamics,"dist_weights") else None,
-    #     **instantiate(cfg.separatrix_locator_fit_kwargs),
-    #     # **{
-    #     #     **instantiate(cfg.separatrix_locator_fit_kwargs),
-    #     #     "learning_rate":1e-5,
-    #     # },
-    # )
-    # print('SL.models[0][0].weight',SL.models[0][0].weight)
-    # x = torch.arange(-2.0, 2.0, 0.01)
-    # plt.plot(x,dynamics_function(x[:,None])[:,0].detach())
-    # plt.show()
+    import time
+    
+    start_time = time.time()
+    SL.fit(
+        dynamics_function,
+        distribution_fit,
+        external_input_dist=input_distribution_fit,
+        dist_weights = cfg.dynamics.dist_weights if hasattr(cfg.dynamics,"dist_weights") else None,
+        **instantiate(cfg.separatrix_locator_fit_kwargs),
+    )
+    end_time = time.time()
+    print(f"SL.fit took {end_time - start_time:.2f} seconds")
 
     if cfg.save_KEF_model:
         SL.save_models(Path(cfg.savepath)/cfg.experiment_details,filename=cfg.dynamics.special_model_name if hasattr(cfg.dynamics,'special_model_name') else None)
@@ -3105,23 +3135,33 @@ def main_multimodel(cfg):
         print('Scores over 2x scaled distribution:\n',scores2.detach().cpu().numpy())
 
 
-    if hasattr(cfg.dynamics,'analytical_eigenfunction'):
-        num_samples = 5000
-        sampled_points = distribution.sample(sample_shape=(num_samples,))
+    if hasattr(cfg,'save_results') and cfg.save_results:
+        scores = scores[...,0].detach().cpu().numpy()
+        # Save scores to CSV with descriptive column names
+        scores_df = pd.DataFrame(scores)
+        scores_df.columns = [f'distribution_{i+1}' for i in range(scores.shape[1])]
+        scores_df.index = [f'model_{i+1}' for i in range(scores.shape[0])]
+        scores_df.index.name = 'model'
+        scores_df.to_csv(Path(cfg.savepath) / cfg.experiment_details / 'model_scores.csv')
 
-        analytical_eigenfunction = instantiate(cfg.dynamics.analytical_eigenfunction)
-        analytical_values = analytical_eigenfunction(sampled_points)
 
-        correlations = []
-        for model in SL.models:
-            model_values = model(sampled_points).detach()
-            x,y = model_values.flatten(), analytical_values.flatten()
-            x = torch.abs(x)
-            y = torch.abs(y)
-            correlation = torch.sum(x*y)/torch.sqrt(torch.sum(x**2)*torch.sum(y**2))
-            correlations.append(correlation)
-
-        print("Correlations between models and analytical eigenfunction:", correlations)
+    # if hasattr(cfg.dynamics,'analytical_eigenfunction'):
+    #     num_samples = 5000
+    #     sampled_points = distribution.sample(sample_shape=(num_samples,))
+    #
+    #     analytical_eigenfunction = instantiate(cfg.dynamics.analytical_eigenfunction)
+    #     analytical_values = analytical_eigenfunction(sampled_points)
+    #
+    #     correlations = []
+    #     for model in SL.models:
+    #         model_values = model(sampled_points).detach()
+    #         x,y = model_values.flatten(), analytical_values.flatten()
+    #         x = torch.abs(x)
+    #         y = torch.abs(y)
+    #         correlation = torch.sum(x*y)/torch.sqrt(torch.sum(x**2)*torch.sum(y**2))
+    #         correlations.append(correlation)
+    #
+    #     print("Correlations between models and analytical eigenfunction:", correlations)
 
     all_below_threshold_points = None
     if cfg.runGD:
@@ -3626,16 +3666,17 @@ def main_multimodel(cfg):
             for i in range(num_curves):
                 # Plot first segment up to change point
                 change_idx = np.where(changes[i])[0][0] if np.any(changes[i]) else num_points
-                ax.plot(pca_points[i,:change_idx+1,0], pca_points[i,:change_idx+1,1], 
-                       c='C0' if cluster_labels[i,0] == 0 else 'C1', alpha=0.5)
+                if change_idx < num_points-1:
+                    ax.plot(pca_points[i,:change_idx+1,0], pca_points[i,:change_idx+1,1],
+                           c='C0' if cluster_labels[i,0] == 0 else 'C1', alpha=0.5)
                 
                 # Plot second segment from change point if it exists
                 if change_idx < num_points-1:
                     ax.plot(pca_points[i,change_idx:,0], pca_points[i,change_idx:,1],
                            c='C1' if cluster_labels[i,0] == 0 else 'C0', alpha=0.5)
 
-                change_idx = np.where(changes[i])[0][0] if np.any(changes[i]) else num_points
-                ax.plot(pca_points[i,change_idx,0], pca_points[i,change_idx,1], 
+                if change_idx < num_points - 1:
+                    ax.plot(pca_points[i,change_idx,0], pca_points[i,change_idx,1],
                        'x', color='red', markersize=10, alpha=0.8)
 
             # Flatten back for plotting
@@ -3746,7 +3787,7 @@ def main_multimodel(cfg):
             for i in range(min(num_curves,len(axes.flatten()))):
                 ax = axes[i]
                 ax.plot(alpha_range, KEFvals[i,:,:])
-                ax.axvline(x=change_points[i], color='r', linestyle='--', alpha=0.7)
+                ax.axvline(x=change_points_alpha[i], color='r', linestyle='--', alpha=0.7)
                 ax.set_title(f'Curve {i+1}')
                 ax.grid(True)
 
@@ -3775,11 +3816,11 @@ def main_multimodel(cfg):
             for idx, label, color in zip(selected_indices, labels, colors):
                 ax.plot(alpha_range, KEFvals[idx,:,:], color=color,lw=1)
                 if idx == max_idx:
-                    ax.axvline(x=change_points[idx], color=color, linestyle='--', alpha=1)
-                    ax.text(change_points[idx]+0.065, 10, 'True separatrix\npoint',
+                    ax.axvline(x=change_points_alpha[idx], color=color, linestyle='--', alpha=1)
+                    ax.text(change_points_alpha[idx]+0.065, 10, 'True separatrix\npoint',
                            rotation=90, va='bottom', ha='center', color=color)
                 else:
-                    ax.axvline(x=change_points[idx], color=color, linestyle='--', alpha=1)
+                    ax.axvline(x=change_points_alpha[idx], color=color, linestyle='--', alpha=1)
             ax.axhline(0,ls='solid',c='k',alpha=0.3)
             ax.set_xlabel(r'Curve parameter $\alpha$',fontsize=13)
             ax.set_ylabel(r'KEF Value $\psi$',fontsize=13)

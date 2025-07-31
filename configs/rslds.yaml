@@ -1,0 +1,39 @@
+defaults:
+  - main
+  - _self_
+
+# RSLDS Configuration
+# Configuration for Recurrent Switching Linear Dynamical Systems
+
+# Model configuration
+model_choice: ResRBF
+
+# Dynamics configuration
+dynamics_choice: bistable_rslds_k5
+
+# Device configuration
+device: cuda:0
+
+# Save and analysis settings
+save_KEF_model: true
+load_KEF_model: false
+plot_KEF_of_traj: false
+save_results: true
+run_analysis: true
+runGD_analytical: false
+runGD: false
+run_fixed_point_finder: false
+
+# Experiment details
+experiment_details: experiment_${model.name}_lr${separatrix_locator_fit_kwargs.optimizer.lr}_noscheduler_l2${separatrix_locator_fit_kwargs.optimizer.weight_decay}_batch${separatrix_locator_fit_kwargs.batch_size}_epochs${separatrix_locator_fit_kwargs.num_epochs}_${separatrix_locator_fit_kwargs.normaliser._target_}_gmmratio${separatrix_locator_fit_kwargs.gmm_mix_ratio}_eigenvalue${eigenvalue}_AdamW_balanceloss${separatrix_locator_fit_kwargs.balance_loss_lambda}
+
+separatrix_locator_fit_kwargs:
+  num_epochs: 1000     # switch to this later
+  batch_size: 1000      # use this for now
+  balance_loss_lambda: 5e-2
+
+separatrix_locator :
+  num_models  : 1
+
+eigenvalue: 1.0
+

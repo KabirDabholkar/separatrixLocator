@@ -30,7 +30,11 @@ defaults:
   - dynamical_systems@2bitflipflop_32D_long  : 2bitflipflop_32D_long
   - dynamical_systems@1bitflipflop_32D_long  : 1bitflipflop_32D_long
   - dynamical_systems@1bitflipflop_32D_long_isotropic  : 1bitflipflop_32D_long_isotropic
+  - dynamical_systems@1bitflipflop_Vanilla32D_long_isotropic  : 1bitflipflop_Vanilla32D_long_isotropic
   - dynamical_systems@1bitflipflop_Vanilla64D_long_isotropic  : 1bitflipflop_Vanilla64D_long_isotropic
+  - dynamical_systems@1bitflipflop_Vanilla128D_long_isotropic  : 1bitflipflop_Vanilla128D_long_isotropic
+  - dynamical_systems@1bitflipflop_Vanilla256D_long_isotropic  : 1bitflipflop_Vanilla256D_long_isotropic
+  - dynamical_systems@1bitflipflop_Vanilla512D_long_isotropic  : 1bitflipflop_Vanilla512D_long_isotropic
   - dynamical_systems@1bitflipflop_Vanilla64D_long_hermitecurvesampler  : 1bitflipflop_Vanilla64D_long_hermitecurvesampler
   - dynamical_systems@1bitflipflop_Vanilla668D_long_isotropic  : 1bitflipflop_Vanilla668D_long_isotropic
   - dynamical_systems@1bitflipflop_Vanilla668D_long_hermitecurvesampler : 1bitflipflop_Vanilla668D_long_hermitecurvesampler
@@ -48,6 +52,7 @@ defaults:
   - dynamical_systems@finkelstein_fontolan_RNN_hermitecurvesampler_speed40 : finkelstein_fontolan_RNN_hermitecurvesampler_speed40
   - dynamical_systems@microbiome_SSR_GLV_2D : microbiome_SSR_GLV_2D
   - dynamical_systems@microbiome_GLV_11D : microbiome_GLV_11D
+  - dynamical_systems@bistable_rslds_k5 : bistable_rslds_k5
 ####### Models #########
 #  - models@DNN_model  : DNN_layers6
 
@@ -90,7 +95,7 @@ defaults:
 save_KEF_model    : true
 load_KEF_model    : false
 plot_KEF_of_traj  : false
-save_results      : false
+save_results      : true
 run_analysis      : false
 runGD_analytical  : false
 runGD             : false
@@ -361,7 +366,11 @@ dynamics_options:
   1bitflipflop_32D_long : ${1bitflipflop_32D_long}
   1bitflipflop_2D_long  : ${1bitflipflop_2D_long}
   1bitflipflop_32D_long_isotropic : ${1bitflipflop_32D_long_isotropic}
+  1bitflipflop_Vanilla32D_long_isotropic : ${1bitflipflop_Vanilla32D_long_isotropic}
   1bitflipflop_Vanilla64D_long_isotropic  : ${1bitflipflop_Vanilla64D_long_isotropic}
+  1bitflipflop_Vanilla128D_long_isotropic : ${1bitflipflop_Vanilla128D_long_isotropic}
+  1bitflipflop_Vanilla256D_long_isotropic : ${1bitflipflop_Vanilla256D_long_isotropic}
+  1bitflipflop_Vanilla512D_long_isotropic : ${1bitflipflop_Vanilla512D_long_isotropic}
   1bitflipflop_Vanilla64D_long_hermitecurvesampler  : ${1bitflipflop_Vanilla64D_long_hermitecurvesampler}
   1bitflipflop_Vanilla668D_long_isotropic : ${1bitflipflop_Vanilla668D_long_isotropic}
   1bitflipflop_Vanilla668D_long_hermitecurvesampler : ${1bitflipflop_Vanilla668D_long_hermitecurvesampler}
@@ -373,6 +382,7 @@ dynamics_options:
   hypercube  : ${hypercube}
   microbiome_SSR_GLV_2D : ${microbiome_SSR_GLV_2D}
   microbiome_GLV_11D  : ${microbiome_GLV_11D}
+  bistable_rslds_k5 : ${bistable_rslds_k5}
 
 
 #model: ${dynamics.analytical_eigenfunction}

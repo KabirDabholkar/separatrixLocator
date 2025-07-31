@@ -7,16 +7,16 @@ save_KEF_model    : false
 load_KEF_model    : false
 run_analysis      : false
 
-dynamics_choice : 1bitflipflop_Vanilla64D_long_isotropic
+dynamics_choice : 1bitflipflop_Vanilla256D_long_isotropic
 
-device  : cuda:0
+device  : cuda:2 #cuda:0
 
 separatrix_locator :
   num_models  : 1
 
 separatrix_locator_fit_kwargs:
 #  num_epochs: 1000
-  num_epochs: 10 #00     # switch to this later
+  num_epochs: 10 #1000     # switch to this later
   batch_size: 1000      # use this for now
 #  batch_size: 5000     # better alternative?
-  balance_loss_lambda : 5e-2
+  balance_loss_lambda : 5e-2 
