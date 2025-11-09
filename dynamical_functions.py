@@ -170,6 +170,21 @@ def init_hopfield_ring(N,M,seed=0,binary=True,normalise=True,scaling=4):
         a *= scaling
     return a
 
+def pendulum(z):
+    """
+    Pendulum dynamical system.
+    
+    Args:
+        z: State tensor with shape (..., 2) where z[..., 0] = x1 (angle) and z[..., 1] = x2 (angular velocity)
+        
+    Returns:
+        Time derivative of the state with shape (..., 2)
+    """
+    x1, x2 = z[..., 0], z[..., 1]
+    dx1_dt = x2
+    dx2_dt = -torch.sin(x1)
+    return torch.stack([dx1_dt, dx2_dt], dim=-1)
+
 
 if __name__ == '__main__':
     # from functools import partial
@@ -207,5 +222,16 @@ if __name__ == '__main__':
         ),
         lambda x: np.linalg.inv(A) @ x,
     )
-
+    
+    # Test pendulum differentiability
+    test_state = torch.tensor([[1.0, 2.0]], requires_grad=True)
+    deriv = pendulum(test_state)
+    
+    # Take gradient of sum of derivatives with respect to input
+    loss = deriv.sum()
+    loss.backward()
+    
+    print("Pendulum derivatives:", deriv)
+    print("Gradient exists:", test_state.grad is not None)
+    print("Gradient:", test_state.grad)
 

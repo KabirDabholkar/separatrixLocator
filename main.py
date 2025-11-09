@@ -41,7 +41,7 @@ from fixed_point_finder.FixedPointFinderTorch import FixedPointFinderTorch
 
 CONFIG_PATH = "configs"
 # CONFIG_NAME = "test"
-# CONFIG_NAME = "main"
+CONFIG_NAME = "main"
 # CONFIG_NAME = "main_2bitflipflop3D"
 # CONFIG_NAME = "twolimitcycles"
 # CONFIG_NAME = "bistable1D"
@@ -52,7 +52,7 @@ CONFIG_PATH = "configs"
 # CONFIG_NAME = "main_1bitflipflop128D"
 # CONFIG_NAME = "main_1bitflipflop256D"
 # CONFIG_NAME = "main_1bitflipflop512D"
-CONFIG_NAME = "rslds.yaml"
+# CONFIG_NAME = "rslds.yaml"
 
 project_path = os.getenv("PROJECT_PATH")
 
@@ -61,6 +61,7 @@ project_path = os.getenv("PROJECT_PATH")
 def decorated_main(cfg):
     # return main(cfg)
     # main_multimodel(cfg)
+    plot_ftle_2D(cfg)
     # return finkelstein_fontolan(cfg)
     # return finkelstein_fontolan_point_finder_test(cfg)
     # return finkelstein_fontolan_analysis_test(cfg)
@@ -72,7 +73,7 @@ def decorated_main(cfg):
     # plot_cubichermitesampler(cfg)
     # return RNN_modify_inputs(cfg)
     # plot_dynamics_1D(cfg)
-    plot_dynamics_2D(cfg)
+    # plot_dynamics_2D(cfg)
     # plot_dynamics(cfg)
     # plot_task_io(cfg)
     # plot_hermite_polynomials_2d(cfg)
@@ -86,6 +87,58 @@ def decorated_main(cfg):
     # RNN_fixedpoints(cfg)
     # flipflop_separatrix_points(cfg)
     # flipflop2Dsliceof3D(cfg)
+    
+def plot_ftle_2D(cfg):
+    omegaconf_resolvers()
+    cfg.savepath = os.path.join(project_path, cfg.savepath)
+    dynamics_function = instantiate(cfg.dynamics.function)
+
+    from ftle_computer import FTLEComputer
+    from plotting import evaluate_on_grid, plot_flow_streamlines, plot_kinetic_energy
+    
+    ftle_comp = FTLEComputer(lambda t,x: dynamics_function(x), device="cpu", method="dopri5")
+
+    t_span = torch.linspace(0, 5.0, 2)
+    resolution = 200
+
+    ftle_function = lambda x: ftle_comp.compute_ftle(x, t_span)
+    X, Y, ftle_vals = evaluate_on_grid(ftle_function,
+                                                 x_limits=cfg.dynamics.lims.x, y_limits=cfg.dynamics.lims.y, resolution=resolution)
+    
+    
+    fig, axs = plt.subplots(1, 2, sharex=True, sharey=True, figsize=(6, 3))
+    
+    # Plot flow streamlines on left subplot
+    ax = axs[0]
+    plot_flow_streamlines(dynamics_function, ax, x_limits=cfg.dynamics.lims.x, y_limits=cfg.dynamics.lims.y,
+                         resolution=resolution, density=0.5, color='black', linewidth=0.5, alpha=0.4)
+    plot_kinetic_energy(dynamics_function, ax, x_limits=cfg.dynamics.lims.x, y_limits=cfg.dynamics.lims.y, heatmap_resolution=resolution)
+    ax.set_title('Flow')
+    
+    # Plot FTLE on right subplot
+    ax = axs[1]
+    im = ax.imshow(ftle_vals, extent=cfg.dynamics.lims.x + cfg.dynamics.lims.y, origin='lower', cmap='Blues_r')
+    plot_flow_streamlines(dynamics_function, ax, x_limits=cfg.dynamics.lims.x, y_limits=cfg.dynamics.lims.y,
+                          resolution=resolution, density=0.5, color='black', linewidth=0.5, alpha=0.4)
+    ax.set_title('FTLE')
+
+    # Add colorbar outside plots
+    fig.subplots_adjust(right=0.85)
+    cbar_ax = fig.add_axes([0.88, 0.15, 0.03, 0.7])
+    fig.colorbar(im, cax=cbar_ax)
+
+    for ax in axs:
+        ax.set_aspect('equal')
+
+    # Create directories if they don't exist
+    Path(cfg.savepath).mkdir(parents=True, exist_ok=True)
+    fig.savefig(Path(cfg.savepath) / f'ftle_2D_{cfg.dynamics.name}.pdf')
+    fig.savefig(Path(cfg.savepath) / f'ftle_2D_{cfg.dynamics.name}.png',dpi=200)
+    
+    
+    
+    
+    
     
 
 def plot_dynamics_1D(cfg):

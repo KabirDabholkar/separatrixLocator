@@ -1,0 +1,20 @@
+function :
+  _target_  : dynamical_functions.pendulum
+  _partial_ : true
+
+IC_distribution:
+  _target_  : custom_distributions.makeIIDMultiVariate
+  dist  :
+    _target_  : torch.distributions.Uniform
+    low       : -5
+    high      : 5
+  dim : ${..dim}
+
+lims  :
+  x : [-5,5]
+  y : [-5,5]
+
+dist_requires_dim : false
+name            : pendulum
+dim  : 2
+equation_latex  : null

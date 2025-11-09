@@ -53,6 +53,8 @@ defaults:
   - dynamical_systems@microbiome_SSR_GLV_2D : microbiome_SSR_GLV_2D
   - dynamical_systems@microbiome_GLV_11D : microbiome_GLV_11D
   - dynamical_systems@bistable_rslds_k5 : bistable_rslds_k5
+  - dynamical_systems@pendulum : pendulum
+
 ####### Models #########
 #  - models@DNN_model  : DNN_layers6
 
@@ -121,11 +123,12 @@ model_choice  : ResRBF
 #dynamics_choice : bistable1D #1bitflipflop_2D #bistable1D # # #duffing #  # #
 #dynamics_choice : affine_bistable2D
 #dynamics_choice : bifurcating_bistable1D
-#dynamics_choice : 1bitflipflop_2D #radial2D_bistable #2bitflipflop_2D #bistable2D #duffing #
+#dynamics_choice : 1bitflipflop_2D #radial2D_bistable # #bistable2D #duffing #
+#dynamics_choice : 2bitflipflop_2D
 #dynamics_choice : duffing
 #dynamics_choice : radial2D_bistable_limit_cycle
 #dynamics_choice : 1bitflipflop_3D
-dynamics_choice : 2bitflipflop_3D
+#dynamics_choice : 2bitflipflop_3D
 #dynamics_choice : 1bitflipflop_32D_long
 #dynamics_choice : 1bitflipflop_32D_long_isotropic
 #dynamics_choice : 1bitflipflop_Vanilla64D_long_isotropic
@@ -146,6 +149,7 @@ dynamics_choice : 2bitflipflop_3D
 #dynamics_choice : bistableND
 #dynamics_choice : bistable4D_nonnormal
 #dynamics_choice : radial2D_bistable
+dynamics_choice : pendulum
 
 
 ### main train func
@@ -383,6 +387,7 @@ dynamics_options:
   microbiome_SSR_GLV_2D : ${microbiome_SSR_GLV_2D}
   microbiome_GLV_11D  : ${microbiome_GLV_11D}
   bistable_rslds_k5 : ${bistable_rslds_k5}
+  pendulum : ${pendulum}
 
 
 #model: ${dynamics.analytical_eigenfunction}
